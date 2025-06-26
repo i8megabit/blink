@@ -8,683 +8,705 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <style>
+    .analysis-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+    
+    .analysis-window {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .log-entry {
+      padding: 0.75rem 1rem;
+      margin: 0.5rem 0;
+      border-radius: 8px;
+      border-left: 4px solid;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.9rem;
+      animation: fadeInUp 0.3s ease-out;
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .log-info {
+      background: #e8f4fd;
+      border-left-color: #3273dc;
+      color: #296fa8;
+    }
+    
+    .log-success {
+      background: #effaf3;
+      border-left-color: #48c774;
+      color: #257942;
+    }
+    
+    .log-warning {
+      background: #fffaeb;
+      border-left-color: #ffdd57;
+      color: #947600;
+    }
+    
+    .log-error {
+      background: #feecf0;
+      border-left-color: #f14668;
+      color: #cc0f35;
+    }
+    
+    .hero-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .step-card {
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .step-card.active {
+      border-color: #3273dc;
+      box-shadow: 0 4px 12px rgba(50, 115, 220, 0.15);
+    }
+    
+    .step-card.completed {
+      border-color: #48c774;
+      background: #f0fff4;
+    }
+    
+    .analysis-stats {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
   <script type="text/babel">
     function App() {
-      const [text, setText] = React.useState('');
       const [domain, setDomain] = React.useState('');
-      const [links, setLinks] = React.useState([]);
+      const [error, setError] = React.useState('');
+      const [analysisStep, setAnalysisStep] = React.useState('input'); // 'input', 'analyzing', 'results'
       const [analysisHistory, setAnalysisHistory] = React.useState([]);
       const [selectedAnalysis, setSelectedAnalysis] = React.useState(null);
-      const [error, setError] = React.useState('');
-      const [loading, setLoading] = React.useState(false);
-      const [wpLoading, setWpLoading] = React.useState(false);
-      const [progress, setProgress] = React.useState(0);
-      const [progressText, setProgressText] = React.useState('');
-      const [notifications, setNotifications] = React.useState([]);
-      const [currentStep, setCurrentStep] = React.useState('');
-      const [totalSteps, setTotalSteps] = React.useState(0);
-      const [completedSteps, setCompletedSteps] = React.useState(0);
-      const [showNotifications, setShowNotifications] = React.useState(false);
       const [currentView, setCurrentView] = React.useState('main'); // 'main', 'history', 'analysis'
+      
+      // Real-time analysis states
+      const [analysisLogs, setAnalysisLogs] = React.useState([]);
+      const [analysisStats, setAnalysisStats] = React.useState(null);
+      const [websocket, setWebsocket] = React.useState(null);
+      const [clientId, setClientId] = React.useState(null);
+      const [connectionStatus, setConnectionStatus] = React.useState('disconnected');
+      const [currentAnalysisId, setCurrentAnalysisId] = React.useState(null);
+      const [recommendations, setRecommendations] = React.useState([]);
 
       React.useEffect(() => { 
-        console.log('🚀 Компонент App загружен');
-        addNotification('success', 'Приложение загружено');
-        loadAnalysisHistory(); 
+        console.log('🚀 SEO Link Recommender загружен');
+        
+        // Генерируем уникальный ID клиента
+        const newClientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        setClientId(newClientId);
+        
+        // Загружаем историю анализов
+        loadAnalysisHistory();
+        
+        // Устанавливаем WebSocket соединение
+        connectWebSocket(newClientId);
+        
+        return () => {
+          if (websocket) {
+            websocket.close();
+          }
+        };
       }, []);
-
-      // Функция для добавления уведомлений
-      function addNotification(type, message, details = null) {
-        const notification = {
-          id: Date.now(),
-          type, // 'success', 'error', 'info', 'warning'
+      
+      // Функции для работы с WebSocket
+      function connectWebSocket(clientId) {
+        if (!clientId) return;
+        
+        setConnectionStatus('connecting');
+        console.log('🔌 Подключение к WebSocket...', clientId);
+        
+        const ws = new WebSocket(`ws://localhost:8000/ws/${clientId}`);
+        
+        ws.onopen = () => {
+          console.log('✅ WebSocket подключен');
+          setConnectionStatus('connected');
+          setWebsocket(ws);
+          addLog('success', 'WebSocket соединение установлено');
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+          } catch (err) {
+            console.error('❌ Ошибка парсинга WebSocket сообщения:', err);
+          }
+        };
+        
+        ws.onclose = () => {
+          console.log('🔌 WebSocket отключен');
+          setConnectionStatus('disconnected');
+          setWebsocket(null);
+          
+          // Автоматическое переподключение через 3 секунды
+          setTimeout(() => connectWebSocket(clientId), 3000);
+        };
+        
+        ws.onerror = (error) => {
+          console.error('❌ Ошибка WebSocket:', error);
+          addLog('error', 'Ошибка WebSocket соединения');
+        };
+      }
+      
+      function handleWebSocketMessage(data) {
+        console.log('📨 WebSocket сообщение:', data);
+        
+        switch (data.type) {
+          case 'progress':
+            addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
+            setAnalysisStats({
+              step: data.step,
+              current: data.current,
+              total: data.total,
+              percentage: data.percentage,
+              details: data.details
+            });
+            break;
+            
+          case 'ollama':
+            if (data.info.status === 'starting') {
+              addLog('info', '🤖 Запуск Ollama анализа', 
+                `Модель: ${data.info.model}, Статей: ${data.info.articles_count}`);
+            } else if (data.info.status === 'completed') {
+              addLog('success', '🤖 Ollama завершила анализ', 
+                `Время: ${data.info.request_time}, Ответ: ${data.info.response_length} символов`);
+            }
+            break;
+            
+          case 'error':
+            addLog('error', data.message, data.details);
+            setError(data.message);
+            // При ошибке возвращаемся к вводу
+            setTimeout(() => {
+              setAnalysisStep('input');
+              setAnalysisLogs([]);
+              setAnalysisStats(null);
+            }, 5000);
+            break;
+            
+          case 'complete':
+            addLog('success', '✅ Анализ завершен успешно!', 
+              `Найдено ${data.recommendations_count} рекомендаций из ${data.posts_count} статей`);
+            
+            // Переходим к результатам через 2 секунды
+            setTimeout(() => {
+              setAnalysisStep('results');
+              loadAnalysisHistory(); // Обновляем историю
+            }, 2000);
+            break;
+        }
+      }
+      
+      function addLog(type, message, details = '') {
+        const logEntry = {
+          id: Date.now() + Math.random(),
+          type,
           message,
           details,
           timestamp: new Date().toLocaleTimeString()
         };
-        console.log(`🔔 [${type.toUpperCase()}] ${message}`, details || '');
-        setNotifications(prev => [notification, ...prev.slice(0, 4)]); // Показываем только последние 5
         
-        // Автоудаление через 5 секунд для success и info
-        if (type === 'success' || type === 'info') {
-          setTimeout(() => {
-            setNotifications(prev => prev.filter(n => n.id !== notification.id));
-          }, 5000);
-        }
-      }
-
-      // Функция для обновления реального прогресса
-      function updateProgress(step, completed, total, message) {
-        setCurrentStep(step);
-        setCompletedSteps(completed);
-        setTotalSteps(total);
-        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-        setProgress(percentage);
-        setProgressText(message);
-        console.log(`📊 Прогресс: ${completed}/${total} (${percentage}%) - ${step}: ${message}`);
+        setAnalysisLogs(prev => [...prev, logEntry]);
+        console.log(`📝 [${type.toUpperCase()}] ${message}`, details);
       }
 
       async function loadAnalysisHistory() {
         try {
-          console.log('📥 Загружаю историю анализов...');
-          addNotification('info', 'Загрузка истории анализов...');
-          
           const resp = await fetch('http://localhost:8000/api/v1/analysis_history');
-          console.log('📥 Ответ сервера (история):', resp.status, resp.statusText);
-          
-          if (!resp.ok) {
-            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-          }
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           
           const data = await resp.json();
-          console.log('📥 Данные истории анализов:', data);
-          console.log('📊 БД: Загружено анализов:', data.length);
-          
           setAnalysisHistory(data);
-          addNotification('success', `История загружена: ${data.length} анализов`);
+          console.log('📥 История анализов загружена:', data.length);
         } catch (err) {
-          console.error('❌ Ошибка загрузки истории анализов:', err);
-          addNotification('error', 'Ошибка загрузки истории', err.message);
+          console.error('❌ Ошибка загрузки истории:', err);
           setError(`Ошибка загрузки истории: ${err.message}`);
         }
       }
 
-      async function sendText() {
-        if (!text.trim()) { 
-          setError('Поле текста не может быть пустым'); 
-          return; 
-        }
-        
-        setError('');
-        setLoading(true);
-        setProgress(0);
-        setProgressText('Подготовка запроса...');
-        
-        try {
-          console.log('📤 Отправляю текст:', text.substring(0, 100) + '...');
-          
-          setProgress(25);
-          setProgressText('Отправка текста на анализ...');
-          
-          const resp = await fetch('http://localhost:8000/api/v1/recommend', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-          });
-          
-          console.log('📤 Ответ сервера (текст):', resp.status, resp.statusText);
-          
-          setProgress(50);
-          setProgressText('Получение ответа от сервера...');
-          
-          if (!resp.ok) {
-            const errorText = await resp.text();
-            console.error('❌ Ошибка ответа сервера:', errorText);
-            throw new Error(`HTTP ${resp.status}: ${errorText}`);
-          }
-          
-          setProgress(75);
-          setProgressText('Обработка рекомендаций...');
-          
-          const data = await resp.json();
-          console.log('📤 Полученные ссылки:', data);
-          
-          setLinks(data.links.map(l => ({ from: '', to: l, anchor: l })));
-          
-          setProgress(90);
-          setProgressText('Сохранение результатов...');
-          
-          setProgress(100);
-          setProgressText('Готово!');
-          
-          console.log('✅ Текст успешно обработан');
-        } catch (err) {
-          console.error('❌ Ошибка отправки текста:', err);
-          setError(`Ошибка обработки текста: ${err.message}`);
-        } finally {
-          setTimeout(() => {
-            setLoading(false);
-            setProgress(0);
-            setProgressText('');
-          }, 1000);
-        }
-      }
-
-      async function sendDomain() {
+      async function startAnalysis() {
         if (!domain.trim()) { 
-          addNotification('warning', 'Поле домена не может быть пустым');
-          setError('Поле домена не может быть пустым'); 
+          setError('Введите DNS имя сайта');
           return; 
         }
         
+        if (!clientId || connectionStatus !== 'connected') {
+          setError('WebSocket не подключен. Обновите страницу.');
+          return;
+        }
+        
         setError('');
-        setWpLoading(true);
-        updateProgress('Инициализация', 0, 5, 'Подготовка анализа WordPress...');
-        addNotification('info', `Начинаю анализ сайта: ${domain}`);
+        setAnalysisStep('analyzing');
+        setAnalysisLogs([]);
+        setAnalysisStats(null);
+        setRecommendations([]);
+        
+        const analysisId = 'analysis_' + Date.now();
+        setCurrentAnalysisId(analysisId);
+        
+        addLog('info', `🚀 Начинаю анализ сайта: ${domain}`, 'Подключение к WordPress API...');
         
         try {
-          console.log('🔍 Анализирую WordPress сайт:', domain);
-          console.log('🌐 Отправляю запрос:', {
-            url: 'http://localhost:8000/api/v1/wp_recommend',
-            method: 'POST',
-            domain: domain,
-            timestamp: new Date().toISOString()
-          });
-          
-          updateProgress('Подключение', 1, 5, 'Подключение к WordPress API...');
-          
-          const startTime = performance.now();
           const resp = await fetch('http://localhost:8000/api/v1/wp_recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ domain })
+            body: JSON.stringify({ 
+              domain: domain,
+              client_id: clientId
+            })
           });
-          const requestTime = performance.now() - startTime;
-          
-          console.log('🔍 Ответ сервера (WordPress):', {
-            status: resp.status,
-            statusText: resp.statusText,
-            headers: Object.fromEntries(resp.headers.entries()),
-            requestTime: `${Math.round(requestTime)}ms`
-          });
-          
-          updateProgress('Получение данных', 2, 5, 'Обработка ответа сервера...');
           
           if (!resp.ok) {
             const errorText = await resp.text();
-            console.error('❌ Ошибка ответа сервера:', errorText);
-            console.error('📊 Детали ошибки:', {
-              status: resp.status,
-              statusText: resp.statusText,
-              body: errorText,
-              url: resp.url
-            });
-            addNotification('error', `Ошибка сервера: ${resp.status}`, errorText);
             throw new Error(`HTTP ${resp.status}: ${errorText}`);
           }
           
-          updateProgress('Парсинг', 3, 5, 'Обработка полученных данных...');
-          
           const data = await resp.json();
-                     console.log('🔍 Полученные рекомендации WordPress:', data);
-           console.log('📊 Ollama ответ:', {
-             recommendationsCount: (data.recommendations && data.recommendations.length) || 0,
-             firstRecommendation: (data.recommendations && data.recommendations[0]) || null,
-             totalRequestTime: `${Math.round(performance.now() - startTime)}ms`
-           });
+          setRecommendations(data.recommendations || []);
           
-          updateProgress('Обновление UI', 4, 5, 'Обновление интерфейса...');
-          
-                               setLinks(data.recommendations || []);
-          addNotification('success', `Анализ завершен: ${(data.recommendations && data.recommendations.length) || 0} рекомендаций`);
-          
-          updateProgress('Завершено', 5, 5, 'Анализ завершен!');
-          
-          // Обновляем историю анализов
-          await loadAnalysisHistory();
-          
-          console.log('✅ WordPress сайт успешно проанализирован');
         } catch (err) {
-          console.error('❌ Ошибка анализа WordPress:', err);
-          console.error('📊 Детали ошибки:', {
-            name: err.name,
-            message: err.message,
-            stack: err.stack
-          });
-          addNotification('error', 'Ошибка анализа WordPress', err.message);
-          setError(`Ошибка анализа WordPress: ${err.message}`);
-        } finally {
-          setTimeout(() => {
-            setWpLoading(false);
-            setProgress(0);
-            setProgressText('');
-            setCurrentStep('');
-            setTotalSteps(0);
-            setCompletedSteps(0);
-          }, 2000);
+          console.error('❌ Ошибка анализа:', err);
+          addLog('error', 'Критическая ошибка анализа', err.message);
+          setError(`Ошибка анализа: ${err.message}`);
         }
       }
-
-      // Функция для извлечения чистого URL из строки
-      function extractUrl(urlString) {
-        if (!urlString) return '';
-        // Убираем префиксы типа "1. ", "2. " и т.д.
-        const cleanUrl = urlString.replace(/^\d+\.\s*/, '');
-        return cleanUrl;
+      
+      function resetAnalysis() {
+        setAnalysisStep('input');
+        setAnalysisLogs([]);
+        setAnalysisStats(null);
+        setRecommendations([]);
+        setCurrentAnalysisId(null);
+        setError('');
       }
 
-      // Компонент колокольчика уведомлений
-      function NotificationBell() {
+      // Анализ в реальном времени - красивое затененное окно
+      function AnalysisOverlay() {
+        if (analysisStep !== 'analyzing') return null;
+        
         return (
-          <div className="notification-bell" style={{position: 'fixed', top: '20px', right: '20px', zIndex: 1000}}>
-            <button 
-              className={`button is-rounded ${notifications.length > 0 ? 'is-warning' : 'is-light'}`}
-              onClick={() => setShowNotifications(!showNotifications)}
-              style={{position: 'relative'}}
-            >
-              🔔
-              {notifications.length > 0 && (
-                <span className="tag is-danger is-small" style={{
-                  position: 'absolute', 
-                  top: '-5px', 
-                  right: '-5px', 
-                  minWidth: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  fontSize: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {notifications.length}
-                </span>
-              )}
-            </button>
-            
-            {showNotifications && (
-              <div className="box" style={{
-                position: 'absolute',
-                top: '50px',
-                right: '0',
-                width: '350px',
-                maxHeight: '400px',
-                overflowY: 'auto',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}>
-                <div className="has-text-weight-bold mb-3">
-                  Уведомления ({notifications.length})
-                  <button 
-                    className="button is-small is-pulled-right"
-                    onClick={() => setNotifications([])}
-                  >
-                    Очистить все
-                  </button>
-                </div>
-                {notifications.length === 0 ? (
-                  <p className="has-text-grey">Нет уведомлений</p>
-                ) : (
-                  notifications.map(notification => (
-                    <div 
-                      key={notification.id} 
-                      className={`notification is-small mb-2 ${
-                        notification.type === 'success' ? 'is-success' :
-                        notification.type === 'error' ? 'is-danger' :
-                        notification.type === 'warning' ? 'is-warning' :
-                        'is-info'
-                      }`}
-                      style={{padding: '10px', cursor: 'pointer'}}
-                      onClick={() => {
-                        // Показать детали уведомления
-                        console.log('📋 Детали уведомления:', notification);
-                      }}
-                    >
+          <div className="analysis-overlay">
+            <div className="analysis-window">
+              <div className="has-text-centered mb-4">
+                <h2 className="title is-4">
+                  🔍 Анализируем сайт {domain}
+                </h2>
+                <p className="subtitle is-6 has-text-grey">
+                  Real-time мониторинг процесса анализа
+                </p>
+              </div>
+              
+              {/* Статистика анализа */}
+              {analysisStats && (
+                <div className="analysis-stats">
+                  <div className="columns is-mobile">
+                    <div className="column">
+                      <div className="has-text-weight-bold is-size-5">
+                        {analysisStats.step}
+                      </div>
                       <div className="is-size-7">
-                        <strong>[{notification.timestamp}]</strong> {notification.message}
-                        {notification.details && (
-                          <div className="mt-1 has-text-grey">
-                            <small>{notification.details}</small>
+                        {analysisStats.current}/{analysisStats.total} ({analysisStats.percentage}%)
+                      </div>
+                    </div>
+                    <div className="column is-narrow">
+                      <div className="is-size-1">
+                        {analysisStats.percentage === 100 ? '✅' : '⚙️'}
+                      </div>
+                    </div>
+                  </div>
+                  <progress 
+                    className="progress is-white is-small" 
+                    value={analysisStats.percentage} 
+                    max="100"
+                  >
+                    {analysisStats.percentage}%
+                  </progress>
+                  <div className="is-size-7 mt-2">
+                    {analysisStats.details}
+                  </div>
+                </div>
+              )}
+              
+              {/* Логи анализа */}
+              <div className="box" style={{maxHeight: '400px', overflowY: 'auto', background: '#fafafa'}}>
+                <h5 className="title is-6 mb-3">📝 Логи анализа</h5>
+                {analysisLogs.length === 0 ? (
+                  <p className="has-text-grey">Ожидание логов...</p>
+                ) : (
+                  analysisLogs.map(log => (
+                    <div key={log.id} className={`log-entry log-${log.type}`}>
+                      <div className="is-flex is-justify-content-space-between is-align-items-flex-start">
+                        <div className="is-flex-grow-1">
+                          <div className="has-text-weight-semibold">
+                            [{log.timestamp}] {log.message}
                           </div>
-                        )}
+                          {log.details && (
+                            <div className="is-size-7 mt-1 has-text-grey-dark">
+                              {log.details}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-            )}
+              
+              {/* Статус соединения */}
+              <div className="level mt-4">
+                <div className="level-left">
+                  <div className="level-item">
+                    <span className={`tag ${
+                      connectionStatus === 'connected' ? 'is-success' : 
+                      connectionStatus === 'connecting' ? 'is-warning' : 'is-danger'
+                    }`}>
+                      {connectionStatus === 'connected' ? '🟢 Подключено' : 
+                       connectionStatus === 'connecting' ? '🟡 Подключение...' : '🔴 Отключено'}
+                    </span>
+                  </div>
+                </div>
+                <div className="level-right">
+                  <div className="level-item">
+                    <button 
+                      className="button is-light"
+                      onClick={resetAnalysis}
+                    >
+                      ❌ Прервать анализ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         );
       }
 
       return (
         <div>
-          <NotificationBell />
+          <AnalysisOverlay />
+          
+          {/* Главная секция */}
+          <section className="hero hero-gradient">
+            <div className="hero-body">
+              <div className="container has-text-centered">
+                <h1 className="title is-2 has-text-white">
+                  SEO Link Recommender
+                </h1>
+                <p className="subtitle is-4 has-text-white-ter">
+                  Умный анализ внутренних ссылок для вашего WordPress сайта
+                </p>
+              </div>
+            </div>
+          </section>
           
           <section className="section">
             <div className="container">
+              {/* Навигация */}
               <nav className="level mb-5">
                 <div className="level-left">
-                  <h1 className="title">SEO Link Recommender</h1>
-                </div>
-                <div className="level-right">
-                  <div className="level-item">
-                    <div className="buttons">
-                      <button 
-                        className={`button ${currentView === 'main' ? 'is-primary' : 'is-light'}`}
-                        onClick={() => setCurrentView('main')}
-                      >
-                        Главная
-                      </button>
-                      <button 
-                        className={`button ${currentView === 'history' ? 'is-primary' : 'is-light'}`}
-                        onClick={() => setCurrentView('history')}
-                      >
-                        История анализов ({analysisHistory.length})
-                      </button>
-                    </div>
+                  <div className="buttons">
+                    <button 
+                      className={`button ${currentView === 'main' ? 'is-primary' : 'is-light'}`}
+                      onClick={() => setCurrentView('main')}
+                    >
+                      🏠 Главная
+                    </button>
+                    <button 
+                      className={`button ${currentView === 'history' ? 'is-primary' : 'is-light'}`}
+                      onClick={() => setCurrentView('history')}
+                    >
+                      📊 История анализов ({analysisHistory.length})
+                    </button>
                   </div>
                 </div>
               </nav>
             
-            {currentView === 'main' && (
-            <React.Fragment>
-            <div className="box">
-              <div className="field">
-                <label className="label">Текст для анализа</label>
-                <div className="control">
-                  <textarea 
-                    className="textarea" 
-                    rows="4" 
-                    value={text} 
-                    onChange={e => setText(e.target.value)}
-                    placeholder="Введите текст для генерации внутренних ссылок..."
-                  ></textarea>
-                </div>
-                <button 
-                  className={`button is-link mt-2 ${loading ? 'is-loading' : ''}`}
-                  onClick={sendText}
-                  disabled={loading || wpLoading}
-                >
-                  {loading ? 'Обрабатываю...' : 'Получить ссылки'}
-                </button>
-              </div>
-              
-              <div className="field mt-4">
-                <label className="label">WordPress сайт</label>
-                <div className="control">
-                  <input 
-                    className="input" 
-                    placeholder="example.com" 
-                    value={domain} 
-                    onChange={e => setDomain(e.target.value)} 
-                  />
-                </div>
-                <button 
-                  className={`button is-primary mt-2 ${wpLoading ? 'is-loading' : ''}`}
-                  onClick={sendDomain}
-                  disabled={loading || wpLoading}
-                >
-                  {wpLoading ? 'Анализирую...' : 'Анализ WordPress'}
-                </button>
-              </div>
-              
-              {/* Прогресс-бар */}
-              {(loading || wpLoading) && (
-                <div className="mt-4">
-                  <div className="field">
-                    <label className="label is-small">
-                      {currentStep && totalSteps > 0 ? 
-                        `${currentStep} (${completedSteps}/${totalSteps})` : 
-                        progressText
-                      }
-                    </label>
-                    <progress className="progress is-primary" value={progress} max="100">
-                      {progress}%
-                    </progress>
-                    <p className="help has-text-centered">
-                      {progress}% - {progressText}
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-
-              
-              {error && (
-                <div className="notification is-danger mt-3">
-                  <button className="delete" onClick={() => setError('')}></button>
-                  {error}
-                </div>
-              )}
-            </div>
-            
-            <div className="content">
-              <h2>Рекомендации</h2>
-              {links.length === 0 ? (
-                <p className="has-text-grey">Рекомендации появятся здесь после анализа текста или WordPress сайта</p>
-              ) : (
-                <table className="table is-striped is-fullwidth">
-                  <thead>
-                    <tr><th>Откуда</th><th>Куда</th><th>Анкор</th><th>Комментарий от AI</th></tr>
-                  </thead>
-                  <tbody>
-                    {links.map((l, i) => (
-                      <tr key={i}>
-                        <td>
-                          {l.from ? (
-                            <a href={extractUrl(l.from)} target="_blank" rel="noopener">
-                              {extractUrl(l.from)}
-                            </a>
-                          ) : '—'}
-                        </td>
-                        <td>
-                          {l.to ? (
-                            <a href={extractUrl(l.to)} target="_blank" rel="noopener">
-                              {extractUrl(l.to)}
-                            </a>
-                          ) : '—'}
-                        </td>
-                        <td>
-                          <div className="field has-addons">
-                            <div className="control is-expanded">
-                              <details>
-                                <summary className="button is-small is-fullwidth has-text-left" style={{cursor: 'pointer'}}>
-                                  {l.anchor ? (l.anchor.length > 30 ? l.anchor.substring(0, 30) + '...' : l.anchor) : '—'}
-                                </summary>
-                                <div className="box mt-2">
-                                  <p className="mb-2">{l.anchor || '—'}</p>
-                                  <button 
-                                    className="button is-small is-primary"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(l.anchor || '');
-                                      addNotification('success', 'Анкор скопирован в буфер обмена');
-                                    }}
-                                  >
-                                    📋 Скопировать
-                                  </button>
-                                </div>
-                              </details>
-                            </div>
+              {/* Главная страница */}
+              {currentView === 'main' && (
+                <div className="columns is-centered">
+                  <div className="column is-8">
+                    
+                    {/* Этап 1: Ввод DNS */}
+                    {analysisStep === 'input' && (
+                      <div className="step-card box active">
+                        <h2 className="title is-4 has-text-centered mb-5">
+                          🌐 Введите DNS имя для анализа
+                        </h2>
+                        
+                        <div className="field">
+                          <label className="label is-medium">DNS имя сайта</label>
+                          <div className="control is-large">
+                            <input 
+                              className="input is-large" 
+                              type="text"
+                              placeholder="example.com (без https://)" 
+                              value={domain} 
+                              onChange={e => setDomain(e.target.value)}
+                              onKeyPress={e => e.key === 'Enter' && startAnalysis()}
+                            />
                           </div>
-                        </td>
-                        <td>
-                          <div className="content is-small">
-                            {l.comment ? (
-                              <details>
-                                <summary className="has-text-grey" style={{cursor: 'pointer'}}>
-                                  {l.comment.length > 25 ? l.comment.substring(0, 25) + '...' : l.comment}
-                                </summary>
-                                <div className="box mt-2 is-size-7">
-                                  <p>{l.comment}</p>
-                                </div>
-                              </details>
-                            ) : '—'}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            </React.Fragment>
-            )}
-            
-            {currentView === 'history' && (
-            <div className="content">
-              <h2 className="title is-3">История анализов</h2>
-              {analysisHistory.length === 0 ? (
-                <div className="notification is-info">
-                  <p>История анализов пуста. Проведите первый анализ WordPress сайта!</p>
-                </div>
-              ) : (
-                <div className="columns is-multiline">
-                  {analysisHistory.map(analysis => (
-                    <div key={analysis.id} className="column is-one-third">
-                      <div className="card" style={{height: '100%'}}>
-                        <div className="card-header">
-                          <div className="card-header-title">
+                          <p className="help">
+                            Введите только DNS имя (например: site.ru), без протокола и слэшей
+                          </p>
+                        </div>
+                        
+                        <div className="has-text-centered mt-5">
+                          <button 
+                            className="button is-primary is-large"
+                            onClick={startAnalysis}
+                            disabled={!domain.trim() || connectionStatus !== 'connected'}
+                          >
                             <span className="icon">
-                              <i>🌐</i>
+                              <i>🚀</i>
                             </span>
-                            <span>{analysis.domain}</span>
+                            <span>Получить ссылки</span>
+                          </button>
+                        </div>
+                        
+                        {/* Статус соединения */}
+                        <div className="has-text-centered mt-3">
+                          <span className={`tag ${
+                            connectionStatus === 'connected' ? 'is-success' : 
+                            connectionStatus === 'connecting' ? 'is-warning' : 'is-danger'
+                          }`}>
+                            WebSocket: {connectionStatus === 'connected' ? 'Готов' : 
+                                      connectionStatus === 'connecting' ? 'Подключение...' : 'Нет связи'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Этап 2: Результаты */}
+                    {analysisStep === 'results' && (
+                      <div className="step-card box completed">
+                        <div className="level">
+                          <div className="level-left">
+                            <div className="level-item">
+                              <h2 className="title is-4">
+                                ✅ Анализ завершен: {domain}
+                              </h2>
+                            </div>
+                          </div>
+                          <div className="level-right">
+                            <div className="level-item">
+                              <button 
+                                className="button is-primary"
+                                onClick={resetAnalysis}
+                              >
+                                🔄 Новый анализ
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="card-content" style={{flexGrow: 1}}>
-                          <div className="content">
-                            <time className="has-text-grey-light is-size-7">
-                              {new Date(analysis.created_at).toLocaleString('ru-RU')}
-                            </time>
-                            <p className="mt-2">{analysis.summary}</p>
+                        
+                        {recommendations.length > 0 ? (
+                          <div>
+                            <div className="notification is-success is-light mb-4">
+                              <strong>Найдено {recommendations.length} рекомендаций по внутренним ссылкам!</strong>
+                              <br />
+                              Результаты автоматически сохранены в историю анализов.
+                            </div>
+                            
+                            <table className="table is-striped is-fullwidth">
+                              <thead>
+                                <tr>
+                                  <th>Откуда</th>
+                                  <th>Куда</th>
+                                  <th>Анкор</th>
+                                  <th>Обоснование ИИ</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {recommendations.map((rec, i) => (
+                                  <tr key={i}>
+                                    <td>
+                                      <a href={rec.from} target="_blank" rel="noopener" className="is-size-7">
+                                        {rec.from.replace('https://', '').substring(0, 40)}...
+                                      </a>
+                                    </td>
+                                    <td>
+                                      <a href={rec.to} target="_blank" rel="noopener" className="is-size-7">
+                                        {rec.to.replace('https://', '').substring(0, 40)}...
+                                      </a>
+                                    </td>
+                                    <td>
+                                      <div className="field has-addons">
+                                        <div className="control is-expanded">
+                                          <input 
+                                            className="input is-small" 
+                                            value={rec.anchor} 
+                                            readOnly 
+                                          />
+                                        </div>
+                                        <div className="control">
+                                          <button 
+                                            className="button is-small is-primary"
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(rec.anchor);
+                                            }}
+                                            title="Скопировать анкор"
+                                          >
+                                            📋
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td>
+                                      <p className="is-size-7 has-text-grey">
+                                        {rec.comment}
+                                      </p>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
-                        <div className="card-footer" style={{flexDirection: 'column', alignItems: 'stretch'}}>
-                          <div className="card-footer-item" style={{justifyContent: 'center', borderBottom: '1px solid #dbdbdb', padding: '0.75rem'}}>
-                            <div className="field is-grouped">
-                              <div className="control">
-                                <div className="tags has-addons">
-                                  <span className="tag is-dark">Статей</span>
-                                  <span className="tag is-info">{analysis.posts_count}</span>
+                        ) : (
+                          <div className="notification is-warning">
+                            <strong>Рекомендации не найдены.</strong>
+                            <br />
+                            Возможно, на сайте недостаточно статей или они не связаны тематически.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Ошибки */}
+                    {error && (
+                      <div className="notification is-danger">
+                        <button className="delete" onClick={() => setError('')}></button>
+                        <strong>Ошибка:</strong> {error}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* История анализов */}
+              {currentView === 'history' && (
+                <div className="content">
+                  <h2 className="title is-3">📊 История анализов</h2>
+                  {analysisHistory.length === 0 ? (
+                    <div className="notification is-info">
+                      <p>История анализов пуста. Проведите первый анализ WordPress сайта!</p>
+                    </div>
+                  ) : (
+                    <div className="columns is-multiline">
+                      {analysisHistory.map(analysis => (
+                        <div key={analysis.id} className="column is-one-third">
+                          <div className="card" style={{height: '100%'}}>
+                            <div className="card-header">
+                              <div className="card-header-title">
+                                <span className="icon"><i>🌐</i></span>
+                                <span>{analysis.domain}</span>
+                              </div>
+                            </div>
+                            <div className="card-content" style={{flexGrow: 1}}>
+                              <div className="content">
+                                <time className="has-text-grey-light is-size-7">
+                                  {new Date(analysis.created_at).toLocaleString('ru-RU')}
+                                </time>
+                                <p className="mt-2">{analysis.summary}</p>
+                              </div>
+                            </div>
+                            <div className="card-footer" style={{flexDirection: 'column', alignItems: 'stretch'}}>
+                              <div className="card-footer-item" style={{justifyContent: 'center', borderBottom: '1px solid #dbdbdb', padding: '0.75rem'}}>
+                                <div className="field is-grouped">
+                                  <div className="control">
+                                    <div className="tags has-addons">
+                                      <span className="tag is-dark">Статей</span>
+                                      <span className="tag is-info">{analysis.posts_count}</span>
+                                    </div>
+                                  </div>
+                                  <div className="control">
+                                    <div className="tags has-addons">
+                                      <span className="tag is-dark">Ссылок</span>
+                                      <span className="tag is-success">{analysis.recommendations_count}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="control">
-                                <div className="tags has-addons">
-                                  <span className="tag is-dark">Ссылок</span>
-                                  <span className="tag is-success">{analysis.recommendations_count}</span>
-                                </div>
+                              <div className="card-footer-item" style={{padding: '0'}}>
+                                <button 
+                                  className="button is-primary is-fullwidth"
+                                  style={{border: 'none', borderRadius: '0'}}
+                                  onClick={() => {
+                                    setSelectedAnalysis(analysis);
+                                    setRecommendations(analysis.recommendations);
+                                    setAnalysisStep('results');
+                                    setDomain(analysis.domain);
+                                    setCurrentView('main');
+                                  }}
+                                >
+                                  👁️ Посмотреть результаты
+                                </button>
                               </div>
                             </div>
                           </div>
-                          <div className="card-footer-item" style={{padding: '0'}}>
-                            <button 
-                              className="button is-primary is-fullwidth"
-                              style={{border: 'none', borderRadius: '0'}}
-                              onClick={() => {
-                                setSelectedAnalysis(analysis);
-                                setCurrentView('analysis');
-                                setLinks(analysis.recommendations);
-                              }}
-                            >
-                              Посмотреть детали
-                            </button>
-                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
-            )}
-            
-            {currentView === 'analysis' && selectedAnalysis && (
-            <div className="content">
-              <nav className="breadcrumb">
-                <ul>
-                  <li><a onClick={() => setCurrentView('history')}>История</a></li>
-                  <li className="is-active"><a>{selectedAnalysis.domain}</a></li>
-                </ul>
-              </nav>
-              
-              <div className="box">
-                <h2 className="title is-4">Анализ сайта {selectedAnalysis.domain}</h2>
-                <div className="columns">
-                  <div className="column">
-                    <div className="field">
-                      <label className="label">Дата анализа</label>
-                      <p>{new Date(selectedAnalysis.created_at).toLocaleString('ru-RU')}</p>
-                    </div>
-                  </div>
-                  <div className="column">
-                    <div className="field">
-                      <label className="label">Статистика</label>
-                      <div className="tags">
-                        <span className="tag is-info is-medium">{selectedAnalysis.posts_count} статей</span>
-                        <span className="tag is-success is-medium">{selectedAnalysis.recommendations_count} рекомендаций</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="field">
-                  <label className="label">Сводка</label>
-                  <p>{selectedAnalysis.summary}</p>
-                </div>
-              </div>
-              
-              <div className="content">
-                <h3>Рекомендации по ссылкам</h3>
-                <table className="table is-striped is-fullwidth">
-                  <thead>
-                    <tr><th>Откуда</th><th>Куда</th><th>Анкор</th><th>Комментарий от AI</th></tr>
-                  </thead>
-                  <tbody>
-                    {(selectedAnalysis.recommendations || []).map((l, i) => (
-                      <tr key={i}>
-                        <td>
-                          <a href={l.from} target="_blank" rel="noopener">
-                            {l.from}
-                          </a>
-                        </td>
-                        <td>
-                          <a href={l.to} target="_blank" rel="noopener">
-                            {l.to}
-                          </a>
-                        </td>
-                        <td>
-                          <div className="field has-addons">
-                            <div className="control is-expanded">
-                              <details>
-                                <summary className="button is-small is-fullwidth has-text-left" style={{cursor: 'pointer'}}>
-                                  {l.anchor ? (l.anchor.length > 30 ? l.anchor.substring(0, 30) + '...' : l.anchor) : '—'}
-                                </summary>
-                                <div className="box mt-2">
-                                  <p className="mb-2">{l.anchor || '—'}</p>
-                                  <button 
-                                    className="button is-small is-primary"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(l.anchor || '');
-                                      addNotification('success', 'Анкор скопирован в буфер обмена');
-                                    }}
-                                  >
-                                    📋 Скопировать
-                                  </button>
-                                </div>
-                              </details>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="content is-small">
-                            {l.comment ? (
-                              <details>
-                                <summary className="has-text-grey" style={{cursor: 'pointer'}}>
-                                  {l.comment.length > 25 ? l.comment.substring(0, 25) + '...' : l.comment}
-                                </summary>
-                                <div className="box mt-2 is-size-7">
-                                  <p>{l.comment}</p>
-                                </div>
-                              </details>
-                            ) : '—'}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            )}
-            
-          </div>
-        </section>
+          </section>
         </div>
       );
     }
 
-    console.log('🎯 Запускаю React приложение...');
+    console.log('🎯 Запускаю обновленное React приложение...');
     ReactDOM.createRoot(document.getElementById('app')).render(<App />);
   </script>
 </body>
