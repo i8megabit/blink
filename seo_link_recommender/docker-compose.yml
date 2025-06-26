@@ -47,6 +47,7 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_REQUEST_TIMEOUT=300s
     restart: unless-stopped
 
 volumes:

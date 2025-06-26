@@ -87,9 +87,9 @@ async def generate_links(text: str) -> list[str]:
 
 
 async def fetch_wp_posts(domain: str) -> list[dict[str, str]]:
-    """Загружает список постов с WordPress сайта."""
-    url = f"https://{domain}/wp-json/wp/v2/posts?per_page=100"
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    """Загружает список постов с WordPress сайта с содержимым."""
+    url = f"https://{domain}/wp-json/wp/v2/posts?per_page=6"  # Еще меньше постов
+    async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.get(url)
     if response.status_code >= 400:
         raise HTTPException(status_code=400, detail="Сайт недоступен или не WordPress")
@@ -99,39 +99,113 @@ async def fetch_wp_posts(domain: str) -> list[dict[str, str]]:
     posts = []
     for item in data:
         try:
-            posts.append({"title": item["title"]["rendered"], "link": item["link"]})
+            # Берем только заголовок - без содержимого для минимизации промпта
+            posts.append({
+                "title": item["title"]["rendered"], 
+                "link": item["link"]
+            })
         except Exception as exc:
             raise HTTPException(status_code=400, detail="Не удалось разобрать данные") from exc
     return posts
 
 
 async def generate_wp_recommendations(posts: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Получает рекомендации по перелинковке статей через Ollama."""
-    listing = "\n".join(f"- {p['title']} ({p['link']})" for p in posts)
-    prompt = (
-        "На основе списка статей предложи до пяти внутренних ссылок между этими статьями. "
-        "Каждую рекомендацию выведи с новой строки в формате 'source_url -> target_url | anchor'. "
-        f"Статьи:\n{listing}"
-    )
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            OLLAMA_URL,
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=60,
-        )
-    resp.raise_for_status()
-    content = resp.json().get("response", "")
-    items = []
-    for line in content.splitlines():
-        if "->" not in line:
-            continue
-        src_part, rest = line.split("->", 1)
-        if "|" in rest:
-            dst_part, anchor = rest.split("|", 1)
-        else:
-            dst_part, anchor = rest, ""
-        items.append({"from": src_part.strip(), "to": dst_part.strip(), "anchor": anchor.strip()})
-    return items
+    """Получает рекомендации по перелинковке статей через Ollama с максимальной оптимизацией."""
+    print(f"🔍 Генерация рекомендаций для {len(posts)} постов")
+    
+    # Обрабатываем все посты за один раз, но с минимальным промптом
+    
+    # Создаем максимально компактный список
+    listing = "\n".join(f"{i+1}. {p['title']}" for i, p in enumerate(posts))
+    print(f"📝 Список статей:\n{listing}")
+    
+    # Супер-компактный промпт с четкими инструкциями
+    prompt = f"""Статьи о переезде:
+{listing}
+
+Создай 8 внутренних ссылок между статьями. Формат: НОМЕР1 -> НОМЕР2 | анкор_на_русском
+
+Примеры:
+1 -> 3 | сравнение городов для переезда
+2 -> 5 | подробнее о переезде
+4 -> 1 | обзор города
+
+Твои ссылки:"""
+
+    print(f"🤖 Отправляю промпт в Ollama: {prompt[:200]}...")
+
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.post(
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL, 
+                    "prompt": prompt, 
+                    "stream": False,
+                    "options": {
+                        "num_batch": 32,      # Еще меньше batch
+                        "num_ctx": 2048,      # Минимальный контекст
+                        "temperature": 0.3,   # Меньше креативности
+                        "top_p": 0.5,         # Более фокусированные ответы
+                        "repeat_penalty": 1.1
+                    }
+                },
+                timeout=90,
+            )
+        resp.raise_for_status()
+        content = resp.json().get("response", "")
+        print(f"🤖 Ответ Ollama: {content}")
+        
+        recommendations = []
+        for line in content.splitlines():
+            if "->" not in line:
+                continue
+            try:
+                src_part, rest = line.split("->", 1)
+                if "|" in rest:
+                    dst_part, anchor = rest.split("|", 1)
+                else:
+                    dst_part, anchor = rest, ""
+                
+                # Очищаем от лишних символов (точки, пробелы)
+                src_clean = src_part.strip().rstrip('.')
+                dst_clean = dst_part.strip().rstrip('.')
+                
+                # Извлекаем только числа
+                import re
+                src_match = re.search(r'\d+', src_clean)
+                dst_match = re.search(r'\d+', dst_clean)
+                
+                if src_match and dst_match:
+                    src_num = int(src_match.group()) - 1
+                    dst_num = int(dst_match.group()) - 1
+                    
+                    if 0 <= src_num < len(posts) and 0 <= dst_num < len(posts) and src_num != dst_num:
+                        recommendations.append({
+                            "from": posts[src_num]['link'], 
+                            "to": posts[dst_num]['link'], 
+                            "anchor": anchor.strip().strip('"')
+                        })
+                        print(f"✅ Добавлена рекомендация: {posts[src_num]['link']} -> {posts[dst_num]['link']}")
+                else:
+                    print(f"❌ Не найдены номера в строке: '{line}'")
+            except (ValueError, IndexError) as e:
+                print(f"❌ Ошибка парсинга строки '{line}': {e}")
+                continue
+                
+    except Exception as e:
+        print(f"❌ Ошибка генерации рекомендаций: {e}")
+        # Возвращаем хотя бы базовые рекомендации
+        recommendations = []
+        for i in range(min(5, len(posts)-1)):
+            recommendations.append({
+                "from": posts[i]['link'],
+                "to": posts[i+1]['link'], 
+                "anchor": f"читать далее о {posts[i+1]['title'][:30]}..."
+            })
+    
+    print(f"📊 Итого сгенерировано {len(recommendations)} рекомендаций")
+    return recommendations[:15]  # Ограничиваем до 15 рекомендаций
 
 
 @app.on_event("startup")
