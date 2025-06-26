@@ -4,9 +4,16 @@
 
 ## Запуск без контейнеров
 
-Убедитесь, что установлены Python 3.11 и Homebrew.
+Убедитесь, что на системе установлен Python 3.11.
+Склонируйте репозиторий и перейдите в папку проекта:
 
 ```bash
+git clone https://github.com/yourname/seo-link-recommender.git
+cd seo-link-recommender
+```
+
+```bash
+# создание виртуального окружения и установка зависимостей
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r seo-link-recommender/backend/requirements.txt

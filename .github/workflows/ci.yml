@@ -20,7 +20,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f seo-link-recommender/backend/requirements.txt ]; then pip install -r seo-link-recommender/backend/requirements.txt; fi
       - name: Run tests
-        run: pytest -q || true
+        run: pytest -q
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to GitHub Container Registry
@@ -32,14 +32,16 @@ jobs:
       - name: Build and push latest
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./seo-link-recommender/backend
+          file: ./seo-link-recommender/backend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
       - name: Build and push dev
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./seo-link-recommender/backend
+          file: ./seo-link-recommender/backend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:dev
       - name: Read version from README
