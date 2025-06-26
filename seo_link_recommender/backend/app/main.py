@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import Integer, Text, JSON, select
@@ -14,6 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 app = FastAPI()
+
+# Добавляем CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Base(DeclarativeBase):
@@ -51,20 +61,38 @@ AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSes
 async def generate_links(text: str) -> list[str]:
     """Запрашивает Ollama для генерации ссылок."""
     prompt = (
-        "Предложи до пяти внутренних ссылок для следующего текста. "
-        "Выведи каждый URL с новой строки без лишних символов: "
-        f"{text}"
+        "Предложи до пяти внутренних ссылок для следующего текста на русском языке. "
+        "Каждую ссылку выведи с новой строки в формате /article/название-статьи, "
+        "основываясь на ключевых словах из текста. "
+        "Не добавляй лишние символы или объяснения. "
+        f"Текст: {text}"
     )
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             OLLAMA_URL,
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=30,
+            timeout=60,
         )
     response.raise_for_status()
     data = response.json()
-    lines = [line.strip("- \n") for line in data.get("response", "").splitlines()]
-    return [line for line in lines if line]
+    content = data.get("response", "").strip()
+    
+    # Парсим ссылки из ответа
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    links = []
+    for line in lines:
+        # Извлекаем URL если есть в строке
+        if line.startswith('/'):
+            links.append(line.split()[0])
+        elif '/article/' in line or '/articles/' in line:
+            # Ищем ссылки в тексте
+            parts = line.split()
+            for part in parts:
+                if part.startswith('/'):
+                    links.append(part)
+                    break
+    
+    return links[:5] if links else [f"/articles/{word}" for word in text.lower().split()[:3] if len(word) > 3]
 
 
 @app.on_event("startup")
@@ -74,13 +102,16 @@ async def on_startup() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+@app.post("/api/v1/test")
+async def test(req: RecommendRequest) -> dict[str, str]:
+    """Тестовый endpoint."""
+    return {"message": f"Получен текст: {req.text[:50]}..."}
+
+
 @app.post("/api/v1/recommend")
 async def recommend(req: RecommendRequest) -> dict[str, list[str]]:
     """Возвращает рекомендации ссылок от Ollama и сохраняет их."""
-    try:
-        links = await generate_links(req.text)
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    links = await generate_links(req.text)
 
     async with AsyncSessionLocal() as session:
         rec = Recommendation(text=req.text, links=links)
@@ -109,10 +140,11 @@ async def list_recommendations() -> list[dict[str, object]]:
     return items
 
 
-frontend_path = Path(__file__).resolve().parents[2] / "frontend"
-if frontend_path.exists():
-    app.mount(
-        "/",
-        StaticFiles(directory=str(frontend_path), html=True),
-        name="frontend",
-    )
+@app.get("/")
+async def root():
+    """Редирект на фронтенд."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="http://localhost:3000")
+
+
+# Убираем StaticFiles mount так как фронтенд теперь на отдельном порту
