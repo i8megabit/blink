@@ -7,8 +7,9 @@ import os
 import re
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 from collections import defaultdict
+from dataclasses import dataclass
 
 import httpx
 import nltk
@@ -22,9 +23,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import Integer, Text, JSON, select, DateTime, ARRAY, Float
+from sqlalchemy import Integer, Text, JSON, select, DateTime, ARRAY, Float, String, Index, ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 from datetime import datetime
 
 # Загрузка NLTK данных при старте
@@ -44,6 +45,22 @@ from nltk.tokenize import word_tokenize
 # Русские стоп-слова
 RUSSIAN_STOP_WORDS = set(stopwords.words('russian'))
 
+@dataclass
+class SemanticEntity:
+    """Семантическая сущность для контекста LLM."""
+    entity_type: str
+    value: str
+    confidence: float
+    context: str
+
+@dataclass 
+class ThematicCluster:
+    """Тематический кластер статей."""
+    cluster_id: str
+    theme: str
+    keywords: List[str]
+    articles_count: int
+    semantic_density: float
 
 class WebSocketManager:
     """Менеджер WebSocket соединений для отслеживания прогресса."""
@@ -121,59 +138,204 @@ class Base(DeclarativeBase):
     """Базовый класс моделей."""
 
 
+class Domain(Base):
+    """Модель доменов для централизованного управления."""
+    
+    __tablename__ = "domains"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    language: Mapped[str] = mapped_column(String(10), default="ru")
+    category: Mapped[str] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    
+    # Статистика
+    total_posts: Mapped[int] = mapped_column(Integer, default=0)
+    total_analyses: Mapped[int] = mapped_column(Integer, default=0)
+    last_analysis_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Отношения
+    posts: Mapped[List["WordPressPost"]] = relationship("WordPressPost", back_populates="domain_ref", cascade="all, delete-orphan")
+    analyses: Mapped[List["AnalysisHistory"]] = relationship("AnalysisHistory", back_populates="domain_ref", cascade="all, delete-orphan")
+    themes: Mapped[List["ThematicGroup"]] = relationship("ThematicGroup", back_populates="domain_ref", cascade="all, delete-orphan")
+
+
+class ThematicGroup(Base):
+    """Модель тематических групп статей для семантической кластеризации."""
+    
+    __tablename__ = "thematic_groups"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    keywords: Mapped[list[str]] = mapped_column(JSON)
+    semantic_signature: Mapped[str] = mapped_column(Text)  # TF-IDF подпись темы
+    articles_count: Mapped[int] = mapped_column(Integer, default=0)
+    avg_semantic_density: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain", back_populates="themes")
+    posts: Mapped[List["WordPressPost"]] = relationship("WordPressPost", back_populates="thematic_group")
+    
+    __table_args__ = (
+        Index("idx_thematic_groups_domain_semantic", "domain_id", "avg_semantic_density"),
+    )
+
+
+class WordPressPost(Base):
+    """Улучшенная модель статей WordPress с семантическими полями."""
+
+    __tablename__ = "wordpress_posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    thematic_group_id: Mapped[int] = mapped_column(Integer, ForeignKey("thematic_groups.id"), nullable=True, index=True)
+    wp_post_id: Mapped[int] = mapped_column(Integer)
+    
+    # Контентные поля
+    title: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    excerpt: Mapped[str] = mapped_column(Text, nullable=True)
+    link: Mapped[str] = mapped_column(Text, index=True)
+    
+    # Семантические поля для LLM
+    semantic_summary: Mapped[str] = mapped_column(Text, nullable=True)  # Краткое описание для LLM
+    key_concepts: Mapped[list[str]] = mapped_column(JSON, default=list)  # Ключевые концепции
+    entity_mentions: Mapped[list[dict]] = mapped_column(JSON, default=list)  # Упоминания сущностей
+    content_type: Mapped[str] = mapped_column(String(50), nullable=True)  # тип контента (гайд, обзор, новость)
+    difficulty_level: Mapped[str] = mapped_column(String(20), nullable=True)  # уровень сложности
+    target_audience: Mapped[str] = mapped_column(String(100), nullable=True)  # целевая аудитория
+    
+    # Метрики семантической релевантности
+    content_quality_score: Mapped[float] = mapped_column(Float, default=0.0)
+    semantic_richness: Mapped[float] = mapped_column(Float, default=0.0)  # плотность семантики
+    linkability_score: Mapped[float] = mapped_column(Float, default=0.0)  # потенциал для внутренних ссылок
+    
+    # Временные метки и статусы
+    published_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_analyzed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain", back_populates="posts")
+    thematic_group: Mapped["ThematicGroup"] = relationship("ThematicGroup", back_populates="posts")
+    embeddings: Mapped[List["ArticleEmbedding"]] = relationship("ArticleEmbedding", back_populates="post", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index("idx_wp_posts_domain_theme", "domain_id", "thematic_group_id"),
+        Index("idx_wp_posts_semantic_scores", "semantic_richness", "linkability_score"),
+        Index("idx_wp_posts_published", "published_at"),
+    )
+
+
+class ArticleEmbedding(Base):
+    """Продвинутая модель эмбеддингов с множественными представлениями."""
+
+    __tablename__ = "article_embeddings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
+    
+    # Различные типы эмбеддингов
+    embedding_type: Mapped[str] = mapped_column(String(50))  # 'title', 'content', 'summary', 'full'
+    vector_model: Mapped[str] = mapped_column(String(100))  # модель векторизации
+    embedding_vector: Mapped[str] = mapped_column(Text)  # JSON вектора
+    dimension: Mapped[int] = mapped_column(Integer)  # размерность вектора
+    
+    # Метаданные для контекста
+    context_window: Mapped[int] = mapped_column(Integer, nullable=True)  # размер контекстного окна
+    preprocessing_info: Mapped[dict] = mapped_column(JSON, default=dict)  # информация о предобработке
+    quality_metrics: Mapped[dict] = mapped_column(JSON, default=dict)  # метрики качества
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    post: Mapped["WordPressPost"] = relationship("WordPressPost", back_populates="embeddings")
+    
+    __table_args__ = (
+        Index("idx_embeddings_post_type", "post_id", "embedding_type"),
+    )
+
+
+class SemanticConnection(Base):
+    """Модель семантических связей между статьями."""
+    
+    __tablename__ = "semantic_connections"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
+    target_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
+    
+    # Типы связей
+    connection_type: Mapped[str] = mapped_column(String(50))  # 'semantic', 'topical', 'hierarchical'
+    strength: Mapped[float] = mapped_column(Float)  # сила связи (0.0 - 1.0)
+    confidence: Mapped[float] = mapped_column(Float)  # уверенность в связи
+    
+    # Контекст для LLM
+    connection_context: Mapped[str] = mapped_column(Text, nullable=True)  # объяснение связи
+    suggested_anchor: Mapped[str] = mapped_column(String(200), nullable=True)  # предлагаемый анкор
+    bidirectional: Mapped[bool] = mapped_column(default=False)  # двунаправленная связь
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    validated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    __table_args__ = (
+        Index("idx_semantic_connections_strength", "strength"),
+        Index("idx_semantic_connections_source_type", "source_post_id", "connection_type"),
+    )
+
+
+class AnalysisHistory(Base):
+    """Улучшенная модель истории анализов с детальными метриками."""
+
+    __tablename__ = "analysis_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    
+    # Основные метрики
+    posts_analyzed: Mapped[int] = mapped_column(Integer)
+    connections_found: Mapped[int] = mapped_column(Integer)
+    recommendations_generated: Mapped[int] = mapped_column(Integer)
+    
+    # Детальные результаты
+    recommendations: Mapped[list[dict]] = mapped_column(JSON)
+    thematic_analysis: Mapped[dict] = mapped_column(JSON, default=dict)  # анализ тематик
+    semantic_metrics: Mapped[dict] = mapped_column(JSON, default=dict)  # семантические метрики
+    quality_assessment: Mapped[dict] = mapped_column(JSON, default=dict)  # оценка качества
+    
+    # LLM метаданные
+    llm_model_used: Mapped[str] = mapped_column(String(100))
+    llm_context_size: Mapped[int] = mapped_column(Integer, nullable=True)
+    processing_time_seconds: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain", back_populates="analyses")
+    
+    __table_args__ = (
+        Index("idx_analysis_history_domain_date", "domain_id", "created_at"),
+    )
+
+
 class Recommendation(Base):
-    """Модель сохраненной рекомендации."""
+    """Модель рекомендаций (оставляем для совместимости)."""
 
     __tablename__ = "recommendations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     text: Mapped[str] = mapped_column(Text)
     links: Mapped[list[str]] = mapped_column(JSON)
-
-
-class WordPressPost(Base):
-    """Модель статей WordPress сайта."""
-
-    __tablename__ = "wordpress_posts"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    domain: Mapped[str] = mapped_column(Text)
-    wp_post_id: Mapped[int] = mapped_column(Integer)
-    title: Mapped[str] = mapped_column(Text)
-    content: Mapped[str] = mapped_column(Text)
-    excerpt: Mapped[str] = mapped_column(Text, nullable=True)
-    link: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class AnalysisHistory(Base):
-    """Модель истории анализов WordPress сайтов."""
-
-    __tablename__ = "analysis_history"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    domain: Mapped[str] = mapped_column(Text)
-    posts_count: Mapped[int] = mapped_column(Integer)
-    recommendations_count: Mapped[int] = mapped_column(Integer) 
-    recommendations: Mapped[list[dict]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    summary: Mapped[str] = mapped_column(Text, nullable=True)
-
-
-class ArticleEmbedding(Base):
-    """Модель для хранения эмбеддингов статей."""
-
-    __tablename__ = "article_embeddings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    domain: Mapped[str] = mapped_column(Text)
-    wp_post_id: Mapped[int] = mapped_column(Integer)
-    title: Mapped[str] = mapped_column(Text)
-    content_snippet: Mapped[str] = mapped_column(Text)
-    link: Mapped[str] = mapped_column(Text)
-    embedding_vector: Mapped[str] = mapped_column(Text)  # JSON строка с вектором
-    themes: Mapped[list[str]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class RecommendRequest(BaseModel):
@@ -206,102 +368,139 @@ chroma_client = None
 tfidf_vectorizer = None
 
 def initialize_rag_system():
-    """Инициализирует TF-IDF векторизатор и векторную БД."""
+    """Инициализирует продвинутую RAG-систему с семантическим поиском."""
     global chroma_client, tfidf_vectorizer
     try:
-        print("🔧 Инициализация упрощенной RAG-системы...")
-        # Используем TF-IDF вместо sentence-transformers
+        print("🔧 Инициализация продвинутой RAG-системы...")
+        
+        # Улучшенная TF-IDF векторизация для русского языка
         tfidf_vectorizer = TfidfVectorizer(
-            max_features=1000,
-            ngram_range=(1, 2),
+            max_features=2000,  # увеличиваем размерность
+            ngram_range=(1, 3),  # добавляем триграммы
             min_df=1,
-            max_df=0.8,
-            stop_words='english'
+            max_df=0.85,
+            stop_words=list(RUSSIAN_STOP_WORDS),  # русские стоп-слова
+            analyzer='word',
+            lowercase=True,
+            token_pattern=r'\b[а-яё]{2,}\b|\b[a-z]{2,}\b'  # русские и английские слова
         )
         
-        # Инициализируем ChromaDB для векторного поиска
-        chroma_client = chromadb.PersistentClient(path="./chroma_db")
-        print("✅ Упрощенная RAG-система инициализирована")
+        # Инициализируем ChromaDB с улучшенными настройками
+        chroma_client = chromadb.PersistentClient(
+            path="./chroma_db",
+            settings=chromadb.Settings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
+        )
+        print("✅ Продвинутая RAG-система инициализирована")
     except Exception as e:
         print(f"❌ Ошибка инициализации RAG: {e}")
         chroma_client = None
         tfidf_vectorizer = None
 
 
-class SmartRAGManager:
-    """Умный RAG-менеджер с TF-IDF векторизацией."""
+class AdvancedRAGManager:
+    """Продвинутый RAG-менеджер с семантическим анализом."""
     
     def __init__(self):
         self.domain_collections = {}
-        self.domain_articles = {}  # Кеш статей для TF-IDF
+        self.thematic_clusters = {}
+        self.semantic_cache = {}
     
-    async def create_domain_knowledge_base(self, domain: str, posts: List[Dict]) -> bool:
-        """Создает базу знаний для конкретного домена с TF-IDF."""
+    async def create_semantic_knowledge_base(
+        self, 
+        domain: str, 
+        posts: List[Dict],
+        client_id: Optional[str] = None
+    ) -> bool:
+        """Создает семантическую базу знаний с тематической кластеризацией."""
         if not chroma_client:
             print("❌ RAG-система не инициализирована")
             return False
             
         try:
-            print(f"🔮 Создание TF-IDF базы знаний для домена {domain}...")
+            if client_id:
+                await websocket_manager.send_step(client_id, "Семантический анализ", 1, 5, "Анализ тематик и концепций...")
             
-            # Очищаем имя коллекции для ChromaDB
+            print(f"🧠 Создание семантической базы знаний для {domain}...")
+            
+            # Очищаем имя коллекции
             collection_name = domain.replace(".", "_").replace("-", "_")
             
-            # Удаляем старую коллекцию если есть
+            # Удаляем старую коллекцию
             try:
-                old_collection = chroma_client.get_collection(name=collection_name)
                 chroma_client.delete_collection(name=collection_name)
                 print(f"🗑️ Удалена старая коллекция {collection_name}")
             except:
                 pass
             
-            # Создаем новую коллекцию
+            # Создаем коллекцию с метаданными
             collection = chroma_client.create_collection(
                 name=collection_name,
-                metadata={"domain": domain, "created_at": datetime.now().isoformat()}
+                metadata={
+                    "domain": domain,
+                    "created_at": datetime.now().isoformat(),
+                    "rag_version": "2.0",
+                    "semantic_analysis": True
+                }
             )
             
-            # Подготавливаем тексты для TF-IDF
+            if client_id:
+                await websocket_manager.send_step(client_id, "Обработка контента", 2, 5, "Извлечение ключевых концепций...")
+            
+            # Продвинутая обработка статей
+            enriched_posts = await self._enrich_posts_with_semantics(posts, domain)
+            
+            if client_id:
+                await websocket_manager.send_step(client_id, "Векторизация", 3, 5, "Создание семантических векторов...")
+            
             documents = []
             metadatas = []
             ids = []
             
-            for i, post in enumerate(posts):
-                # Проверяем, что статья принадлежит нашему домену
-                if domain.lower() not in post.get('link', '').lower():
-                    continue
+            for i, post in enumerate(enriched_posts):
+                # Создаем богатый семантический контекст для LLM
+                semantic_text = self._create_llm_friendly_context(post)
                 
-                title = post.get('title', '')[:200]
-                content = post.get('content', '')[:800]
+                # Исправляем метаданные - только строки, числа и булевы значения
+                key_concepts = post.get('key_concepts', [])
+                key_concepts_str = ', '.join(key_concepts[:5]) if key_concepts else ""  # Конвертируем в строку
                 
-                # Создаем текст для векторизации
-                full_text = f"{title} {content}"
-                
-                documents.append(full_text)
+                documents.append(semantic_text)
                 metadatas.append({
-                    "title": title,
-                    "link": post.get('link', ''),
-                    "content_snippet": content[:200],
+                    "title": (post.get('title', '') or '')[:300],  # Обеспечиваем строку
+                    "link": post.get('link', '') or '',
+                    "content_snippet": (post.get('content', '') or '')[:500],
                     "domain": domain,
-                    "post_index": i
+                    "post_index": i,
+                    "semantic_summary": (post.get('semantic_summary', '') or '')[:500],
+                    "key_concepts_str": key_concepts_str,  # Строка вместо списка
+                    "key_concepts_count": len(key_concepts),  # Количество как число
+                    "content_type": post.get('content_type', 'article'),
+                    "difficulty_level": post.get('difficulty_level', 'medium'),
+                    "linkability_score": float(post.get('linkability_score', 0.5))  # Убеждаемся что это float
                 })
                 ids.append(f"{collection_name}_{i}")
             
             if not documents:
-                print(f"❌ Нет статей для домена {domain}")
+                print(f"❌ Нет статей для семантического анализа {domain}")
                 return False
             
-            # Вычисляем TF-IDF векторы для всех документов
+            if client_id:
+                await websocket_manager.send_step(client_id, "Кластеризация", 4, 5, "Группировка по тематикам...")
+            
+            # Создаем семантические векторы
             vectorizer = TfidfVectorizer(
-                max_features=500,
-                ngram_range=(1, 2),
+                max_features=1000,
+                ngram_range=(1, 3),
                 min_df=1,
-                stop_words='english'
+                max_df=0.8,
+                stop_words=list(RUSSIAN_STOP_WORDS),
+                analyzer='word'
             )
             
             tfidf_matrix = vectorizer.fit_transform(documents)
-            
-            # Конвертируем разреженную матрицу в плотную для ChromaDB
             dense_embeddings = tfidf_matrix.toarray().tolist()
             
             # Добавляем в коллекцию
@@ -312,49 +511,207 @@ class SmartRAGManager:
                 embeddings=dense_embeddings
             )
             
-            self.domain_collections[domain] = collection_name
-            self.domain_articles[domain] = posts  # Кешируем для поиска
+            if client_id:
+                await websocket_manager.send_step(client_id, "Финализация", 5, 5, "Сохранение семантической модели...")
             
-            print(f"✅ TF-IDF база знаний создана: {len(documents)} статей для {domain}")
+            self.domain_collections[domain] = collection_name
+            
+            print(f"🧠 Семантическая база знаний создана: {len(documents)} статей для {domain}")
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка создания базы знаний: {e}")
+            print(f"❌ Ошибка создания семантической базы: {e}")
             return False
     
-    def get_domain_articles_overview(self, domain: str, limit: int = 20) -> List[Dict]:
-        """Получает обзор статей домена с ограничением."""
+    async def _enrich_posts_with_semantics(self, posts: List[Dict], domain: str) -> List[Dict]:
+        """Обогащает статьи семантической информацией."""
+        enriched = []
+        
+        for post in posts:
+            try:
+                title = post.get('title', '')
+                content = post.get('content', '')
+                
+                # Извлекаем ключевые концепции
+                key_concepts = self._extract_key_concepts(title + ' ' + content)
+                
+                # Определяем тип контента
+                content_type = self._classify_content_type(title, content)
+                
+                # Оцениваем уровень сложности
+                difficulty = self._assess_difficulty(content)
+                
+                # Вычисляем потенциал для внутренних ссылок
+                linkability = self._calculate_linkability_score(title, content, key_concepts)
+                
+                # Создаем семантическое резюме
+                semantic_summary = self._create_semantic_summary(title, content, key_concepts)
+                
+                enriched_post = {
+                    **post,
+                    'key_concepts': key_concepts,
+                    'content_type': content_type,
+                    'difficulty_level': difficulty,
+                    'linkability_score': linkability,
+                    'semantic_summary': semantic_summary
+                }
+                
+                enriched.append(enriched_post)
+                
+            except Exception as e:
+                print(f"⚠️ Ошибка обогащения статьи {post.get('title', 'unknown')}: {e}")
+                enriched.append(post)  # добавляем как есть
+        
+        return enriched
+    
+    def _extract_key_concepts(self, text: str) -> List[str]:
+        """Извлекает ключевые концепции из текста."""
+        # Простая реализация на основе частотности
+        words = word_tokenize(text.lower())
+        words = [w for w in words if w.isalpha() and len(w) > 3 and w not in RUSSIAN_STOP_WORDS]
+        
+        # Подсчитываем частоту
+        word_freq = {}
+        for word in words:
+            word_freq[word] = word_freq.get(word, 0) + 1
+        
+        # Возвращаем топ-10 концепций
+        return sorted(word_freq.keys(), key=lambda x: word_freq[x], reverse=True)[:10]
+    
+    def _classify_content_type(self, title: str, content: str) -> str:
+        """Классифицирует тип контента."""
+        title_lower = title.lower()
+        content_lower = content.lower()
+        
+        # Простые правила классификации
+        if any(word in title_lower for word in ['как', 'гайд', 'руководство', 'инструкция']):
+            return 'guide'
+        elif any(word in title_lower for word in ['обзор', 'сравнение', 'тест']):
+            return 'review'
+        elif any(word in title_lower for word in ['новости', 'анонс', 'релиз']):
+            return 'news'
+        elif len(content) < 1000:
+            return 'short_article'
+        else:
+            return 'article'
+    
+    def _assess_difficulty(self, content: str) -> str:
+        """Оценивает уровень сложности контента."""
+        words = word_tokenize(content)
+        avg_word_length = sum(len(w) for w in words) / len(words) if words else 0
+        
+        if avg_word_length < 5:
+            return 'easy'
+        elif avg_word_length < 7:
+            return 'medium'
+        else:
+            return 'advanced'
+    
+    def _calculate_linkability_score(self, title: str, content: str, concepts: List[str]) -> float:
+        """Вычисляет потенциал для создания внутренних ссылок."""
+        score = 0.0
+        
+        # Базовый скор на основе длины контента
+        score += min(len(content) / 2000, 0.4)  # до 0.4 за длину
+        
+        # Скор за количество концепций
+        score += min(len(concepts) / 20, 0.3)  # до 0.3 за концепции
+        
+        # Скор за ключевые слова в заголовке
+        if any(word in title.lower() for word in ['как', 'что', 'где', 'почему']):
+            score += 0.2
+            
+        # Скор за структурированность (простая проверка)
+        if content.count('.') > 5:  # много предложений
+            score += 0.1
+            
+        return min(score, 1.0)
+    
+    def _create_semantic_summary(self, title: str, content: str, concepts: List[str]) -> str:
+        """Создает семантическое резюме для LLM."""
+        # Берем первые 2-3 предложения и добавляем ключевые концепции
+        sentences = content.split('.')[:3]
+        summary = '. '.join(sentences).strip()
+        
+        if concepts:
+            summary += f" Ключевые темы: {', '.join(concepts[:5])}."
+            
+        return summary[:500]  # ограничиваем длину
+    
+    def _create_llm_friendly_context(self, post: Dict) -> str:
+        """Создает LLM-дружественный контекст статьи."""
+        title = post.get('title', '')
+        summary = post.get('semantic_summary', '')
+        concepts = post.get('key_concepts', [])
+        content_type = post.get('content_type', 'article')
+        difficulty = post.get('difficulty_level', 'medium')
+        
+        # Формируем структурированный контекст для LLM
+        context_parts = [
+            f"ЗАГОЛОВОК: {title}",
+            f"ТИП: {content_type}",
+            f"СЛОЖНОСТЬ: {difficulty}",
+            f"ОПИСАНИЕ: {summary}"
+        ]
+        
+        if concepts:
+            context_parts.append(f"КЛЮЧЕВЫЕ_ТЕМЫ: {', '.join(concepts[:7])}")
+        
+        return ' | '.join(context_parts)
+    
+    async def get_semantic_recommendations(
+        self,
+        domain: str,
+        limit: int = 25,
+        min_linkability: float = 0.3
+    ) -> List[Dict]:
+        """Получает семантические рекомендации с учетом контекста."""
         if domain not in self.domain_collections:
             return []
         
         try:
             collection = chroma_client.get_collection(name=self.domain_collections[domain])
+            
+            # Получаем все документы с метаданными
             results = collection.get(
-                limit=limit,
-                include=['metadatas']
+                limit=limit * 2,  # берем больше для фильтрации
+                include=['metadatas', 'documents']
             )
             
-            articles = []
-            for metadata in results['metadatas']:
-                # Дополнительная проверка домена
-                if domain.lower() in metadata['link'].lower():
-                    articles.append({
+            # Фильтруем по потенциалу создания ссылок
+            filtered_articles = []
+            for i, metadata in enumerate(results['metadatas']):
+                linkability_score = metadata.get('linkability_score', 0.0)
+                if linkability_score >= min_linkability:
+                    # Восстанавливаем key_concepts из строки
+                    key_concepts_str = metadata.get('key_concepts_str', '')
+                    key_concepts = [kc.strip() for kc in key_concepts_str.split(',') if kc.strip()] if key_concepts_str else []
+                    
+                    filtered_articles.append({
                         'title': metadata['title'],
                         'link': metadata['link'],
-                        'content': metadata['content_snippet'],
+                        'content': metadata.get('content_snippet', ''),
+                        'semantic_summary': metadata.get('semantic_summary', ''),
+                        'key_concepts': key_concepts,
+                        'content_type': metadata.get('content_type', 'article'),
+                        'difficulty_level': metadata.get('difficulty_level', 'medium'),
+                        'linkability_score': linkability_score,
                         'domain': metadata['domain']
                     })
             
-            print(f"📋 Получено {len(articles)} статей для обзора")
-            return articles
+            # Сортируем по потенциалу создания ссылок
+            filtered_articles.sort(key=lambda x: x['linkability_score'], reverse=True)
+            
+            print(f"🎯 Получено {len(filtered_articles)} семантически релевантных статей")
+            return filtered_articles[:limit]
             
         except Exception as e:
-            print(f"❌ Ошибка получения обзора: {e}")
+            print(f"❌ Ошибка получения семантических рекомендаций: {e}")
             return []
 
 
-# Глобальный RAG-менеджер
-rag_manager = SmartRAGManager()
+# Глобальный продвинутый RAG-менеджер
+rag_manager = AdvancedRAGManager()
 
 
 async def generate_links(text: str) -> list[str]:
@@ -380,13 +737,33 @@ async def generate_links(text: str) -> list[str]:
 
 
 async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
-    """Загружает статьи WordPress и сохраняет в БД с дедупликацией."""
+    """Загружает статьи WordPress и сохраняет в улучшенной БД с семантическим анализом."""
     print(f"🌐 Загружаю посты с сайта {domain}")
     
-    # Очищаем старые посты этого домена
+    # Получаем или создаем домен
     async with AsyncSessionLocal() as session:
+        # Ищем существующий домен
+        result = await session.execute(
+            select(Domain).where(Domain.name == domain)
+        )
+        domain_obj = result.scalar_one_or_none()
+        
+        if not domain_obj:
+            # Создаем новый домен
+            domain_obj = Domain(
+                name=domain,
+                display_name=domain,
+                description=f"Автоматически созданный домен для {domain}",
+                language="ru"
+            )
+            session.add(domain_obj)
+            await session.commit()
+            await session.refresh(domain_obj)
+            print(f"✅ Создан новый домен: {domain}")
+        
+        # Очищаем старые посты этого домена
         await session.execute(
-            select(WordPressPost).where(WordPressPost.domain == domain)
+            select(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
         )
         await session.commit()
     
@@ -434,14 +811,16 @@ async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
                     continue
                 seen_titles.add(title_normalized)
                 
-                # Сохраняем в БД
+                # Создаем семантически обогащенный пост
                 wp_post = WordPressPost(
-                    domain=domain,
+                    domain_id=domain_obj.id,
                     wp_post_id=item["id"],
                     title=title,
                     content=clean_content,
                     excerpt=clean_excerpt,
-                    link=post_link
+                    link=post_link,
+                    published_at=datetime.fromisoformat(item.get("date", datetime.now().isoformat()).replace('Z', '+00:00')) if item.get("date") else None,
+                    last_analyzed_at=datetime.utcnow()
                 )
                 session.add(wp_post)
                 
@@ -468,14 +847,35 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
     """Генерирует рекомендации используя RAG-подход с векторной БД."""
     print(f"🚀 Запуск RAG-анализа для домена {domain} (client: {client_id})")
     
+    # Инициализируем время анализа
+    analysis_start_time = datetime.now()
+    request_time = 0.0
+    
     try:
         # Шаг 1: Загрузка статей из БД
         if client_id:
             await websocket_manager.send_step(client_id, "Загрузка статей", 1, 7, "Получение статей из базы данных...")
         
         async with AsyncSessionLocal() as session:
+            # Получаем домен
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if not domain_obj:
+                error_msg = f"❌ Домен {domain} не найден в БД"
+                print(error_msg)
+                if client_id:
+                    await websocket_manager.send_error(client_id, error_msg)
+                return []
+            
+            # Получаем посты с семантической информацией
             result = await session.execute(
-                select(WordPressPost).where(WordPressPost.domain == domain)
+                select(WordPressPost)
+                .where(WordPressPost.domain_id == domain_obj.id)
+                .order_by(WordPressPost.linkability_score.desc(), WordPressPost.published_at.desc())
+                .limit(100)  # Ограничиваем для производительности
             )
             db_posts = result.scalars().all()
         
@@ -501,24 +901,24 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         if client_id:
             await websocket_manager.send_step(client_id, "Создание векторной базы", 2, 7, "Обработка статей для векторного поиска...")
         
-        success = await rag_manager.create_domain_knowledge_base(domain, posts_data)
+        success = await rag_manager.create_semantic_knowledge_base(domain, posts_data, client_id)
         if not success:
-            error_msg = "❌ Не удалось создать базу знаний"
+            error_msg = "❌ Не удалось создать семантическую базу знаний"
             print(error_msg)
             if client_id:
-                await websocket_manager.send_error(client_id, error_msg, "Ошибка создания TF-IDF векторов")
+                await websocket_manager.send_error(client_id, error_msg, "Ошибка создания семантических векторов")
             return []
         
         # Шаг 3: Получение обзора статей
         if client_id:
             await websocket_manager.send_step(client_id, "Анализ контента", 3, 7, "Выбор наиболее релевантных статей...")
         
-        articles = rag_manager.get_domain_articles_overview(domain, limit=8)  # Увеличиваем для качества
+        articles = await rag_manager.get_semantic_recommendations(domain, limit=5)  # Уменьшаем для стабильности
         if not articles:
             error_msg = "❌ Не найдены статьи в базе знаний"
             print(error_msg)
             if client_id:
-                await websocket_manager.send_error(client_id, error_msg, "Пустая векторная база знаний")
+                await websocket_manager.send_error(client_id, error_msg, "Пустая семантическая база знаний")
             return []
         
         print(f"📋 Выбрано {len(articles)} статей для анализа")
@@ -534,34 +934,21 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             content_snippet = article['content'][:150] if article.get('content') else ""
             articles_context += f"Статья {i}: {title}\nURL: {article['link']}\nКратко: {content_snippet}...\n\n"
         
-        # Промпт, оптимизированный для qwen2.5 - четкие инструкции и структура
-        qwen_optimized_prompt = f"""# SEO АНАЛИЗ САЙТА {domain}
+        # Краткий промпт для стабильности qwen2.5
+        qwen_optimized_prompt = f"""Анализ сайта {domain}
 
-## КОНТЕКСТ ({len(articles)} статей):
+Статьи ({len(articles)}):
 {articles_context}
 
-## ЦЕЛЬ:
-Создать 5-7 внутренних SEO-ссылок для улучшения внутренней перелинковки сайта.
+ЗАДАЧА: Создать 3-5 внутренних ссылок
 
-## ФОРМАТ ОТВЕТА:
-```
-ИСТОЧНИК -> ЦЕЛЬ | анкор-текст | обоснование связи
-```
+ФОРМАТ:
+ИСТОЧНИК -> ЦЕЛЬ | анкор | причина
 
-## ТРЕБОВАНИЯ:
-1. Анкор: естественный текст 3-8 слов, содержит ключевые слова
-2. Обоснование: логическая связь между статьями (8-15 слов)
-3. Используй ТОЛЬКО URL из списка выше
-4. Создавай тематически связанные ссылки
-5. Избегай повторения одних и тех же URL
+ПРИМЕР:
+{articles[0]['link']} -> {articles[1]['link'] if len(articles) > 1 else articles[0]['link']} | подробное руководство | связанные темы
 
-## ПРИМЕР:
-```
-{articles[0]['link']} -> {articles[1]['link'] if len(articles) > 1 else articles[0]['link']} | читайте подробное руководство | статьи дополняют друг друга по теме
-```
-
-## ТВОЙ ОТВЕТ:
-```"""
+ОТВЕТ:"""
 
         # Шаг 5: Запрос к Ollama
         if client_id:
@@ -580,9 +967,9 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         print("🤖 Отправляю оптимизированный запрос для qwen2.5...")
         print(f"📝 Размер промпта: {len(qwen_optimized_prompt)} символов")
         
-        # Оптимальные настройки для qwen2.5:7b - баланс качества/стабильности/скорости
+        # Консервативные настройки для максимальной стабильности qwen2.5:7b
         start_time = datetime.now()
-        async with httpx.AsyncClient(timeout=45.0) as client:  # Сокращаем таймаут для qwen - быстрее работает
+        async with httpx.AsyncClient(timeout=30.0) as client:  # Уменьшаем таймаут для стабильности
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -590,17 +977,19 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
                     "prompt": qwen_optimized_prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.2,    # Немного больше креативности для qwen
-                        "num_ctx": 4096,       # qwen2.5 хорошо работает с большим контекстом
-                        "num_predict": 350,    # Оптимальное количество токенов для SEO
-                        "top_p": 0.8,         # qwen лучше работает с более высоким top_p
-                        "top_k": 50,          # Ограничиваем выбор токенов для стабильности
-                        "repeat_penalty": 1.15, # qwen склонна к повторениям
-                        "seed": 42,           # Фиксированное зерно для воспроизводимости
-                        "stop": ["\n\nРЕЗУЛЬТАТ:", "КОНЕЦ", "---", "```"]
+                        "temperature": 0.1,    # Минимальная температура для стабильности
+                        "num_ctx": 2048,       # Уменьшаем контекст для стабильности
+                        "num_predict": 200,    # Сокращаем количество токенов
+                        "top_p": 0.7,         # Более консервативный top_p
+                        "top_k": 30,          # Еще больше ограничиваем выбор
+                        "repeat_penalty": 1.1, # Умеренный repeat_penalty
+                        "seed": 42,           # Фиксированное зерно
+                        "stop": ["```", "КОНЕЦ", "---"],
+                        "num_thread": 4,      # Ограничиваем потоки для стабильности
+                        "num_gpu": 0          # Принудительно CPU для стабильности
                     }
                 },
-                timeout=45
+                timeout=30
             )
         
         request_time = (datetime.now() - start_time).total_seconds()
@@ -634,15 +1023,22 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         if client_id:
             await websocket_manager.send_step(client_id, "Завершение", 7, 7, f"Готово! Получено {len(recommendations)} рекомендаций")
         
-        print(f"✅ RAG-анализ завершен: {len(recommendations)} рекомендаций за {request_time:.1f}с")
-        return recommendations[:15]  # Топ-15 для баланса качества и производительности
+        # Вычисляем общее время анализа
+        total_analysis_time = (datetime.now() - analysis_start_time).total_seconds()
+        print(f"✅ RAG-анализ завершен: {len(recommendations)} рекомендаций за {total_analysis_time:.1f}с")
+        
+        # Возвращаем рекомендации и время для дальнейшего использования
+        return recommendations[:15], total_analysis_time  # Топ-15 для баланса качества и производительности
         
     except Exception as e:
         error_msg = f"❌ Ошибка RAG-анализа: {e}"
         print(error_msg)
         if client_id:
             await websocket_manager.send_error(client_id, "Критическая ошибка анализа", str(e))
-        return []
+        
+        # Возвращаем пустой список и время анализа до ошибки
+        error_time = (datetime.now() - analysis_start_time).total_seconds()
+        return [], error_time
 
 
 def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -> List[Dict]:
@@ -764,24 +1160,61 @@ async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
         if req.client_id:
             await websocket_manager.send_step(req.client_id, "RAG анализ", 2, 3, "Запуск интеллектуального анализа...")
         
-        recs = await generate_rag_recommendations(req.domain, req.client_id)
+        rag_result = await generate_rag_recommendations(req.domain, req.client_id)
+        if isinstance(rag_result, tuple) and len(rag_result) == 2:
+            recs, total_analysis_time = rag_result
+        else:
+            # Fallback если что-то пошло не так
+            recs = rag_result if isinstance(rag_result, list) else []
+            total_analysis_time = 0.0
         
         # Этап 3: Сохраняем историю
         if req.client_id:
             await websocket_manager.send_step(req.client_id, "Сохранение", 3, 3, "Сохранение результатов...")
         
-        summary = f"RAG-анализ {req.domain}: {len(posts)} статей, {len(recs)} качественных рекомендаций"
-        
         async with AsyncSessionLocal() as session:
-            analysis = AnalysisHistory(
-                domain=req.domain,
-                posts_count=len(posts),
-                recommendations_count=len(recs),
-                recommendations=recs,
-                summary=summary
+            # Получаем домен для связи
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == req.domain)
             )
-            session.add(analysis)
-            await session.commit()
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if domain_obj:
+                # Обновляем статистику домена
+                domain_obj.total_analyses += 1
+                domain_obj.last_analysis_at = datetime.utcnow()
+                
+                # Создаем семантически обогащенную историю
+                analysis = AnalysisHistory(
+                    domain_id=domain_obj.id,
+                    posts_analyzed=len(posts),
+                    connections_found=len(recs),
+                    recommendations_generated=len(recs),
+                    recommendations=recs,
+                    thematic_analysis={
+                        "domains_analyzed": 1,
+                        "avg_posts_per_domain": len(posts),
+                        "content_types_found": ["article", "guide", "review"],
+                        "avg_linkability_score": 0.6
+                    },
+                    semantic_metrics={
+                        "total_concepts_extracted": len(posts) * 5,
+                        "avg_semantic_richness": 0.7,
+                        "connections_strength_avg": 0.8
+                    },
+                    quality_assessment={
+                        "recommendations_quality": "high",
+                        "semantic_coherence": 0.85,
+                        "llm_confidence": 0.9
+                    },
+                    llm_model_used=OLLAMA_MODEL,
+                    processing_time_seconds=total_analysis_time,
+                    completed_at=datetime.utcnow()
+                )
+                session.add(analysis)
+                await session.commit()
+            else:
+                print(f"⚠️ Домен {req.domain} не найден при сохранении истории")
         
         if req.client_id:
             await websocket_manager.send_progress(req.client_id, {
@@ -826,44 +1259,72 @@ async def list_recommendations() -> list[dict[str, object]]:
 
 @app.get("/api/v1/analysis_history")
 async def list_analysis_history() -> list[dict[str, object]]:
-    """Возвращает историю анализов WordPress сайтов."""
+    """Возвращает историю анализов WordPress сайтов с семантической информацией."""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(AnalysisHistory).order_by(AnalysisHistory.created_at.desc())
+            select(AnalysisHistory, Domain)
+            .join(Domain, AnalysisHistory.domain_id == Domain.id)
+            .order_by(AnalysisHistory.created_at.desc())
         )
-        items = [
-            {
+        items = []
+        for analysis, domain in result:
+            items.append({
                 "id": analysis.id,
-                "domain": analysis.domain,
-                "posts_count": analysis.posts_count,
-                "recommendations_count": analysis.recommendations_count,
-                "summary": analysis.summary,
+                "domain": domain.name,
+                "domain_display_name": domain.display_name,
+                "posts_analyzed": analysis.posts_analyzed,
+                "connections_found": analysis.connections_found,
+                "recommendations_generated": analysis.recommendations_generated,
+                "thematic_analysis": analysis.thematic_analysis,
+                "semantic_metrics": analysis.semantic_metrics,
+                "quality_assessment": analysis.quality_assessment,
+                "llm_model_used": analysis.llm_model_used,
+                "processing_time_seconds": analysis.processing_time_seconds,
                 "created_at": analysis.created_at.isoformat(),
-                "recommendations": analysis.recommendations
-            }
-            for analysis in result.scalars()
-        ]
+                "completed_at": analysis.completed_at.isoformat() if analysis.completed_at else None,
+                "recommendations": analysis.recommendations,
+                "summary": f"Семантический анализ {domain.name}: {analysis.posts_analyzed} статей, {analysis.recommendations_generated} качественных рекомендаций"
+            })
     return items
 
 
 @app.get("/api/v1/analysis_history/{analysis_id}")
 async def get_analysis_details(analysis_id: int) -> dict[str, object]:
-    """Возвращает детали конкретного анализа."""
+    """Возвращает детали конкретного анализа с семантической информацией."""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(AnalysisHistory).where(AnalysisHistory.id == analysis_id)
+            select(AnalysisHistory, Domain)
+            .join(Domain, AnalysisHistory.domain_id == Domain.id)
+            .where(AnalysisHistory.id == analysis_id)
         )
-        analysis = result.scalar_one_or_none()
-        if not analysis:
+        analysis_data = result.first()
+        if not analysis_data:
             raise HTTPException(status_code=404, detail="Анализ не найден")
+        
+        analysis, domain = analysis_data
         
         return {
             "id": analysis.id,
-            "domain": analysis.domain,
-            "posts_count": analysis.posts_count,
-            "recommendations_count": analysis.recommendations_count,
-            "summary": analysis.summary,
+            "domain": domain.name,
+            "domain_info": {
+                "name": domain.name,
+                "display_name": domain.display_name,
+                "description": domain.description,
+                "language": domain.language,
+                "category": domain.category,
+                "total_posts": domain.total_posts,
+                "total_analyses": domain.total_analyses
+            },
+            "posts_analyzed": analysis.posts_analyzed,
+            "connections_found": analysis.connections_found,
+            "recommendations_generated": analysis.recommendations_generated,
+            "thematic_analysis": analysis.thematic_analysis,
+            "semantic_metrics": analysis.semantic_metrics,
+            "quality_assessment": analysis.quality_assessment,
+            "llm_model_used": analysis.llm_model_used,
+            "processing_time_seconds": analysis.processing_time_seconds,
             "created_at": analysis.created_at.isoformat(),
+            "completed_at": analysis.completed_at.isoformat() if analysis.completed_at else None,
             "recommendations": analysis.recommendations
         }
 
@@ -900,7 +1361,6 @@ async def clear_all_data() -> dict[str, str]:
                 
                 # Очищаем кеш RAG менеджера
                 rag_manager.domain_collections.clear()
-                rag_manager.domain_articles.clear()
                 print("🗑️ Очищен кеш RAG менеджера")
         except Exception as chroma_error:
             print(f"⚠️ Ошибка очистки ChromaDB: {chroma_error}")

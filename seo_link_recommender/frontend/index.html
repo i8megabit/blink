@@ -5,117 +5,508 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO Link Recommender</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.css" rel="stylesheet">
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
   <style>
+    :root {
+      --apple-blue: #007AFF;
+      --apple-blue-light: #5AC8FA;
+      --apple-green: #34C759;
+      --apple-orange: #FF9500;
+      --apple-red: #FF3B30;
+      --apple-gray: #8E8E93;
+      --apple-gray-light: #F2F2F7;
+      --apple-gray-dark: #1C1C1E;
+      --apple-black: #000000;
+      --apple-white: #FFFFFF;
+      --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.1);
+      --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.08);
+      --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.12);
+      --blur-glass: blur(20px);
+      --border-radius: 12px;
+      --border-radius-large: 20px;
+      --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body, html {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      font-weight: 400;
+      line-height: 1.6;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .apple-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: var(--blur-glass);
+      -webkit-backdrop-filter: var(--blur-glass);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-medium);
+    }
+
+         .hero-apple {
+       background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+       color: var(--apple-white);
+       padding: 20px 0;
+       position: relative;
+       overflow: hidden;
+     }
+
+    .hero-apple::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+      animation: float 20s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+         .hero-title {
+       font-size: clamp(1.5rem, 3vw, 2.2rem);
+       font-weight: 700;
+       text-align: center;
+       margin-bottom: 0.3rem;
+       background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+       -webkit-background-clip: text;
+       -webkit-text-fill-color: transparent;
+       background-clip: text;
+       letter-spacing: -0.02em;
+     }
+
+         .hero-subtitle {
+       font-size: 1rem;
+       font-weight: 400;
+       text-align: center;
+       opacity: 0.8;
+       max-width: 450px;
+       margin: 0 auto;
+     }
+
+         .nav-apple {
+       padding: 15px 0;
+       background: rgba(255, 255, 255, 0.95);
+       backdrop-filter: var(--blur-glass);
+       position: sticky;
+       top: 0;
+       z-index: 1000;
+       border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+     }
+
+    .nav-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .btn-apple {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-apple::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .btn-apple:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary {
+      background: var(--apple-blue);
+      color: var(--apple-white);
+      box-shadow: var(--shadow-light);
+    }
+
+    .btn-primary:hover {
+      background: #0056b3;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-medium);
+    }
+
+    .btn-secondary {
+      background: var(--apple-gray-light);
+      color: var(--apple-gray-dark);
+    }
+
+    .btn-secondary:hover {
+      background: #e5e5ea;
+      transform: translateY(-1px);
+    }
+
+    .btn-large {
+      padding: 16px 32px;
+      font-size: 16px;
+      border-radius: var(--border-radius-large);
+    }
+
+         .step-card {
+       background: var(--apple-white);
+       border-radius: var(--border-radius-large);
+       box-shadow: var(--shadow-medium);
+       padding: 30px;
+       margin: 20px 0;
+       transition: var(--transition);
+       border: 2px solid transparent;
+       position: relative;
+       overflow: hidden;
+     }
+
+    .step-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light));
+      opacity: 0;
+      transition: var(--transition);
+    }
+
+    .step-card.active {
+      border-color: var(--apple-blue);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-heavy);
+    }
+
+    .step-card.active::before {
+      opacity: 1;
+    }
+
+    .step-card.completed {
+      border-color: var(--apple-green);
+      background: linear-gradient(135deg, #f0fff4 0%, #f8fff8 100%);
+    }
+
+    .input-apple {
+      width: 100%;
+      padding: 16px 20px;
+      border: 2px solid #e5e5ea;
+      border-radius: var(--border-radius);
+      font-family: inherit;
+      font-size: 16px;
+      background: var(--apple-white);
+      transition: var(--transition);
+      outline: none;
+    }
+
+    .input-apple:focus {
+      border-color: var(--apple-blue);
+      box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+    }
+
+    .input-large {
+      padding: 20px 24px;
+      font-size: 18px;
+    }
+
     .analysis-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: var(--blur-glass);
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(8px);
+      animation: fadeIn 0.3s ease-out;
     }
-    
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     .analysis-window {
-      background: white;
-      border-radius: 12px;
-      padding: 2rem;
-      max-width: 800px;
+      background: var(--apple-white);
+      border-radius: var(--border-radius-large);
+      padding: 40px;
+      max-width: 900px;
       width: 90%;
-      max-height: 80vh;
+      max-height: 85vh;
       overflow-y: auto;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-      animation: slideIn 0.3s ease-out;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      position: relative;
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+      transform: translateZ(0);
     }
-    
-    @keyframes slideIn {
+
+    @keyframes slideUp {
       from {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translateY(30px) scale(0.95);
       }
       to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
       }
     }
-    
+
+    .progress-apple {
+      height: 8px;
+      background: var(--apple-gray-light);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light));
+      border-radius: 4px;
+      transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.3s ease;
+      animation: pulse 2s ease-in-out infinite;
+      will-change: width, background;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+
+    .stats-card {
+      background: linear-gradient(135deg, var(--apple-blue) 0%, var(--apple-blue-light) 100%);
+      color: var(--apple-white);
+      border-radius: var(--border-radius-large);
+      padding: 30px;
+      margin: 20px 0;
+      box-shadow: var(--shadow-medium);
+      transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+      will-change: background, transform;
+    }
+
+    .log-container {
+      background: var(--apple-gray-light);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin: 20px 0;
+    }
+
     .log-entry {
-      padding: 0.75rem 1rem;
-      margin: 0.5rem 0;
+      padding: 12px 16px;
+      margin: 8px 0;
       border-radius: 8px;
       border-left: 4px solid;
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: 0.9rem;
-      animation: fadeInUp 0.3s ease-out;
+      font-family: 'SF Mono', Consolas, Monaco, monospace;
+      font-size: 14px;
+      animation: slideInLeft 0.3s ease-out;
+      background: var(--apple-white);
+      box-shadow: var(--shadow-light);
+      transition: all 0.2s ease;
+      will-change: transform, opacity;
     }
     
-    @keyframes fadeInUp {
+    .log-entry:hover {
+      transform: translateX(4px);
+      box-shadow: var(--shadow-medium);
+    }
+
+    @keyframes slideInLeft {
       from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateX(-20px);
       }
       to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateX(0);
       }
     }
-    
-    .log-info {
-      background: #e8f4fd;
-      border-left-color: #3273dc;
-      color: #296fa8;
+
+    .log-info { border-left-color: var(--apple-blue); }
+    .log-success { border-left-color: var(--apple-green); }
+    .log-warning { border-left-color: var(--apple-orange); }
+    .log-error { border-left-color: var(--apple-red); }
+
+    .icon-apple {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2;
     }
-    
-    .log-success {
-      background: #effaf3;
-      border-left-color: #48c774;
-      color: #257942;
+
+    .card-apple {
+      background: var(--apple-white);
+      border-radius: var(--border-radius-large);
+      box-shadow: var(--shadow-medium);
+      transition: var(--transition);
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.05);
     }
-    
-    .log-warning {
-      background: #fffaeb;
-      border-left-color: #ffdd57;
-      color: #947600;
+
+    .card-apple:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-heavy);
     }
-    
-    .log-error {
-      background: #feecf0;
-      border-left-color: #f14668;
-      color: #cc0f35;
+
+    .table-apple {
+      width: 100%;
+      background: var(--apple-white);
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-light);
     }
-    
-    .hero-gradient {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+    .table-apple th {
+      background: var(--apple-gray-light);
+      padding: 16px;
+      font-weight: 600;
+      text-align: left;
+      border-bottom: 1px solid #e5e5ea;
     }
-    
-    .step-card {
-      border: 2px solid transparent;
-      transition: all 0.3s ease;
+
+    .table-apple td {
+      padding: 16px;
+      border-bottom: 1px solid #f0f0f0;
     }
-    
-    .step-card.active {
-      border-color: #3273dc;
-      box-shadow: 0 4px 12px rgba(50, 115, 220, 0.15);
+
+    .table-apple tr:hover {
+      background: rgba(0, 122, 255, 0.02);
     }
-    
-    .step-card.completed {
-      border-color: #48c774;
-      background: #f0fff4;
+
+    .tag-apple {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--apple-gray-light);
+      color: var(--apple-gray-dark);
     }
-    
-    .analysis-stats {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      color: white;
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin: 1rem 0;
+
+    .tag-success {
+      background: rgba(52, 199, 89, 0.1);
+      color: var(--apple-green);
+    }
+
+    .tag-warning {
+      background: rgba(255, 149, 0, 0.1);
+      color: var(--apple-orange);
+    }
+
+    .tag-danger {
+      background: rgba(255, 59, 48, 0.1);
+      color: var(--apple-red);
+    }
+
+    .notification-apple {
+      padding: 16px 20px;
+      border-radius: var(--border-radius);
+      margin: 16px 0;
+      background: var(--apple-white);
+      border-left: 4px solid;
+      box-shadow: var(--shadow-light);
+    }
+
+    .notification-success {
+      border-left-color: var(--apple-green);
+      background: rgba(52, 199, 89, 0.05);
+    }
+
+    .notification-warning {
+      border-left-color: var(--apple-orange);
+      background: rgba(255, 149, 0, 0.05);
+    }
+
+    .notification-error {
+      border-left-color: var(--apple-red);
+      background: rgba(255, 59, 48, 0.05);
+    }
+
+    .text-center { text-align: center; }
+         .text-muted { color: #6E6E73; font-weight: 500; }
+    .font-weight-bold { font-weight: 600; }
+    .font-weight-semibold { font-weight: 500; }
+
+    .mt-2 { margin-top: 8px; }
+    .mt-3 { margin-top: 16px; }
+    .mt-4 { margin-top: 24px; }
+    .mt-5 { margin-top: 32px; }
+    .mb-2 { margin-bottom: 8px; }
+    .mb-3 { margin-bottom: 16px; }
+    .mb-4 { margin-bottom: 24px; }
+    .mb-5 { margin-bottom: 32px; }
+
+    .d-flex { display: flex; }
+    .align-items-center { align-items: center; }
+    .justify-content-between { justify-content: space-between; }
+    .justify-content-center { justify-content: center; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 16px; }
+
+         /* Responsive */
+     @media (max-width: 768px) {
+       .apple-container { padding: 0 16px; }
+       .step-card { padding: 24px; margin: 20px 0; }
+       .analysis-window { padding: 24px; }
+       .hero-apple { padding: 15px 0; }
+       .nav-apple { padding: 10px 0; }
+       .nav-buttons { flex-wrap: wrap; }
+     }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      .step-card {
+        background: #1c1c1e;
+        color: var(--apple-white);
+      }
+      .log-entry {
+        background: #2c2c2e;
+        color: var(--apple-white);
+      }
     }
   </style>
 </head>
@@ -125,10 +516,10 @@
     function App() {
       const [domain, setDomain] = React.useState('');
       const [error, setError] = React.useState('');
-      const [analysisStep, setAnalysisStep] = React.useState('input'); // 'input', 'analyzing', 'results'
+      const [analysisStep, setAnalysisStep] = React.useState('input');
       const [analysisHistory, setAnalysisHistory] = React.useState([]);
       const [selectedAnalysis, setSelectedAnalysis] = React.useState(null);
-      const [currentView, setCurrentView] = React.useState('main'); // 'main', 'history', 'analysis'
+      const [currentView, setCurrentView] = React.useState('main');
       
       // Real-time analysis states
       const [analysisLogs, setAnalysisLogs] = React.useState([]);
@@ -138,18 +529,25 @@
       const [connectionStatus, setConnectionStatus] = React.useState('disconnected');
       const [currentAnalysisId, setCurrentAnalysisId] = React.useState(null);
       const [recommendations, setRecommendations] = React.useState([]);
+      
+      // Новые состояния для уведомлений и стабильности
+      const [notifications, setNotifications] = React.useState([]);
+      const [showNotifications, setShowNotifications] = React.useState(false);
+      const [analysisError, setAnalysisError] = React.useState(null);
+      const [isAnalyzing, setIsAnalyzing] = React.useState(false);
 
       React.useEffect(() => { 
         console.log('🚀 SEO Link Recommender загружен');
         
-        // Генерируем уникальный ID клиента
+        // Инициализируем Feather Icons
+        if (window.feather) {
+          window.feather.replace();
+        }
+        
         const newClientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         setClientId(newClientId);
         
-        // Загружаем историю анализов
         loadAnalysisHistory();
-        
-        // Устанавливаем WebSocket соединение
         connectWebSocket(newClientId);
         
         return () => {
@@ -159,7 +557,6 @@
         };
       }, []);
       
-      // Функции для работы с WebSocket
       function connectWebSocket(clientId) {
         if (!clientId) return;
         
@@ -173,6 +570,7 @@
           setConnectionStatus('connected');
           setWebsocket(ws);
           addLog('success', 'WebSocket соединение установлено');
+          addNotification('success', 'Соединение установлено', 'WebSocket готов к работе');
         };
         
         ws.onmessage = (event) => {
@@ -188,15 +586,39 @@
           console.log('🔌 WebSocket отключен');
           setConnectionStatus('disconnected');
           setWebsocket(null);
-          
-          // Автоматическое переподключение через 3 секунды
+          addNotification('warning', 'Соединение потеряно', 'Переподключение через 3 секунды...');
           setTimeout(() => connectWebSocket(clientId), 3000);
         };
         
         ws.onerror = (error) => {
           console.error('❌ Ошибка WebSocket:', error);
           addLog('error', 'Ошибка WebSocket соединения');
+          addNotification('error', 'Ошибка соединения', 'Проблема с WebSocket');
         };
+      }
+      
+      function addNotification(type, title, message, duration = 5000) {
+        const notification = {
+          id: Date.now() + Math.random(),
+          type,
+          title,
+          message,
+          timestamp: new Date(),
+          duration
+        };
+        
+        setNotifications(prev => [notification, ...prev.slice(0, 9)]); // Максимум 10 уведомлений
+        
+        // Автоматически удаляем уведомление через указанное время
+        if (duration > 0) {
+          setTimeout(() => {
+            removeNotification(notification.id);
+          }, duration);
+        }
+      }
+      
+      function removeNotification(id) {
+        setNotifications(prev => prev.filter(n => n.id !== id));
       }
       
       function handleWebSocketMessage(data) {
@@ -205,44 +627,50 @@
         switch (data.type) {
           case 'progress':
             addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
-            setAnalysisStats({
+            setAnalysisStats(prev => ({
+              ...prev,
               step: data.step,
               current: data.current,
               total: data.total,
               percentage: data.percentage,
               details: data.details
-            });
+            }));
             break;
             
           case 'ollama':
             if (data.info.status === 'starting') {
               addLog('info', '🤖 Запуск Ollama анализа', 
                 `Модель: ${data.info.model}, Статей: ${data.info.articles_count}`);
+              addNotification('info', 'Ollama запущена', `Анализ ${data.info.articles_count} статей`, 3000);
             } else if (data.info.status === 'completed') {
               addLog('success', '🤖 Ollama завершила анализ', 
                 `Время: ${data.info.request_time}, Ответ: ${data.info.response_length} символов`);
+              addNotification('success', 'Ollama завершена', `Анализ за ${data.info.request_time}`, 3000);
             }
             break;
             
           case 'error':
             addLog('error', data.message, data.details);
-            setError(data.message);
-            // При ошибке возвращаемся к вводу
-            setTimeout(() => {
-              setAnalysisStep('input');
-              setAnalysisLogs([]);
-              setAnalysisStats(null);
-            }, 5000);
+            setAnalysisError({
+              message: data.message,
+              details: data.details,
+              timestamp: new Date()
+            });
+            addNotification('error', 'Ошибка анализа', data.message, 0); // Не автоудаляется
+            setIsAnalyzing(false);
             break;
             
           case 'complete':
             addLog('success', '✅ Анализ завершен успешно!', 
               `Найдено ${data.recommendations_count} рекомендаций из ${data.posts_count} статей`);
             
-            // Переходим к результатам через 2 секунды
+            addNotification('success', 'Анализ завершен!', 
+              `${data.recommendations_count} рекомендаций из ${data.posts_count} статей`, 0);
+            
+            setIsAnalyzing(false);
             setTimeout(() => {
               setAnalysisStep('results');
-              loadAnalysisHistory(); // Обновляем историю
+              loadAnalysisHistory();
             }, 2000);
             break;
         }
@@ -272,6 +700,7 @@
         } catch (err) {
           console.error('❌ Ошибка загрузки истории:', err);
           setError(`Ошибка загрузки истории: ${err.message}`);
+          addNotification('error', 'Ошибка загрузки', 'Не удалось загрузить историю анализов');
         }
       }
 
@@ -283,19 +712,29 @@
         
         if (!clientId || connectionStatus !== 'connected') {
           setError('WebSocket не подключен. Обновите страницу.');
+          addNotification('error', 'Нет соединения', 'WebSocket не подключен');
           return;
         }
         
         setError('');
+        setAnalysisError(null);
         setAnalysisStep('analyzing');
         setAnalysisLogs([]);
-        setAnalysisStats(null);
+        setAnalysisStats({
+          step: 'Инициализация',
+          current: 0,
+          total: 7,
+          percentage: 0,
+          details: 'Подготовка к анализу...'
+        });
         setRecommendations([]);
+        setIsAnalyzing(true);
         
         const analysisId = 'analysis_' + Date.now();
         setCurrentAnalysisId(analysisId);
         
         addLog('info', `🚀 Начинаю анализ сайта: ${domain}`, 'Подключение к WordPress API...');
+        addNotification('info', 'Анализ запущен', `Анализируем сайт ${domain}`, 3000);
         
         try {
           const resp = await fetch('http://localhost:8000/api/v1/wp_recommend', {
@@ -318,7 +757,13 @@
         } catch (err) {
           console.error('❌ Ошибка анализа:', err);
           addLog('error', 'Критическая ошибка анализа', err.message);
-          setError(`Ошибка анализа: ${err.message}`);
+          setAnalysisError({
+            message: 'Критическая ошибка анализа',
+            details: err.message,
+            timestamp: new Date()
+          });
+          addNotification('error', 'Критическая ошибка', err.message, 0);
+          setIsAnalyzing(false);
         }
       }
       
@@ -328,371 +773,587 @@
         setAnalysisStats(null);
         setRecommendations([]);
         setCurrentAnalysisId(null);
+        setAnalysisError(null);
+        setIsAnalyzing(false);
         setError('');
       }
+      
+      function retryAnalysis() {
+        setAnalysisError(null);
+        startAnalysis();
+      }
 
-      // Анализ в реальном времени - красивое затененное окно
+      function NotificationBell() {
+        const unreadCount = notifications.filter(n => !n.read).length;
+        const notificationRef = React.useRef(null);
+        
+        React.useEffect(() => {
+          function handleClickOutside(event) {
+            if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+              setShowNotifications(false);
+            }
+          }
+          
+          if (showNotifications) {
+            document.addEventListener('mousedown', handleClickOutside);
+          }
+          
+          return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+          };
+        }, [showNotifications]);
+        
+        return (
+          <div style={{position: 'relative'}} ref={notificationRef}>
+            <button 
+              className={`btn-apple ${showNotifications ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setShowNotifications(!showNotifications)}
+              style={{position: 'relative'}}
+            >
+              <i data-feather="bell" className="icon-apple"></i>
+              Уведомления
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: 'var(--apple-red)',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  fontSize: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold'
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: '0',
+                width: '400px',
+                maxHeight: '500px',
+                background: 'var(--apple-white)',
+                borderRadius: 'var(--border-radius)',
+                boxShadow: 'var(--shadow-heavy)',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                zIndex: 1000,
+                marginTop: '8px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  padding: '16px',
+                  borderBottom: '1px solid #f0f0f0',
+                  background: 'var(--apple-gray-light)',
+                  fontWeight: '600'
+                }}>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span>Уведомления ({notifications.length})</span>
+                    <button 
+                      className="btn-apple btn-secondary"
+                      onClick={() => setNotifications([])}
+                      style={{padding: '4px 8px', fontSize: '12px'}}
+                    >
+                      Очистить все
+                    </button>
+                  </div>
+                </div>
+                
+                <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+                  {notifications.length === 0 ? (
+                    <div style={{padding: '32px', textAlign: 'center', color: '#6E6E73'}}>
+                      <i data-feather="bell-off" style={{width: '48px', height: '48px', marginBottom: '12px'}}></i>
+                      <div>Нет уведомлений</div>
+                    </div>
+                  ) : (
+                    notifications.map(notification => (
+                      <div 
+                        key={notification.id}
+                        style={{
+                          padding: '12px 16px',
+                          borderBottom: '1px solid #f0f0f0',
+                          borderLeft: `4px solid ${
+                            notification.type === 'success' ? 'var(--apple-green)' :
+                            notification.type === 'error' ? 'var(--apple-red)' :
+                            notification.type === 'warning' ? 'var(--apple-orange)' : 'var(--apple-blue)'
+                          }`
+                        }}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div style={{flex: 1}}>
+                            <div className="font-weight-semibold" style={{fontSize: '14px'}}>
+                              {notification.title}
+                            </div>
+                            <div style={{fontSize: '13px', color: '#6E6E73', marginTop: '2px'}}>
+                              {notification.message}
+                            </div>
+                            <div style={{fontSize: '11px', color: '#8E8E93', marginTop: '4px'}}>
+                              {notification.timestamp.toLocaleTimeString()}
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => removeNotification(notification.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              color: '#8E8E93'
+                            }}
+                          >
+                            <i data-feather="x" style={{width: '14px', height: '14px'}}></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       function AnalysisOverlay() {
         if (analysisStep !== 'analyzing') return null;
         
         return (
           <div className="analysis-overlay">
             <div className="analysis-window">
-              <div className="has-text-centered mb-4">
-                <h2 className="title is-4">
-                  🔍 Анализируем сайт {domain}
+              <div className="text-center mb-4">
+                <h2 className="hero-title" style={{fontSize: '2rem', marginBottom: '0.5rem', color: '#1C1C1E', fontWeight: '600'}}>
+                  <i data-feather="search" className="icon-apple" style={{marginRight: '12px', color: '#007AFF'}}></i>
+                  Анализируем <span style={{color: '#007AFF', fontWeight: '700'}}>{domain}</span>
                 </h2>
-                <p className="subtitle is-6 has-text-grey">
+                <p style={{color: '#6E6E73', fontSize: '1.1rem', fontWeight: '500'}}>
                   Real-time мониторинг процесса анализа
                 </p>
               </div>
               
-              {/* Статистика анализа */}
               {analysisStats && (
-                <div className="analysis-stats">
-                  <div className="columns is-mobile">
-                    <div className="column">
-                      <div className="has-text-weight-bold is-size-5">
-                        {analysisStats.step}
+                <div className="stats-card" style={{
+                  background: analysisError ? 
+                    'linear-gradient(135deg, var(--apple-red) 0%, #ff6b6b 100%)' :
+                    'linear-gradient(135deg, var(--apple-blue) 0%, var(--apple-blue-light) 100%)',
+                  transition: 'all 0.5s ease'
+                }}>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                      <div className="font-weight-bold" style={{fontSize: '1.25rem'}}>
+                        {analysisError ? 'Ошибка анализа' : analysisStats.step}
                       </div>
-                      <div className="is-size-7">
-                        {analysisStats.current}/{analysisStats.total} ({analysisStats.percentage}%)
+                      <div style={{opacity: 0.8}}>
+                        {analysisError ? 
+                          'Процесс прерван' :
+                          `${analysisStats.current}/${analysisStats.total} (${analysisStats.percentage}%)`
+                        }
                       </div>
                     </div>
-                    <div className="column is-narrow">
-                      <div className="is-size-1">
-                        {analysisStats.percentage === 100 ? '✅' : '⚙️'}
-                      </div>
+                    <div style={{fontSize: '2rem'}}>
+                      {analysisError ? '❌' : 
+                       analysisStats.percentage === 100 ? '✅' : '⚙️'}
                     </div>
                   </div>
-                  <progress 
-                    className="progress is-white is-small" 
-                    value={analysisStats.percentage} 
-                    max="100"
-                  >
-                    {analysisStats.percentage}%
-                  </progress>
-                  <div className="is-size-7 mt-2">
-                    {analysisStats.details}
+                  
+                  <div className="progress-apple">
+                    <div 
+                      className="progress-bar" 
+                      style={{
+                        width: analysisError ? '100%' : `${analysisStats.percentage}%`,
+                        background: analysisError ? 
+                          'linear-gradient(90deg, var(--apple-red), #ff6b6b)' :
+                          'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))',
+                        transition: 'width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.3s ease'
+                      }}
+                    ></div>
+                  </div>
+                  
+                  <div className="mt-2" style={{color: '#1C1C1E', fontSize: '0.95rem', fontWeight: '500'}}>
+                    {analysisError ? analysisError.details : analysisStats.details}
                   </div>
                 </div>
               )}
               
-              {/* Логи анализа */}
-              <div className="box" style={{maxHeight: '400px', overflowY: 'auto', background: '#fafafa'}}>
-                <h5 className="title is-6 mb-3">📝 Логи анализа</h5>
+              {analysisError && (
+                <div className="notification-apple notification-error mb-4">
+                  <div className="d-flex justify-content-between align-items-start">
+                    <div>
+                      <div className="font-weight-semibold">{analysisError.message}</div>
+                      <div className="mt-2" style={{fontSize: '0.9rem'}}>{analysisError.details}</div>
+                      <div className="mt-2 text-muted" style={{fontSize: '0.8rem'}}>
+                        Время ошибки: {analysisError.timestamp.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="d-flex gap-2 mt-3">
+                    <button 
+                      className="btn-apple btn-primary"
+                      onClick={retryAnalysis}
+                      disabled={isAnalyzing}
+                    >
+                      <i data-feather="refresh-cw" className="icon-apple"></i>
+                      Повторить анализ
+                    </button>
+                    <button 
+                      className="btn-apple btn-secondary"
+                      onClick={resetAnalysis}
+                    >
+                      <i data-feather="arrow-left" className="icon-apple"></i>
+                      Вернуться к вводу
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="log-container">
+                <h5 className="font-weight-semibold mb-3">
+                  <i data-feather="file-text" className="icon-apple" style={{marginRight: '8px'}}></i>
+                  Логи анализа
+                </h5>
                 {analysisLogs.length === 0 ? (
-                  <p className="has-text-grey">Ожидание логов...</p>
+                  <p className="text-muted">Ожидание логов...</p>
                 ) : (
                   analysisLogs.map(log => (
                     <div key={log.id} className={`log-entry log-${log.type}`}>
-                      <div className="is-flex is-justify-content-space-between is-align-items-flex-start">
-                        <div className="is-flex-grow-1">
-                          <div className="has-text-weight-semibold">
-                            [{log.timestamp}] {log.message}
-                          </div>
-                          {log.details && (
-                            <div className="is-size-7 mt-1 has-text-grey-dark">
-                              {log.details}
-                            </div>
-                          )}
-                        </div>
+                      <div className="font-weight-semibold">
+                        [{log.timestamp}] {log.message}
                       </div>
+                      {log.details && (
+                        <div className="mt-1" style={{color: '#6E6E73', fontSize: '0.9rem', fontWeight: '500'}}>
+                          {log.details}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
               </div>
               
-              {/* Статус соединения */}
-              <div className="level mt-4">
-                <div className="level-left">
-                  <div className="level-item">
-                    <span className={`tag ${
-                      connectionStatus === 'connected' ? 'is-success' : 
-                      connectionStatus === 'connecting' ? 'is-warning' : 'is-danger'
-                    }`}>
-                      {connectionStatus === 'connected' ? '🟢 Подключено' : 
-                       connectionStatus === 'connecting' ? '🟡 Подключение...' : '🔴 Отключено'}
-                    </span>
-                  </div>
-                </div>
-                <div className="level-right">
-                  <div className="level-item">
-                    <button 
-                      className="button is-light"
-                      onClick={resetAnalysis}
-                    >
-                      ❌ Прервать анализ
-                    </button>
-                  </div>
-                </div>
+              <div className="d-flex justify-content-between align-items-center mt-4">
+                <span className={`tag-apple ${
+                  connectionStatus === 'connected' ? 'tag-success' : 
+                  connectionStatus === 'connecting' ? 'tag-warning' : 'tag-danger'
+                }`}>
+                  <i data-feather={
+                    connectionStatus === 'connected' ? 'wifi' : 
+                    connectionStatus === 'connecting' ? 'loader' : 'wifi-off'
+                  } className="icon-apple"></i>
+                  {connectionStatus === 'connected' ? 'Подключено' : 
+                   connectionStatus === 'connecting' ? 'Подключение...' : 'Отключено'}
+                </span>
+                
+                {!analysisError && (
+                  <button 
+                    className="btn-apple btn-secondary"
+                    onClick={resetAnalysis}
+                  >
+                    <i data-feather="x" className="icon-apple"></i>
+                    Прервать анализ
+                  </button>
+                )}
               </div>
             </div>
           </div>
         );
       }
 
+      React.useEffect(() => {
+        if (window.feather) {
+          window.feather.replace();
+        }
+      });
+
       return (
         <div>
           <AnalysisOverlay />
           
-          {/* Главная секция */}
-          <section className="hero hero-gradient">
-            <div className="hero-body">
-              <div className="container has-text-centered">
-                <h1 className="title is-2 has-text-white">
-                  SEO Link Recommender
-                </h1>
-                <p className="subtitle is-4 has-text-white-ter">
-                  Умный анализ внутренних ссылок для вашего WordPress сайта
-                </p>
-              </div>
+          <section className="hero-apple">
+            <div className="apple-container">
+              <h1 className="hero-title">
+                SEO Link Recommender
+              </h1>
+              <p className="hero-subtitle">
+                Умный анализ внутренних ссылок для вашего WordPress
+              </p>
             </div>
           </section>
           
-          <section className="section">
-            <div className="container">
-              {/* Навигация */}
-              <nav className="level mb-5">
-                <div className="level-left">
-                  <div className="buttons">
-                    <button 
-                      className={`button ${currentView === 'main' ? 'is-primary' : 'is-light'}`}
-                      onClick={() => setCurrentView('main')}
-                    >
-                      🏠 Главная
-                    </button>
-                    <button 
-                      className={`button ${currentView === 'history' ? 'is-primary' : 'is-light'}`}
-                      onClick={() => setCurrentView('history')}
-                    >
-                      📊 История анализов ({analysisHistory.length})
-                    </button>
-                  </div>
-                </div>
-              </nav>
-            
-              {/* Главная страница */}
+          <nav className="nav-apple">
+            <div className="apple-container">
+              <div className="nav-buttons">
+                <button 
+                  className={`btn-apple ${currentView === 'main' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCurrentView('main')}
+                >
+                  <i data-feather="home" className="icon-apple"></i>
+                  Главная
+                </button>
+                <button 
+                  className={`btn-apple ${currentView === 'history' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCurrentView('history')}
+                >
+                  <i data-feather="bar-chart" className="icon-apple"></i>
+                  История анализов ({analysisHistory.length})
+                </button>
+                
+                <NotificationBell />
+              </div>
+            </div>
+          </nav>
+          
+          <section style={{padding: '20px 0', minHeight: '70vh'}}>
+            <div className="apple-container">
+              
               {currentView === 'main' && (
-                <div className="columns is-centered">
-                  <div className="column is-8">
-                    
-                    {/* Этап 1: Ввод DNS */}
-                    {analysisStep === 'input' && (
-                      <div className="step-card box active">
-                        <h2 className="title is-4 has-text-centered mb-5">
-                          🌐 Введите DNS имя для анализа
+                <div style={{maxWidth: '800px', margin: '0 auto'}}>
+                  
+                  {analysisStep === 'input' && (
+                    <div className="step-card active">
+                      <div className="text-center mb-5">
+                        <div style={{fontSize: '4rem', marginBottom: '1rem'}}>🌐</div>
+                        <h2 style={{fontSize: '2rem', fontWeight: '600', marginBottom: '1rem'}}>
+                          Введите DNS имя для анализа
                         </h2>
-                        
-                        <div className="field">
-                          <label className="label is-medium">DNS имя сайта</label>
-                          <div className="control is-large">
-                            <input 
-                              className="input is-large" 
-                              type="text"
-                              placeholder="example.com (без https://)" 
-                              value={domain} 
-                              onChange={e => setDomain(e.target.value)}
-                              onKeyPress={e => e.key === 'Enter' && startAnalysis()}
-                            />
-                          </div>
-                          <p className="help">
-                            Введите только DNS имя (например: site.ru), без протокола и слэшей
-                          </p>
-                        </div>
-                        
-                        <div className="has-text-centered mt-5">
-                          <button 
-                            className="button is-primary is-large"
-                            onClick={startAnalysis}
-                            disabled={!domain.trim() || connectionStatus !== 'connected'}
-                          >
-                            <span className="icon">
-                              <i>🚀</i>
-                            </span>
-                            <span>Получить ссылки</span>
-                          </button>
-                        </div>
-                        
-                        {/* Статус соединения */}
-                        <div className="has-text-centered mt-3">
-                          <span className={`tag ${
-                            connectionStatus === 'connected' ? 'is-success' : 
-                            connectionStatus === 'connecting' ? 'is-warning' : 'is-danger'
-                          }`}>
-                            WebSocket: {connectionStatus === 'connected' ? 'Готов' : 
-                                      connectionStatus === 'connecting' ? 'Подключение...' : 'Нет связи'}
-                          </span>
-                        </div>
                       </div>
-                    )}
-                    
-                    {/* Этап 2: Результаты */}
-                    {analysisStep === 'results' && (
-                      <div className="step-card box completed">
-                        <div className="level">
-                          <div className="level-left">
-                            <div className="level-item">
-                              <h2 className="title is-4">
-                                ✅ Анализ завершен: {domain}
-                              </h2>
-                            </div>
-                          </div>
-                          <div className="level-right">
-                            <div className="level-item">
-                              <button 
-                                className="button is-primary"
-                                onClick={resetAnalysis}
-                              >
-                                🔄 Новый анализ
-                              </button>
-                            </div>
-                          </div>
+                      
+                      <div className="mb-4">
+                        <label className="font-weight-semibold mb-2" style={{display: 'block', fontSize: '1.1rem'}}>
+                          DNS имя сайта
+                        </label>
+                        <input 
+                          className="input-apple input-large" 
+                          type="text"
+                          placeholder="example.com (без https://)" 
+                          value={domain} 
+                          onChange={e => setDomain(e.target.value)}
+                          onKeyPress={e => e.key === 'Enter' && startAnalysis()}
+                        />
+                        <p className="text-muted mt-2">
+                          Введите только DNS имя (например: site.ru), без протокола и слэшей
+                        </p>
+                      </div>
+                      
+                      <div className="text-center mt-5">
+                        <button 
+                          className="btn-apple btn-primary btn-large"
+                          onClick={startAnalysis}
+                          disabled={!domain.trim() || connectionStatus !== 'connected'}
+                        >
+                          <i data-feather="zap" className="icon-apple"></i>
+                          Получить ссылки
+                        </button>
+                      </div>
+                      
+                      <div className="text-center mt-3">
+                        <span className={`tag-apple ${
+                          connectionStatus === 'connected' ? 'tag-success' : 
+                          connectionStatus === 'connecting' ? 'tag-warning' : 'tag-danger'
+                        }`}>
+                          <i data-feather={
+                            connectionStatus === 'connected' ? 'wifi' : 
+                            connectionStatus === 'connecting' ? 'loader' : 'wifi-off'
+                          } className="icon-apple"></i>
+                          WebSocket: {connectionStatus === 'connected' ? 'Готов' : 
+                                    connectionStatus === 'connecting' ? 'Подключение...' : 'Нет связи'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {analysisStep === 'results' && (
+                    <div className="step-card completed">
+                      <div className="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                          <h2 style={{fontSize: '1.5rem', fontWeight: '600'}}>
+                            <i data-feather="check-circle" className="icon-apple" style={{marginRight: '8px', color: 'var(--apple-green)'}}></i>
+                            Анализ завершен: {domain}
+                          </h2>
                         </div>
-                        
-                        {recommendations.length > 0 ? (
-                          <div>
-                            <div className="notification is-success is-light mb-4">
-                              <strong>Найдено {recommendations.length} рекомендаций по внутренним ссылкам!</strong>
-                              <br />
+                        <button 
+                          className="btn-apple btn-primary"
+                          onClick={resetAnalysis}
+                        >
+                          <i data-feather="refresh-cw" className="icon-apple"></i>
+                          Новый анализ
+                        </button>
+                      </div>
+                      
+                      {recommendations.length > 0 ? (
+                        <div>
+                          <div className="notification-apple notification-success mb-4">
+                            <div className="font-weight-semibold">
+                              Найдено {recommendations.length} рекомендаций по внутренним ссылкам!
+                            </div>
+                            <div className="mt-1">
                               Результаты автоматически сохранены в историю анализов.
                             </div>
-                            
-                            <table className="table is-striped is-fullwidth">
-                              <thead>
-                                <tr>
-                                  <th>Откуда</th>
-                                  <th>Куда</th>
-                                  <th>Анкор</th>
-                                  <th>Обоснование ИИ</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {recommendations.map((rec, i) => (
-                                  <tr key={i}>
-                                    <td>
-                                      <a href={rec.from} target="_blank" rel="noopener" className="is-size-7">
-                                        {rec.from.replace('https://', '').substring(0, 40)}...
-                                      </a>
-                                    </td>
-                                    <td>
-                                      <a href={rec.to} target="_blank" rel="noopener" className="is-size-7">
-                                        {rec.to.replace('https://', '').substring(0, 40)}...
-                                      </a>
-                                    </td>
-                                    <td>
-                                      <div className="field has-addons">
-                                        <div className="control is-expanded">
-                                          <input 
-                                            className="input is-small" 
-                                            value={rec.anchor} 
-                                            readOnly 
-                                          />
-                                        </div>
-                                        <div className="control">
-                                          <button 
-                                            className="button is-small is-primary"
-                                            onClick={() => {
-                                              navigator.clipboard.writeText(rec.anchor);
-                                            }}
-                                            title="Скопировать анкор"
-                                          >
-                                            📋
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td>
-                                      <p className="is-size-7 has-text-grey">
-                                        {rec.comment}
-                                      </p>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
                           </div>
-                        ) : (
-                          <div className="notification is-warning">
-                            <strong>Рекомендации не найдены.</strong>
-                            <br />
+                          
+                          <table className="table-apple">
+                            <thead>
+                              <tr>
+                                <th>
+                                  <i data-feather="arrow-right" className="icon-apple" style={{marginRight: '8px'}}></i>
+                                  Откуда
+                                </th>
+                                <th>
+                                  <i data-feather="external-link" className="icon-apple" style={{marginRight: '8px'}}></i>
+                                  Куда
+                                </th>
+                                <th>
+                                  <i data-feather="link" className="icon-apple" style={{marginRight: '8px'}}></i>
+                                  Анкор
+                                </th>
+                                <th>
+                                  <i data-feather="message-circle" className="icon-apple" style={{marginRight: '8px'}}></i>
+                                  Обоснование ИИ
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {recommendations.map((rec, i) => (
+                                <tr key={i}>
+                                  <td>
+                                    <a href={rec.from} target="_blank" rel="noopener" style={{color: 'var(--apple-blue)', textDecoration: 'none'}}>
+                                      {rec.from.replace('https://', '').substring(0, 40)}...
+                                    </a>
+                                  </td>
+                                  <td>
+                                    <a href={rec.to} target="_blank" rel="noopener" style={{color: 'var(--apple-blue)', textDecoration: 'none'}}>
+                                      {rec.to.replace('https://', '').substring(0, 40)}...
+                                    </a>
+                                  </td>
+                                  <td>
+                                    <div className="d-flex gap-2">
+                                      <input 
+                                        className="input-apple" 
+                                        value={rec.anchor} 
+                                        readOnly 
+                                        style={{fontSize: '0.9rem'}}
+                                      />
+                                      <button 
+                                        className="btn-apple btn-primary"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(rec.anchor);
+                                        }}
+                                        title="Скопировать анкор"
+                                        style={{padding: '8px 12px'}}
+                                      >
+                                        <i data-feather="copy" className="icon-apple"></i>
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <p className="text-muted" style={{fontSize: '0.9rem', lineHeight: '1.4'}}>
+                                      {rec.comment}
+                                    </p>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="notification-apple notification-warning">
+                          <div className="font-weight-semibold">Рекомендации не найдены.</div>
+                          <div className="mt-1">
                             Возможно, на сайте недостаточно статей или они не связаны тематически.
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {error && (
+                    <div className="notification-apple notification-error">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <div className="font-weight-semibold">Ошибка:</div>
+                          <div className="mt-1">{error}</div>
+                        </div>
+                        <button 
+                          className="btn-apple btn-secondary"
+                          onClick={() => setError('')}
+                          style={{padding: '8px'}}
+                        >
+                          <i data-feather="x" className="icon-apple"></i>
+                        </button>
                       </div>
-                    )}
-                    
-                    {/* Ошибки */}
-                    {error && (
-                      <div className="notification is-danger">
-                        <button className="delete" onClick={() => setError('')}></button>
-                        <strong>Ошибка:</strong> {error}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
               
-              {/* История анализов */}
               {currentView === 'history' && (
-                <div className="content">
-                  <h2 className="title is-3">📊 История анализов</h2>
+                <div>
+                  <div className="text-center mb-5">
+                    <h2 style={{fontSize: '2.5rem', fontWeight: '600', marginBottom: '0.5rem'}}>
+                      <i data-feather="bar-chart" className="icon-apple" style={{marginRight: '12px'}}></i>
+                      История анализов
+                    </h2>
+                  </div>
+                  
                   {analysisHistory.length === 0 ? (
-                    <div className="notification is-info">
-                      <p>История анализов пуста. Проведите первый анализ WordPress сайта!</p>
+                    <div className="notification-apple" style={{maxWidth: '600px', margin: '0 auto'}}>
+                      <div className="text-center">
+                        <div style={{fontSize: '3rem', marginBottom: '1rem'}}>📊</div>
+                        <div className="font-weight-semibold">История анализов пуста</div>
+                        <div className="mt-1">Проведите первый анализ WordPress сайта!</div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="columns is-multiline">
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px'}}>
                       {analysisHistory.map(analysis => (
-                        <div key={analysis.id} className="column is-one-third">
-                          <div className="card" style={{height: '100%'}}>
-                            <div className="card-header">
-                              <div className="card-header-title">
-                                <span className="icon"><i>🌐</i></span>
-                                <span>{analysis.domain}</span>
-                              </div>
+                        <div key={analysis.id} className="card-apple">
+                          <div style={{padding: '24px 24px 16px'}}>
+                            <div className="d-flex align-items-center gap-2 mb-3">
+                              <i data-feather="globe" className="icon-apple"></i>
+                              <span className="font-weight-semibold">{analysis.domain}</span>
                             </div>
-                            <div className="card-content" style={{flexGrow: 1}}>
-                              <div className="content">
-                                <time className="has-text-grey-light is-size-7">
-                                  {new Date(analysis.created_at).toLocaleString('ru-RU')}
-                                </time>
-                                <p className="mt-2">{analysis.summary}</p>
-                              </div>
+                            
+                            <div className="text-muted mb-3" style={{fontSize: '0.85rem'}}>
+                              {new Date(analysis.created_at).toLocaleString('ru-RU')}
                             </div>
-                            <div className="card-footer" style={{flexDirection: 'column', alignItems: 'stretch'}}>
-                              <div className="card-footer-item" style={{justifyContent: 'center', borderBottom: '1px solid #dbdbdb', padding: '0.75rem'}}>
-                                <div className="field is-grouped">
-                                  <div className="control">
-                                    <div className="tags has-addons">
-                                      <span className="tag is-dark">Статей</span>
-                                      <span className="tag is-info">{analysis.posts_count}</span>
-                                    </div>
-                                  </div>
-                                  <div className="control">
-                                    <div className="tags has-addons">
-                                      <span className="tag is-dark">Ссылок</span>
-                                      <span className="tag is-success">{analysis.recommendations_count}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="card-footer-item" style={{padding: '0'}}>
-                                <button 
-                                  className="button is-primary is-fullwidth"
-                                  style={{border: 'none', borderRadius: '0'}}
-                                  onClick={() => {
-                                    setSelectedAnalysis(analysis);
-                                    setRecommendations(analysis.recommendations);
-                                    setAnalysisStep('results');
-                                    setDomain(analysis.domain);
-                                    setCurrentView('main');
-                                  }}
-                                >
-                                  👁️ Посмотреть результаты
-                                </button>
-                              </div>
+                            
+                            <p style={{lineHeight: '1.5', marginBottom: '1rem'}}>
+                              {analysis.summary}
+                            </p>
+                            
+                            <div className="d-flex gap-2 mb-3">
+                              <span className="tag-apple">
+                                <i data-feather="file-text" className="icon-apple"></i>
+                                {analysis.posts_count} статей
+                              </span>
+                              <span className="tag-apple tag-success">
+                                <i data-feather="link" className="icon-apple"></i>
+                                {analysis.recommendations_count} ссылок
+                              </span>
                             </div>
+                          </div>
+                          
+                          <div style={{borderTop: '1px solid #f0f0f0', padding: '0'}}>
+                            <button 
+                              className="btn-apple btn-primary"
+                              style={{width: '100%', borderRadius: '0 0 var(--border-radius-large) var(--border-radius-large)'}}
+                              onClick={() => {
+                                setSelectedAnalysis(analysis);
+                                setRecommendations(analysis.recommendations);
+                                setAnalysisStep('results');
+                                setDomain(analysis.domain);
+                                setCurrentView('main');
+                              }}
+                            >
+                              <i data-feather="eye" className="icon-apple"></i>
+                              Посмотреть результаты
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -706,7 +1367,7 @@
       );
     }
 
-    console.log('🎯 Запускаю обновленное React приложение...');
+    console.log('🎯 Запускаю Apple-стиль React приложение...');
     ReactDOM.createRoot(document.getElementById('app')).render(<App />);
   </script>
 </body>
