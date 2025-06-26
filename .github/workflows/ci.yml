@@ -22,7 +22,7 @@ jobs:
       - name: Build backend image
         uses: docker/build-push-action@v5
         with:
-          context: ./seo_link_recommender/backend
+          context: ./seo_link_recommender
           file: ./seo_link_recommender/backend/Dockerfile
           push: false
 
