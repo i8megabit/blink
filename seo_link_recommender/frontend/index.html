@@ -2,48 +2,92 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO Link Recommender</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; background: #fff; }
+    textarea { width: 100%; padding: 10px; box-sizing: border-box; resize: vertical; }
+    button { margin-top: 10px; padding: 8px 16px; }
+    h1 { text-align: center; }
+    section { margin-top: 20px; }
+    ul { list-style: disc; margin-left: 20px; padding-left: 0; }
+    .history-item { margin-bottom: 8px; }
+    .link-list a { color: #0645ad; text-decoration: none; }
+    .link-list a:hover { text-decoration: underline; }
+    #error { color: #b00020; }
+  </style>
 </head>
 <body>
-  <h1>SEO Link Recommender</h1>
-  <textarea id="text" rows="10" cols="80" placeholder="Введите текст"></textarea><br>
-  <button id="send">Получить рекомендации</button>
-  <button id="load">Загрузить историю</button>
-  <ul id="result"></ul>
-  <h2>История</h2>
-  <ul id="history"></ul>
+  <div class="container">
+    <h1>SEO Link Recommender</h1>
+    <label for="text">Введите текст:</label>
+    <textarea id="text" rows="8" placeholder="Введите текст"></textarea>
+    <div>
+      <button id="send">Получить рекомендации</button>
+      <button id="load">Загрузить историю</button>
+    </div>
+    <p id="error" role="alert"></p>
+
+    <section>
+      <h2>Результаты</h2>
+      <ul id="result" class="link-list"></ul>
+    </section>
+
+    <section>
+      <h2>История</h2>
+      <ul id="history"></ul>
+    </section>
+  </div>
   <script>
+    async function updateHistory() {
+      const resp = await fetch('/api/v1/recommendations');
+      const data = await resp.json();
+      const history = document.getElementById('history');
+      history.innerHTML = '';
+      data.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        li.textContent = item.text + ' \u2192 ' + (item.links || []).join(', ');
+        history.appendChild(li);
+      });
+    }
+
     document.getElementById('send').addEventListener('click', async () => {
-      const text = document.getElementById('text').value;
-      const response = await fetch('/api/v1/recommend', {
+      const input = document.getElementById('text');
+      const text = input.value.trim();
+      const err = document.getElementById('error');
+      err.textContent = '';
+      if (!text) {
+        err.textContent = 'Поле не может быть пустым';
+        return;
+      }
+      const resp = await fetch('/api/v1/recommend', {
         method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    const data = await response.json();
-    const ul = document.getElementById('result');
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (!resp.ok) {
+        err.textContent = 'Ошибка получения данных';
+        return;
+      }
+      const data = await resp.json();
+      const ul = document.getElementById('result');
       ul.innerHTML = '';
       (data.links || []).forEach(link => {
         const li = document.createElement('li');
         const a = document.createElement('a');
         a.href = link;
         a.textContent = link;
+        a.target = '_blank';
         li.appendChild(a);
         ul.appendChild(li);
       });
+      await updateHistory();
     });
 
-    document.getElementById('load').addEventListener('click', async () => {
-      const response = await fetch('/api/v1/recommendations');
-      const data = await response.json();
-      const history = document.getElementById('history');
-      history.innerHTML = '';
-      data.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = item.text + ' -> ' + (item.links || []).join(', ');
-        history.appendChild(li);
-      });
-    });
+    document.getElementById('load').addEventListener('click', updateHistory);
+    document.addEventListener('DOMContentLoaded', updateHistory);
   </script>
 </body>
 </html>
