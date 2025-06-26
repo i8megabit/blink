@@ -46,6 +46,12 @@ class RecommendRequest(BaseModel):
     text: str
 
 
+class WPRequest(BaseModel):
+    """Запрос для анализа WordPress-сайта."""
+
+    domain: str
+
+
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
@@ -75,24 +81,57 @@ async def generate_links(text: str) -> list[str]:
         )
     response.raise_for_status()
     data = response.json()
-    content = data.get("response", "").strip()
-    
-    # Парсим ссылки из ответа
-    lines = [line.strip() for line in content.splitlines() if line.strip()]
-    links = []
-    for line in lines:
-        # Извлекаем URL если есть в строке
-        if line.startswith('/'):
-            links.append(line.split()[0])
-        elif '/article/' in line or '/articles/' in line:
-            # Ищем ссылки в тексте
-            parts = line.split()
-            for part in parts:
-                if part.startswith('/'):
-                    links.append(part)
-                    break
-    
-    return links[:5] if links else [f"/articles/{word}" for word in text.lower().split()[:3] if len(word) > 3]
+    lines = [line.strip("- \n") for line in data.get("response", "").splitlines()]
+    links = [line for line in lines if line]
+    return links[:5]
+
+
+async def fetch_wp_posts(domain: str) -> list[dict[str, str]]:
+    """Загружает список постов с WordPress сайта."""
+    url = f"https://{domain}/wp-json/wp/v2/posts?per_page=100"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.get(url)
+    if response.status_code >= 400:
+        raise HTTPException(status_code=400, detail="Сайт недоступен или не WordPress")
+    data = response.json()
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="Некорректный ответ WordPress")
+    posts = []
+    for item in data:
+        try:
+            posts.append({"title": item["title"]["rendered"], "link": item["link"]})
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Не удалось разобрать данные") from exc
+    return posts
+
+
+async def generate_wp_recommendations(posts: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Получает рекомендации по перелинковке статей через Ollama."""
+    listing = "\n".join(f"- {p['title']} ({p['link']})" for p in posts)
+    prompt = (
+        "На основе списка статей предложи до пяти внутренних ссылок между этими статьями. "
+        "Каждую рекомендацию выведи с новой строки в формате 'source_url -> target_url | anchor'. "
+        f"Статьи:\n{listing}"
+    )
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            OLLAMA_URL,
+            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            timeout=60,
+        )
+    resp.raise_for_status()
+    content = resp.json().get("response", "")
+    items = []
+    for line in content.splitlines():
+        if "->" not in line:
+            continue
+        src_part, rest = line.split("->", 1)
+        if "|" in rest:
+            dst_part, anchor = rest.split("|", 1)
+        else:
+            dst_part, anchor = rest, ""
+        items.append({"from": src_part.strip(), "to": dst_part.strip(), "anchor": anchor.strip()})
+    return items
 
 
 @app.on_event("startup")
@@ -118,6 +157,14 @@ async def recommend(req: RecommendRequest) -> dict[str, list[str]]:
         session.add(rec)
         await session.commit()
     return {"links": links}
+
+
+@app.post("/api/v1/wp_recommend")
+async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
+    """Анализирует WordPress-сайт и выдает рекомендации по перелинковке."""
+    posts = await fetch_wp_posts(req.domain)
+    recs = await generate_wp_recommendations(posts)
+    return {"recommendations": recs}
 
 
 @app.get("/api/v1/health")
