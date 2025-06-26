@@ -16,7 +16,8 @@
       const [text, setText] = React.useState('');
       const [domain, setDomain] = React.useState('');
       const [links, setLinks] = React.useState([]);
-      const [history, setHistory] = React.useState([]);
+      const [analysisHistory, setAnalysisHistory] = React.useState([]);
+      const [selectedAnalysis, setSelectedAnalysis] = React.useState(null);
       const [error, setError] = React.useState('');
       const [loading, setLoading] = React.useState(false);
       const [wpLoading, setWpLoading] = React.useState(false);
@@ -26,11 +27,13 @@
       const [currentStep, setCurrentStep] = React.useState('');
       const [totalSteps, setTotalSteps] = React.useState(0);
       const [completedSteps, setCompletedSteps] = React.useState(0);
+      const [showNotifications, setShowNotifications] = React.useState(false);
+      const [currentView, setCurrentView] = React.useState('main'); // 'main', 'history', 'analysis'
 
       React.useEffect(() => { 
         console.log('🚀 Компонент App загружен');
         addNotification('success', 'Приложение загружено');
-        loadHistory(); 
+        loadAnalysisHistory(); 
       }, []);
 
       // Функция для добавления уведомлений
@@ -64,26 +67,26 @@
         console.log(`📊 Прогресс: ${completed}/${total} (${percentage}%) - ${step}: ${message}`);
       }
 
-      async function loadHistory() {
+      async function loadAnalysisHistory() {
         try {
-          console.log('📥 Загружаю историю...');
-          addNotification('info', 'Загрузка истории рекомендаций...');
+          console.log('📥 Загружаю историю анализов...');
+          addNotification('info', 'Загрузка истории анализов...');
           
-          const resp = await fetch('http://localhost:8000/api/v1/recommendations');
-          console.log('📥 Ответ сервера (история):', resp.status, resp.statusText, resp.headers);
+          const resp = await fetch('http://localhost:8000/api/v1/analysis_history');
+          console.log('📥 Ответ сервера (история):', resp.status, resp.statusText);
           
           if (!resp.ok) {
             throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
           }
           
           const data = await resp.json();
-          console.log('📥 Данные истории:', data);
-          console.log('📊 БД: Загружено записей:', data.length);
+          console.log('📥 Данные истории анализов:', data);
+          console.log('📊 БД: Загружено анализов:', data.length);
           
-          setHistory(data);
-          addNotification('success', `История загружена: ${data.length} записей`);
+          setAnalysisHistory(data);
+          addNotification('success', `История загружена: ${data.length} анализов`);
         } catch (err) {
-          console.error('❌ Ошибка загрузки истории:', err);
+          console.error('❌ Ошибка загрузки истории анализов:', err);
           addNotification('error', 'Ошибка загрузки истории', err.message);
           setError(`Ошибка загрузки истории: ${err.message}`);
         }
@@ -132,9 +135,7 @@
           setLinks(data.links.map(l => ({ from: '', to: l, anchor: l })));
           
           setProgress(90);
-          setProgressText('Обновление истории...');
-          
-          await loadHistory();
+          setProgressText('Сохранение результатов...');
           
           setProgress(100);
           setProgressText('Готово!');
@@ -217,10 +218,13 @@
           
           updateProgress('Обновление UI', 4, 5, 'Обновление интерфейса...');
           
-                     setLinks(data.recommendations || []);
-           addNotification('success', `Анализ завершен: ${(data.recommendations && data.recommendations.length) || 0} рекомендаций`);
+                               setLinks(data.recommendations || []);
+          addNotification('success', `Анализ завершен: ${(data.recommendations && data.recommendations.length) || 0} рекомендаций`);
           
           updateProgress('Завершено', 5, 5, 'Анализ завершен!');
+          
+          // Обновляем историю анализов
+          await loadAnalysisHistory();
           
           console.log('✅ WordPress сайт успешно проанализирован');
         } catch (err) {
@@ -252,11 +256,120 @@
         return cleanUrl;
       }
 
-      return (
-        <section className="section">
-          <div className="container">
-            <h1 className="title has-text-centered">SEO Link Recommender</h1>
+      // Компонент колокольчика уведомлений
+      function NotificationBell() {
+        return (
+          <div className="notification-bell" style={{position: 'fixed', top: '20px', right: '20px', zIndex: 1000}}>
+            <button 
+              className={`button is-rounded ${notifications.length > 0 ? 'is-warning' : 'is-light'}`}
+              onClick={() => setShowNotifications(!showNotifications)}
+              style={{position: 'relative'}}
+            >
+              🔔
+              {notifications.length > 0 && (
+                <span className="tag is-danger is-small" style={{
+                  position: 'absolute', 
+                  top: '-5px', 
+                  right: '-5px', 
+                  minWidth: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  fontSize: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {notifications.length}
+                </span>
+              )}
+            </button>
             
+            {showNotifications && (
+              <div className="box" style={{
+                position: 'absolute',
+                top: '50px',
+                right: '0',
+                width: '350px',
+                maxHeight: '400px',
+                overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}>
+                <div className="has-text-weight-bold mb-3">
+                  Уведомления ({notifications.length})
+                  <button 
+                    className="button is-small is-pulled-right"
+                    onClick={() => setNotifications([])}
+                  >
+                    Очистить все
+                  </button>
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="has-text-grey">Нет уведомлений</p>
+                ) : (
+                  notifications.map(notification => (
+                    <div 
+                      key={notification.id} 
+                      className={`notification is-small mb-2 ${
+                        notification.type === 'success' ? 'is-success' :
+                        notification.type === 'error' ? 'is-danger' :
+                        notification.type === 'warning' ? 'is-warning' :
+                        'is-info'
+                      }`}
+                      style={{padding: '10px', cursor: 'pointer'}}
+                      onClick={() => {
+                        // Показать детали уведомления
+                        console.log('📋 Детали уведомления:', notification);
+                      }}
+                    >
+                      <div className="is-size-7">
+                        <strong>[{notification.timestamp}]</strong> {notification.message}
+                        {notification.details && (
+                          <div className="mt-1 has-text-grey">
+                            <small>{notification.details}</small>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <NotificationBell />
+          
+          <section className="section">
+            <div className="container">
+              <nav className="level mb-5">
+                <div className="level-left">
+                  <h1 className="title">SEO Link Recommender</h1>
+                </div>
+                <div className="level-right">
+                  <div className="level-item">
+                    <div className="buttons">
+                      <button 
+                        className={`button ${currentView === 'main' ? 'is-primary' : 'is-light'}`}
+                        onClick={() => setCurrentView('main')}
+                      >
+                        Главная
+                      </button>
+                      <button 
+                        className={`button ${currentView === 'history' ? 'is-primary' : 'is-light'}`}
+                        onClick={() => setCurrentView('history')}
+                      >
+                        История анализов ({analysisHistory.length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </nav>
+            
+            {currentView === 'main' && (
+            <React.Fragment>
             <div className="box">
               <div className="field">
                 <label className="label">Текст для анализа</label>
@@ -317,42 +430,7 @@
                 </div>
               )}
               
-              {/* Панель уведомлений */}
-              {notifications.length > 0 && (
-                <div className="mt-4">
-                  <div className="field">
-                    <label className="label is-small">
-                      🔔 Уведомления ({notifications.length})
-                    </label>
-                    <div style={{maxHeight: '200px', overflowY: 'auto'}}>
-                      {notifications.map(notification => (
-                        <div 
-                          key={notification.id} 
-                          className={`notification is-small mt-1 ${
-                            notification.type === 'success' ? 'is-success' :
-                            notification.type === 'error' ? 'is-danger' :
-                            notification.type === 'warning' ? 'is-warning' :
-                            'is-info'
-                          }`}
-                        >
-                          <button 
-                            className="delete is-small" 
-                            onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
-                          ></button>
-                          <div className="is-size-7">
-                            <strong>[{notification.timestamp}]</strong> {notification.message}
-                            {notification.details && (
-                              <div className="mt-1 has-text-grey">
-                                <small>{notification.details}</small>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+
               
               {error && (
                 <div className="notification is-danger mt-3">
@@ -369,7 +447,7 @@
               ) : (
                 <table className="table is-striped is-fullwidth">
                   <thead>
-                    <tr><th>Откуда</th><th>Куда</th><th>Анкор</th></tr>
+                    <tr><th>Откуда</th><th>Куда</th><th>Анкор</th><th>Комментарий от AI</th></tr>
                   </thead>
                   <tbody>
                     {links.map((l, i) => (
@@ -388,33 +466,221 @@
                             </a>
                           ) : '—'}
                         </td>
-                        <td>{l.anchor || '—'}</td>
+                        <td>
+                          <div className="field has-addons">
+                            <div className="control is-expanded">
+                              <details>
+                                <summary className="button is-small is-fullwidth has-text-left" style={{cursor: 'pointer'}}>
+                                  {l.anchor ? (l.anchor.length > 30 ? l.anchor.substring(0, 30) + '...' : l.anchor) : '—'}
+                                </summary>
+                                <div className="box mt-2">
+                                  <p className="mb-2">{l.anchor || '—'}</p>
+                                  <button 
+                                    className="button is-small is-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(l.anchor || '');
+                                      addNotification('success', 'Анкор скопирован в буфер обмена');
+                                    }}
+                                  >
+                                    📋 Скопировать
+                                  </button>
+                                </div>
+                              </details>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="content is-small">
+                            {l.comment ? (
+                              <details>
+                                <summary className="has-text-grey" style={{cursor: 'pointer'}}>
+                                  {l.comment.length > 25 ? l.comment.substring(0, 25) + '...' : l.comment}
+                                </summary>
+                                <div className="box mt-2 is-size-7">
+                                  <p>{l.comment}</p>
+                                </div>
+                              </details>
+                            ) : '—'}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
             </div>
+            </React.Fragment>
+            )}
             
+            {currentView === 'history' && (
             <div className="content">
-              <h2>История ({history.length})</h2>
-              {history.length === 0 ? (
-                <p className="has-text-grey">История анализов будет показана здесь</p>
+              <h2 className="title is-3">История анализов</h2>
+              {analysisHistory.length === 0 ? (
+                <div className="notification is-info">
+                  <p>История анализов пуста. Проведите первый анализ WordPress сайта!</p>
+                </div>
               ) : (
-                <ul>
-                  {history.map(h => (
-                    <li key={h.id} className="mb-2">
-                      <strong>{h.text.substring(0, 80)}...</strong><br/>
-                      <small className="has-text-grey">
-                        Ссылки: {(h.links || []).join(', ')}
-                      </small>
-                    </li>
+                <div className="columns is-multiline">
+                  {analysisHistory.map(analysis => (
+                    <div key={analysis.id} className="column is-one-third">
+                      <div className="card" style={{height: '100%'}}>
+                        <div className="card-header">
+                          <div className="card-header-title">
+                            <span className="icon">
+                              <i>🌐</i>
+                            </span>
+                            <span>{analysis.domain}</span>
+                          </div>
+                        </div>
+                        <div className="card-content" style={{flexGrow: 1}}>
+                          <div className="content">
+                            <time className="has-text-grey-light is-size-7">
+                              {new Date(analysis.created_at).toLocaleString('ru-RU')}
+                            </time>
+                            <p className="mt-2">{analysis.summary}</p>
+                          </div>
+                        </div>
+                        <div className="card-footer" style={{flexDirection: 'column', alignItems: 'stretch'}}>
+                          <div className="card-footer-item" style={{justifyContent: 'center', borderBottom: '1px solid #dbdbdb', padding: '0.75rem'}}>
+                            <div className="field is-grouped">
+                              <div className="control">
+                                <div className="tags has-addons">
+                                  <span className="tag is-dark">Статей</span>
+                                  <span className="tag is-info">{analysis.posts_count}</span>
+                                </div>
+                              </div>
+                              <div className="control">
+                                <div className="tags has-addons">
+                                  <span className="tag is-dark">Ссылок</span>
+                                  <span className="tag is-success">{analysis.recommendations_count}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="card-footer-item" style={{padding: '0'}}>
+                            <button 
+                              className="button is-primary is-fullwidth"
+                              style={{border: 'none', borderRadius: '0'}}
+                              onClick={() => {
+                                setSelectedAnalysis(analysis);
+                                setCurrentView('analysis');
+                                setLinks(analysis.recommendations);
+                              }}
+                            >
+                              Посмотреть детали
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
+            )}
+            
+            {currentView === 'analysis' && selectedAnalysis && (
+            <div className="content">
+              <nav className="breadcrumb">
+                <ul>
+                  <li><a onClick={() => setCurrentView('history')}>История</a></li>
+                  <li className="is-active"><a>{selectedAnalysis.domain}</a></li>
+                </ul>
+              </nav>
+              
+              <div className="box">
+                <h2 className="title is-4">Анализ сайта {selectedAnalysis.domain}</h2>
+                <div className="columns">
+                  <div className="column">
+                    <div className="field">
+                      <label className="label">Дата анализа</label>
+                      <p>{new Date(selectedAnalysis.created_at).toLocaleString('ru-RU')}</p>
+                    </div>
+                  </div>
+                  <div className="column">
+                    <div className="field">
+                      <label className="label">Статистика</label>
+                      <div className="tags">
+                        <span className="tag is-info is-medium">{selectedAnalysis.posts_count} статей</span>
+                        <span className="tag is-success is-medium">{selectedAnalysis.recommendations_count} рекомендаций</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="field">
+                  <label className="label">Сводка</label>
+                  <p>{selectedAnalysis.summary}</p>
+                </div>
+              </div>
+              
+              <div className="content">
+                <h3>Рекомендации по ссылкам</h3>
+                <table className="table is-striped is-fullwidth">
+                  <thead>
+                    <tr><th>Откуда</th><th>Куда</th><th>Анкор</th><th>Комментарий от AI</th></tr>
+                  </thead>
+                  <tbody>
+                    {(selectedAnalysis.recommendations || []).map((l, i) => (
+                      <tr key={i}>
+                        <td>
+                          <a href={l.from} target="_blank" rel="noopener">
+                            {l.from}
+                          </a>
+                        </td>
+                        <td>
+                          <a href={l.to} target="_blank" rel="noopener">
+                            {l.to}
+                          </a>
+                        </td>
+                        <td>
+                          <div className="field has-addons">
+                            <div className="control is-expanded">
+                              <details>
+                                <summary className="button is-small is-fullwidth has-text-left" style={{cursor: 'pointer'}}>
+                                  {l.anchor ? (l.anchor.length > 30 ? l.anchor.substring(0, 30) + '...' : l.anchor) : '—'}
+                                </summary>
+                                <div className="box mt-2">
+                                  <p className="mb-2">{l.anchor || '—'}</p>
+                                  <button 
+                                    className="button is-small is-primary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(l.anchor || '');
+                                      addNotification('success', 'Анкор скопирован в буфер обмена');
+                                    }}
+                                  >
+                                    📋 Скопировать
+                                  </button>
+                                </div>
+                              </details>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="content is-small">
+                            {l.comment ? (
+                              <details>
+                                <summary className="has-text-grey" style={{cursor: 'pointer'}}>
+                                  {l.comment.length > 25 ? l.comment.substring(0, 25) + '...' : l.comment}
+                                </summary>
+                                <div className="box mt-2 is-size-7">
+                                  <p>{l.comment}</p>
+                                </div>
+                              </details>
+                            ) : '—'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            )}
+            
           </div>
         </section>
+        </div>
       );
     }
 
