@@ -1,7 +1,16 @@
+import os
+import importlib
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-from seo_link_recommender.backend.app.main import app
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
+if os.path.exists("test.db"):
+    os.remove("test.db")
+from seo_link_recommender.backend.app import main
+importlib.reload(main)
+app = main.app
+import asyncio
+asyncio.get_event_loop().run_until_complete(main.on_startup())
 
 
 @pytest.mark.asyncio

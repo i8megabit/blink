@@ -9,8 +9,25 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy import Integer, Text, JSON, select
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 app = FastAPI()
+
+
+class Base(DeclarativeBase):
+    """Базовый класс моделей."""
+
+
+class Recommendation(Base):
+    """Модель сохраненной рекомендации."""
+
+    __tablename__ = "recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    links: Mapped[list[str]] = mapped_column(JSON)
 
 
 class RecommendRequest(BaseModel):
@@ -21,6 +38,14 @@ class RecommendRequest(BaseModel):
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://seo_user:seo_pass@localhost/seo_db",
+)
+
+engine = create_async_engine(DATABASE_URL)
+AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
 async def generate_links(text: str) -> list[str]:
@@ -42,13 +67,25 @@ async def generate_links(text: str) -> list[str]:
     return [line for line in lines if line]
 
 
+@app.on_event("startup")
+async def on_startup() -> None:
+    """Создает таблицы при запуске."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
 @app.post("/api/v1/recommend")
 async def recommend(req: RecommendRequest) -> dict[str, list[str]]:
-    """Возвращает рекомендации ссылок от Ollama."""
+    """Возвращает рекомендации ссылок от Ollama и сохраняет их."""
     try:
         links = await generate_links(req.text)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    async with AsyncSessionLocal() as session:
+        rec = Recommendation(text=req.text, links=links)
+        session.add(rec)
+        await session.commit()
     return {"links": links}
 
 
@@ -56,6 +93,20 @@ async def recommend(req: RecommendRequest) -> dict[str, list[str]]:
 async def health() -> dict[str, str]:
     """Проверка работоспособности."""
     return {"status": "ok"}
+
+
+@app.get("/api/v1/recommendations")
+async def list_recommendations() -> list[dict[str, object]]:
+    """Возвращает все сохраненные рекомендации."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Recommendation).order_by(Recommendation.id.desc())
+        )
+        items = [
+            {"id": rec.id, "text": rec.text, "links": rec.links}
+            for rec in result.scalars()
+        ]
+    return items
 
 
 frontend_path = Path(__file__).resolve().parents[2] / "frontend"
