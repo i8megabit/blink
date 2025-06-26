@@ -1,11 +1,7 @@
-import sys
-from pathlib import Path
-
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
-from main import app
+from seo_link_recommender.backend.app.main import app
 
 
 @pytest.mark.asyncio

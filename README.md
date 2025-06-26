@@ -8,16 +8,16 @@
 Склонируйте репозиторий и перейдите в папку проекта:
 
 ```bash
-git clone https://github.com/yourname/seo-link-recommender.git
-cd seo-link-recommender
+git clone https://github.com/yourname/seo_link_recommender.git
+cd seo_link_recommender
 ```
 
 ```bash
 # создание виртуального окружения и установка зависимостей
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r seo-link-recommender/backend/requirements.txt
-uvicorn app.main:app --app-dir seo-link-recommender/backend/app --reload
+pip install -r seo_link_recommender/backend/requirements.txt
+uvicorn app.main:app --app-dir seo_link_recommender/backend/app --reload
 ```
 
 ## Запуск через Docker
@@ -25,7 +25,7 @@ uvicorn app.main:app --app-dir seo-link-recommender/backend/app --reload
 Требуется установленный Docker Desktop.
 
 ```bash
-docker compose -f seo-link-recommender/docker-compose.yml up --build
+docker compose -f seo_link_recommender/docker-compose.yml up --build
 ```
 
 После сборки приложение доступно по адресу http://localhost:8000.
@@ -37,5 +37,5 @@ GitHub Actions автоматически публикует образ с те�
 ## Тестирование
 
 ```bash
-pytest
+python -m pytest
 ```
