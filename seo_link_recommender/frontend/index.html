@@ -305,14 +305,54 @@
       height: 100%;
       background: linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light));
       border-radius: 4px;
-      transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.3s ease;
-      animation: pulse 2s ease-in-out infinite;
-      will-change: width, background;
+      transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1), background 0.4s ease;
+      animation: shimmer 2.5s ease-in-out infinite;
+      will-change: width;
+      position: relative;
+      overflow: hidden;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.8; }
+    .progress-bar::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      animation: progressShine 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { 
+        box-shadow: 0 0 20px rgba(0, 122, 255, 0.3);
+        transform: scale(1);
+      }
+      50% { 
+        box-shadow: 0 0 30px rgba(0, 122, 255, 0.5);
+        transform: scale(1.001);
+      }
+    }
+
+    @keyframes progressShine {
+      0% { left: -100%; }
+      50% { left: 100%; }
+      100% { left: 100%; }
+    }
+
+    @keyframes gentleUpdate {
+      0% { 
+        transform: scale(1);
+        filter: brightness(1);
+      }
+      50% { 
+        transform: scale(1.01);
+        filter: brightness(1.1);
+      }
+      100% { 
+        transform: scale(1);
+        filter: brightness(1);
+      }
     }
 
     .stats-card {
@@ -322,8 +362,13 @@
       padding: 30px;
       margin: 20px 0;
       box-shadow: var(--shadow-medium);
-      transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
       will-change: background, transform;
+      transform-origin: center;
+    }
+
+    .stats-card.smooth-update {
+      animation: gentleUpdate 0.4s ease-out;
     }
 
     .log-container {
@@ -627,14 +672,30 @@
         switch (data.type) {
           case 'progress':
             addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
-            setAnalysisStats(prev => ({
-              ...prev,
-              step: data.step,
-              current: data.current,
-              total: data.total,
-              percentage: data.percentage,
-              details: data.details
-            }));
+            
+            // Плавное обновление с анимацией
+            setAnalysisStats(prev => {
+              // Добавляем класс анимации если значительное изменение
+              const shouldAnimate = !prev || Math.abs(prev.percentage - data.percentage) > 5;
+              
+              return {
+                ...prev,
+                step: data.step,
+                current: data.current,
+                total: data.total,
+                percentage: data.percentage,
+                details: data.details,
+                shouldAnimate: shouldAnimate
+              };
+            });
+            
+            // Убираем класс анимации через короткое время
+            setTimeout(() => {
+              setAnalysisStats(prev => ({
+                ...prev,
+                shouldAnimate: false
+              }));
+            }, 400);
             break;
             
           case 'ollama':
@@ -939,11 +1000,10 @@
               </div>
               
               {analysisStats && (
-                <div className="stats-card" style={{
+                <div className={`stats-card ${analysisStats.shouldAnimate ? 'smooth-update' : ''}`} style={{
                   background: analysisError ? 
                     'linear-gradient(135deg, var(--apple-red) 0%, #ff6b6b 100%)' :
-                    'linear-gradient(135deg, var(--apple-blue) 0%, var(--apple-blue-light) 100%)',
-                  transition: 'all 0.5s ease'
+                    'linear-gradient(135deg, var(--apple-blue) 0%, var(--apple-blue-light) 100%)'
                 }}>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div>
@@ -970,8 +1030,7 @@
                         width: analysisError ? '100%' : `${analysisStats.percentage}%`,
                         background: analysisError ? 
                           'linear-gradient(90deg, var(--apple-red), #ff6b6b)' :
-                          'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))',
-                        transition: 'width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), background 0.3s ease'
+                          'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))'
                       }}
                     ></div>
                   </div>
@@ -1197,69 +1256,130 @@
                             </div>
                           </div>
                           
-                          <table className="table-apple">
-                            <thead>
-                              <tr>
-                                <th>
-                                  <i data-feather="arrow-right" className="icon-apple" style={{marginRight: '8px'}}></i>
-                                  Откуда
-                                </th>
-                                <th>
-                                  <i data-feather="external-link" className="icon-apple" style={{marginRight: '8px'}}></i>
-                                  Куда
-                                </th>
-                                <th>
-                                  <i data-feather="link" className="icon-apple" style={{marginRight: '8px'}}></i>
-                                  Анкор
-                                </th>
-                                <th>
-                                  <i data-feather="message-circle" className="icon-apple" style={{marginRight: '8px'}}></i>
-                                  Обоснование ИИ
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {recommendations.map((rec, i) => (
-                                <tr key={i}>
-                                  <td>
-                                    <a href={rec.from} target="_blank" rel="noopener" style={{color: 'var(--apple-blue)', textDecoration: 'none'}}>
-                                      {rec.from.replace('https://', '').substring(0, 40)}...
+                          <div style={{display: 'grid', gap: '20px'}}>
+                            {recommendations.map((rec, i) => (
+                              <div key={i} className="card-apple" style={{padding: '24px'}}>
+                                <div className="d-flex justify-content-between align-items-start mb-3">
+                                  <div className="font-weight-semibold" style={{color: 'var(--apple-blue)', fontSize: '1.1rem'}}>
+                                    <i data-feather="link" className="icon-apple" style={{marginRight: '8px'}}></i>
+                                    Рекомендация #{i + 1}
+                                  </div>
+                                  <span className="tag-apple tag-success">
+                                    <i data-feather="check" className="icon-apple"></i>
+                                    ИИ проверено
+                                  </span>
+                                </div>
+                                
+                                {/* Источник */}
+                                <div className="mb-4">
+                                  <div className="font-weight-semibold mb-2" style={{color: '#1C1C1E', fontSize: '0.95rem'}}>
+                                    <i data-feather="arrow-right" className="icon-apple" style={{marginRight: '6px', color: 'var(--apple-blue)'}}></i>
+                                    Откуда добавить ссылку:
+                                  </div>
+                                  <div style={{
+                                    background: 'var(--apple-gray-light)', 
+                                    padding: '12px 16px', 
+                                    borderRadius: '8px',
+                                    border: '1px solid #e5e5ea'
+                                  }}>
+                                    <a href={rec.from} target="_blank" rel="noopener" style={{
+                                      color: 'var(--apple-blue)', 
+                                      textDecoration: 'none',
+                                      fontSize: '0.9rem',
+                                      wordBreak: 'break-all'
+                                    }}>
+                                      {rec.from}
                                     </a>
-                                  </td>
-                                  <td>
-                                    <a href={rec.to} target="_blank" rel="noopener" style={{color: 'var(--apple-blue)', textDecoration: 'none'}}>
-                                      {rec.to.replace('https://', '').substring(0, 40)}...
+                                  </div>
+                                </div>
+                                
+                                {/* Цель */}
+                                <div className="mb-4">
+                                  <div className="font-weight-semibold mb-2" style={{color: '#1C1C1E', fontSize: '0.95rem'}}>
+                                    <i data-feather="external-link" className="icon-apple" style={{marginRight: '6px', color: 'var(--apple-green)'}}></i>
+                                    Куда должна вести ссылка:
+                                  </div>
+                                  <div style={{
+                                    background: 'rgba(52, 199, 89, 0.05)', 
+                                    padding: '12px 16px', 
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(52, 199, 89, 0.2)'
+                                  }}>
+                                    <a href={rec.to} target="_blank" rel="noopener" style={{
+                                      color: 'var(--apple-green)', 
+                                      textDecoration: 'none',
+                                      fontSize: '0.9rem',
+                                      wordBreak: 'break-all'
+                                    }}>
+                                      {rec.to}
                                     </a>
-                                  </td>
-                                  <td>
-                                    <div className="d-flex gap-2">
-                                      <input 
-                                        className="input-apple" 
-                                        value={rec.anchor} 
-                                        readOnly 
-                                        style={{fontSize: '0.9rem'}}
-                                      />
-                                      <button 
-                                        className="btn-apple btn-primary"
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(rec.anchor);
-                                        }}
-                                        title="Скопировать анкор"
-                                        style={{padding: '8px 12px'}}
-                                      >
-                                        <i data-feather="copy" className="icon-apple"></i>
-                                      </button>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <p className="text-muted" style={{fontSize: '0.9rem', lineHeight: '1.4'}}>
+                                  </div>
+                                </div>
+                                
+                                {/* Анкор */}
+                                <div className="mb-4">
+                                  <div className="font-weight-semibold mb-2" style={{color: '#1C1C1E', fontSize: '0.95rem'}}>
+                                    <i data-feather="tag" className="icon-apple" style={{marginRight: '6px', color: 'var(--apple-orange)'}}></i>
+                                    Текст ссылки (анкор):
+                                  </div>
+                                  <div className="d-flex gap-2">
+                                    <input 
+                                      className="input-apple" 
+                                      value={rec.anchor} 
+                                      readOnly 
+                                      style={{
+                                        fontSize: '0.95rem',
+                                        background: 'rgba(255, 149, 0, 0.05)',
+                                        border: '2px solid rgba(255, 149, 0, 0.2)',
+                                        fontWeight: '500'
+                                      }}
+                                    />
+                                    <button 
+                                      className="btn-apple btn-primary"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(rec.anchor);
+                                        // Показываем уведомление о копировании
+                                        const originalText = event.target.innerHTML;
+                                        event.target.innerHTML = '<i data-feather="check" class="icon-apple"></i>';
+                                        setTimeout(() => {
+                                          event.target.innerHTML = originalText;
+                                          if (window.feather) window.feather.replace();
+                                        }, 1000);
+                                      }}
+                                      title="Скопировать анкор"
+                                      style={{padding: '12px 16px', minWidth: '60px'}}
+                                    >
+                                      <i data-feather="copy" className="icon-apple"></i>
+                                    </button>
+                                  </div>
+                                </div>
+                                
+                                {/* Обоснование */}
+                                <div>
+                                  <div className="font-weight-semibold mb-2" style={{color: '#1C1C1E', fontSize: '0.95rem'}}>
+                                    <i data-feather="message-circle" className="icon-apple" style={{marginRight: '6px', color: 'var(--apple-gray)'}}></i>
+                                    Обоснование ИИ:
+                                  </div>
+                                  <div style={{
+                                    background: 'rgba(142, 142, 147, 0.05)', 
+                                    padding: '16px', 
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(142, 142, 147, 0.2)',
+                                    fontStyle: 'italic'
+                                  }}>
+                                    <p style={{
+                                      margin: '0',
+                                      fontSize: '0.95rem', 
+                                      lineHeight: '1.5',
+                                      color: '#1C1C1E'
+                                    }}>
                                       {rec.comment}
                                     </p>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="notification-apple notification-warning">

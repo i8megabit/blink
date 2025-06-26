@@ -868,7 +868,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
                 print(error_msg)
                 if client_id:
                     await websocket_manager.send_error(client_id, error_msg)
-                return []
+                return [], 0.0
             
             # Получаем посты с семантической информацией
             result = await session.execute(
@@ -884,7 +884,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg, f"Не найдено статей для домена {domain}")
-            return []
+            return [], 0.0
         
         print(f"📊 Загружено {len(db_posts)} статей из БД")
         
@@ -907,7 +907,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg, "Ошибка создания семантических векторов")
-            return []
+            return [], 0.0
         
         # Шаг 3: Получение обзора статей
         if client_id:
@@ -919,7 +919,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg, "Пустая семантическая база знаний")
-            return []
+            return [], 0.0
         
         print(f"📋 Выбрано {len(articles)} статей для анализа")
         
@@ -957,19 +957,19 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             await websocket_manager.send_ollama_info(client_id, {
                 "status": "starting",
                 "model": OLLAMA_MODEL,
-                "model_info": "qwen2.5:7b - оптимизированная для SEO",
+                "model_info": "qwen2.5:7b - сбалансированная для качества и скорости",
                 "articles_count": len(articles),
                 "prompt_length": len(qwen_optimized_prompt),
-                "timeout": 45,
-                "settings": "temperature=0.2, ctx=4096, predict=350"
+                "timeout": 120,
+                "settings": "temperature=0.3, ctx=4096, predict=300, threads=6"
             })
         
         print("🤖 Отправляю оптимизированный запрос для qwen2.5...")
         print(f"📝 Размер промпта: {len(qwen_optimized_prompt)} символов")
         
-        # Консервативные настройки для максимальной стабильности qwen2.5:7b
+        # Оптимизированные настройки для стабильной работы qwen2.5:7b
         start_time = datetime.now()
-        async with httpx.AsyncClient(timeout=30.0) as client:  # Уменьшаем таймаут для стабильности
+        async with httpx.AsyncClient(timeout=120.0) as client:  # Увеличиваем до 2 минут
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -977,19 +977,18 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
                     "prompt": qwen_optimized_prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.1,    # Минимальная температура для стабильности
-                        "num_ctx": 2048,       # Уменьшаем контекст для стабильности
-                        "num_predict": 200,    # Сокращаем количество токенов
-                        "top_p": 0.7,         # Более консервативный top_p
-                        "top_k": 30,          # Еще больше ограничиваем выбор
-                        "repeat_penalty": 1.1, # Умеренный repeat_penalty
+                        "temperature": 0.3,    # Немного повышаем для креативности
+                        "num_ctx": 4096,       # Увеличиваем контекст
+                        "num_predict": 300,    # Больше токенов для качественного ответа
+                        "top_p": 0.8,         # Оптимизируем top_p
+                        "top_k": 40,          # Увеличиваем выбор
+                        "repeat_penalty": 1.05, # Снижаем repeat_penalty
                         "seed": 42,           # Фиксированное зерно
-                        "stop": ["```", "КОНЕЦ", "---"],
-                        "num_thread": 4,      # Ограничиваем потоки для стабильности
-                        "num_gpu": 0          # Принудительно CPU для стабильности
+                        "stop": ["```", "КОНЕЦ", "---", "\n\n\n"],
+                        "num_thread": 6      # Больше потоков для скорости
                     }
                 },
-                timeout=30
+                timeout=120  # Дублируем тайм-аут
             )
         
         request_time = (datetime.now() - start_time).total_seconds()
@@ -1007,17 +1006,25 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg, f"HTTP статус: {response.status_code}")
-            return []
+            return [], 0.0
         
         data = response.json()
         content = data.get("response", "")
         print(f"📝 Получен ответ от Ollama: {len(content)} символов за {request_time:.1f}с")
+        
+        # Добавляем детальное логирование для отладки
+        print("🔍 ОТЛАДКА: Ответ Ollama:")
+        print("="*50)
+        print(content)
+        print("="*50)
         
         # Шаг 6: Обработка результатов
         if client_id:
             await websocket_manager.send_step(client_id, "Обработка ответа", 6, 7, "Парсинг рекомендаций от ИИ...")
         
         recommendations = parse_ollama_recommendations(content, domain, articles)
+        
+        print(f"📊 ОТЛАДКА: Парсер нашел {len(recommendations)} рекомендаций из {len(articles)} статей")
         
         # Шаг 7: Финализация
         if client_id:
@@ -1052,52 +1059,78 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
         if domain.lower() in url.lower():
             valid_urls.add(url)
     
-    print(f"🔍 Валидные URL для домена {domain}: {len(valid_urls)}")
+    print(f"🔍 ОТЛАДКА: Валидные URL для домена {domain}: {len(valid_urls)}")
+    for i, url in enumerate(valid_urls, 1):
+        print(f"   {i}. {url[:80]}...")
     
     lines = text.splitlines()
-    for line in lines:
+    print(f"🔍 ОТЛАДКА: Обрабатываю {len(lines)} строк ответа")
+    
+    for i, line in enumerate(lines, 1):
         line = line.strip()
+        print(f"   Строка {i}: {line[:100]}...")
         
         if '->' in line and '|' in line:
+            print(f"      ✓ Найден паттерн -> и | в строке {i}")
             try:
                 parts = line.split('|', 2)
+                print(f"      ✓ Разделено на {len(parts)} частей")
+                
                 if len(parts) < 3:
+                    print(f"      ❌ Недостаточно частей: {len(parts)}")
                     continue
                 
                 link_part = parts[0].strip()
                 anchor = parts[1].strip()
                 comment = parts[2].strip()
                 
-                # Проверяем качество
-                if len(anchor) < 5 or len(comment) < 40:
+                print(f"      - Ссылочная часть: {link_part}")
+                print(f"      - Анкор: {anchor}")
+                print(f"      - Комментарий: {comment[:50]}...")
+                
+                # Смягчаем проверку качества
+                if len(anchor) < 3 or len(comment) < 10:
+                    print(f"      ❌ Качество: анкор {len(anchor)} символов, комментарий {len(comment)} символов")
                     continue
                 
                 if '->' in link_part:
-                    source, target = link_part.split('->', 1)
-                    source = source.strip()
-                    target = target.strip()
-                    
-                    # Проверяем, что URL принадлежат нашему домену
-                    if (source in valid_urls and 
-                        target in valid_urls and 
-                        source != target and
-                        domain.lower() in source.lower() and
-                        domain.lower() in target.lower()):
+                    source_target = link_part.split('->', 1)
+                    if len(source_target) == 2:
+                        source = source_target[0].strip()
+                        target = source_target[1].strip()
                         
+                        print(f"      - Источник: {source[:60]}...")
+                        print(f"      - Цель: {target[:60]}...")
+                    else:
+                        print(f"      ❌ Не удалось разделить на источник->цель")
+                        continue
+                    
+                    # Более гибкая проверка URL - проверяем содержание домена, а не точное совпадение
+                    source_valid = any(domain.lower() in source.lower() for _ in [1]) and source != target
+                    target_valid = any(domain.lower() in target.lower() for _ in [1])
+                    
+                    print(f"      - Источник валиден: {source_valid}")
+                    print(f"      - Цель валидна: {target_valid}")
+                    
+                    if source_valid and target_valid:
                         recommendations.append({
                             "from": source,
                             "to": target,
                             "anchor": anchor,
                             "comment": comment
                         })
-                        print(f"✅ Валидная рекомендация: {source[:50]}... -> {target[:50]}...")
+                        print(f"      ✅ ПРИНЯТА рекомендация #{len(recommendations)}")
                     else:
-                        print(f"⚠️ Отклонена рекомендация: неподходящие URL или домен")
+                        print(f"      ❌ Отклонена: невалидные URL или домен")
                         
             except Exception as e:
-                print(f"❌ Ошибка парсинга строки: {e}")
+                print(f"      ❌ Ошибка парсинга строки {i}: {e}")
                 continue
+        else:
+            if line and not line.startswith('#') and len(line) > 10:
+                print(f"      - Пропускаю строку без паттерна: {line[:50]}...")
     
+    print(f"📊 ФИНАЛ: Найдено {len(recommendations)} валидных рекомендаций")
     return recommendations
 
 
