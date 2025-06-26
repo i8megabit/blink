@@ -766,6 +766,14 @@
       }
 
       async function startAnalysis() {
+        await runAnalysis('standard');
+      }
+      
+      async function startComprehensiveAnalysis() {
+        await runAnalysis('comprehensive');
+      }
+      
+      async function runAnalysis(type = 'standard') {
         if (!domain.trim()) { 
           setError('Введите DNS имя сайта');
           return; 
@@ -777,6 +785,10 @@
           return;
         }
         
+        const isComprehensive = type === 'comprehensive';
+        const analysisName = isComprehensive ? 'полная индексация' : 'быстрый анализ';
+        const totalSteps = isComprehensive ? 10 : 3;
+        
         setError('');
         setAnalysisError(null);
         setAnalysisStep('analyzing');
@@ -784,9 +796,9 @@
         setAnalysisStats({
           step: 'Инициализация',
           current: 0,
-          total: 7,
+          total: totalSteps,
           percentage: 0,
-          details: 'Подготовка к анализу...'
+          details: `Подготовка к ${analysisName}...`
         });
         setRecommendations([]);
         setIsAnalyzing(true);
@@ -794,16 +806,22 @@
         const analysisId = 'analysis_' + Date.now();
         setCurrentAnalysisId(analysisId);
         
-        addLog('info', `🚀 Начинаю анализ сайта: ${domain}`, 'Подключение к WordPress API...');
-        addNotification('info', 'Анализ запущен', `Анализируем сайт ${domain}`, 3000);
+        addLog('info', `🚀 Начинаю ${analysisName} сайта: ${domain}`, 'Подключение к WordPress API...');
+        addNotification('info', `${isComprehensive ? 'Полная индексация' : 'Анализ'} запущена`, 
+          `${analysisName} сайта ${domain}`, 3000);
         
         try {
-          const resp = await fetch('http://localhost:8000/api/v1/wp_recommend', {
+          const endpoint = isComprehensive ? 
+            'http://localhost:8000/api/v1/wp_comprehensive' : 
+            'http://localhost:8000/api/v1/wp_recommend';
+          
+          const resp = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               domain: domain,
-              client_id: clientId
+              client_id: clientId,
+              comprehensive: isComprehensive
             })
           });
           
@@ -1201,14 +1219,36 @@
                       </div>
                       
                       <div className="text-center mt-5">
-                        <button 
-                          className="btn-apple btn-primary btn-large"
-                          onClick={startAnalysis}
-                          disabled={!domain.trim() || connectionStatus !== 'connected'}
-                        >
-                          <i data-feather="zap" className="icon-apple"></i>
-                          Получить ссылки
-                        </button>
+                        <div className="d-flex justify-content-center gap-3">
+                          <button 
+                            className="btn-apple btn-primary btn-large"
+                            onClick={startAnalysis}
+                            disabled={!domain.trim() || connectionStatus !== 'connected'}
+                          >
+                            <i data-feather="zap" className="icon-apple"></i>
+                            Быстрый анализ
+                          </button>
+                          <button 
+                            className="btn-apple btn-secondary btn-large"
+                            onClick={() => startComprehensiveAnalysis()}
+                            disabled={!domain.trim() || connectionStatus !== 'connected'}
+                            style={{
+                              background: 'linear-gradient(135deg, var(--apple-orange) 0%, #ff6b35 100%)',
+                              color: 'var(--apple-white)',
+                              border: 'none'
+                            }}
+                          >
+                            <i data-feather="database" className="icon-apple"></i>
+                            Полная индексация
+                          </button>
+                        </div>
+                        
+                        <div className="mt-3 text-center">
+                          <div style={{fontSize: '0.9rem', color: '#6E6E73', lineHeight: '1.4'}}>
+                            <strong>Быстрый:</strong> 12 статей, 3-5 рекомендаций, ~1-2 мин<br/>
+                            <strong>Полная индексация:</strong> все статьи, до 50 рекомендаций, ~3-8 мин (оптимизировано)
+                          </div>
+                        </div>
                       </div>
                       
                       <div className="text-center mt-3">

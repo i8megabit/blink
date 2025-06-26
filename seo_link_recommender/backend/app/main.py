@@ -349,6 +349,7 @@ class WPRequest(BaseModel):
 
     domain: str
     client_id: Optional[str] = None
+    comprehensive: Optional[bool] = False  # Флаг для полной индексации
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
@@ -663,7 +664,7 @@ class AdvancedRAGManager:
         self,
         domain: str,
         limit: int = 25,
-        min_linkability: float = 0.3
+        min_linkability: float = 0.2  # Снижаем порог для большего покрытия
     ) -> List[Dict]:
         """Получает семантические рекомендации с учетом контекста."""
         if domain not in self.domain_collections:
@@ -843,6 +844,329 @@ async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
     return posts
 
 
+async def generate_comprehensive_domain_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
+    """Генерирует исчерпывающие рекомендации через полную индексацию домена."""
+    print(f"🔍 Запуск полной индексации домена {domain} (client: {client_id})")
+    
+    analysis_start_time = datetime.now()
+    all_recommendations = []
+    
+    try:
+        # Шаг 1: Загружаем ВСЕ статьи домена с полным контекстом
+        if client_id:
+            await websocket_manager.send_step(client_id, "Полная индексация", 1, 9, "Загрузка всех статей домена...")
+        
+        async with AsyncSessionLocal() as session:
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if not domain_obj:
+                error_msg = f"❌ Домен {domain} не найден в БД"
+                print(error_msg)
+                if client_id:
+                    await websocket_manager.send_error(client_id, error_msg)
+                return [], 0.0
+            
+            # Получаем ВСЕ посты с полной семантической информацией
+            result = await session.execute(
+                select(WordPressPost)
+                .where(WordPressPost.domain_id == domain_obj.id)
+                .order_by(WordPressPost.linkability_score.desc())
+                # НЕ ограничиваем - берем все!
+            )
+            all_posts = result.scalars().all()
+        
+        if not all_posts:
+            error_msg = "❌ Нет статей для полной индексации"
+            print(error_msg)
+            if client_id:
+                await websocket_manager.send_error(client_id, error_msg)
+            return [], 0.0
+        
+        print(f"📊 Полная индексация: {len(all_posts)} статей из БД")
+        
+        # Шаг 2: Создаем полный датасет статей
+        if client_id:
+            await websocket_manager.send_step(client_id, "Подготовка датасета", 2, 9, f"Обработка {len(all_posts)} статей...")
+        
+        full_dataset = []
+        for post in all_posts:
+            full_dataset.append({
+                "id": post.id,
+                "title": post.title,
+                "link": post.link,
+                "content": post.content,
+                "semantic_summary": post.semantic_summary or "",
+                "key_concepts": post.key_concepts or [],
+                "content_type": post.content_type or "article",
+                "difficulty_level": post.difficulty_level or "medium",
+                "linkability_score": post.linkability_score or 0.5,
+                "semantic_richness": post.semantic_richness or 0.5
+            })
+        
+        # Шаг 3: Создаем семантическую базу знаний для всего домена
+        if client_id:
+            await websocket_manager.send_step(client_id, "Семантический анализ", 3, 9, "Создание полной семантической модели...")
+        
+        success = await rag_manager.create_semantic_knowledge_base(domain, full_dataset, client_id)
+        if not success:
+            error_msg = "❌ Не удалось создать полную семантическую базу знаний"
+            print(error_msg)
+            if client_id:
+                await websocket_manager.send_error(client_id, error_msg)
+            return [], 0.0
+        
+        # Шаг 4: Батчинг статей для глубокого анализа
+        if client_id:
+            await websocket_manager.send_step(client_id, "Батчинг статей", 4, 9, "Разбивка на группы для анализа...")
+        
+        batch_size = 4  # Уменьшаем размер батча для стабильности
+        batches = []
+        for i in range(0, len(full_dataset), batch_size):
+            batch = full_dataset[i:i+batch_size]
+            batches.append(batch)
+        
+        print(f"📦 Создано {len(batches)} батчей по {batch_size} статей")
+        
+        # Шаг 5-7: Обрабатываем каждый батч через Ollama с повторными попытками
+        for batch_idx, batch in enumerate(batches, 1):
+            if client_id:
+                await websocket_manager.send_step(
+                    client_id, 
+                    f"Анализ батча {batch_idx}/{len(batches)}", 
+                    4 + batch_idx, 
+                    9, 
+                    f"Анализ {len(batch)} статей (попытка 1/3)..."
+                )
+            
+            # Обрабатываем батч с повторными попытками
+            batch_recommendations = []
+            max_retries = 3
+            
+            for attempt in range(max_retries):
+                try:
+                    batch_recommendations = await process_batch_with_ollama(
+                        domain, batch, full_dataset, batch_idx, len(batches), client_id
+                    )
+                    
+                    if batch_recommendations:  # Успешно получили рекомендации
+                        break
+                    else:
+                        print(f"⚠️ Батч {batch_idx}: пустой результат, попытка {attempt + 1}/{max_retries}")
+                        
+                except Exception as e:
+                    print(f"❌ Батч {batch_idx}: ошибка в попытке {attempt + 1}/{max_retries}: {e}")
+                    
+                    if attempt < max_retries - 1:  # Не последняя попытка
+                        if client_id:
+                            await websocket_manager.send_step(
+                                client_id, 
+                                f"Повтор батча {batch_idx}/{len(batches)}", 
+                                4 + batch_idx, 
+                                9, 
+                                f"Повтор после ошибки (попытка {attempt + 2}/3)..."
+                            )
+                        await asyncio.sleep(10)  # Пауза перед повтором
+                    else:
+                        # Последняя попытка неудачна - продолжаем с пустым результатом
+                        print(f"❌ Батч {batch_idx}: все попытки неудачны, пропускаем")
+                        if client_id:
+                            await websocket_manager.send_progress(client_id, {
+                                "type": "warning",
+                                "message": f"Батч {batch_idx} пропущен",
+                                "details": f"Не удалось обработать после {max_retries} попыток"
+                            })
+            
+            all_recommendations.extend(batch_recommendations)
+            print(f"✅ Батч {batch_idx}: получено {len(batch_recommendations)} рекомендаций")
+        
+        # Шаг 8: Дедупликация и ранжирование
+        if client_id:
+            await websocket_manager.send_step(client_id, "Финальная обработка", 8, 9, "Дедупликация и ранжирование...")
+        
+        final_recommendations = deduplicate_and_rank_recommendations(all_recommendations, domain)
+        
+        # Шаг 9: Финализация
+        total_analysis_time = (datetime.now() - analysis_start_time).total_seconds()
+        
+        if client_id:
+            await websocket_manager.send_step(
+                client_id, 
+                "Завершение индексации", 
+                9, 
+                9, 
+                f"Готово! {len(final_recommendations)} уникальных рекомендаций"
+            )
+        
+        print(f"🎯 Полная индексация завершена: {len(final_recommendations)} рекомендаций за {total_analysis_time:.1f}с")
+        return final_recommendations, total_analysis_time
+        
+    except Exception as e:
+        error_msg = f"❌ Ошибка полной индексации: {e}"
+        print(error_msg)
+        if client_id:
+            await websocket_manager.send_error(client_id, "Критическая ошибка индексации", str(e))
+        
+        error_time = (datetime.now() - analysis_start_time).total_seconds()
+        return [], error_time
+
+
+async def process_batch_with_ollama(
+    domain: str, 
+    batch: List[Dict], 
+    full_dataset: List[Dict], 
+    batch_idx: int, 
+    total_batches: int,
+    client_id: Optional[str] = None
+) -> List[Dict]:
+    """Обрабатывает батч статей через Ollama с максимальным контекстом."""
+    
+    # Создаем оптимизированный контекст для батча
+    batch_context = f"""АНАЛИЗ БАТЧА {batch_idx}/{total_batches} ДОМЕНА {domain}
+
+СТАТЬИ ДЛЯ АНАЛИЗА ({len(batch)}):
+"""
+    
+    for i, article in enumerate(batch, 1):
+        key_concepts_str = ', '.join(article['key_concepts'][:4]) if article['key_concepts'] else 'не определены'
+        
+        batch_context += f"""
+{i}. {article['title']}
+   URL: {article['link']}
+   Тип: {article['content_type']} | Связность: {article['linkability_score']:.2f}
+   Концепции: {key_concepts_str}
+   Краткое описание: {article['semantic_summary'][:150]}
+   Контент: {article['content'][:200]}...
+
+"""
+    
+    # Добавляем сокращенный контекст других статей
+    batch_context += f"""ДОСТУПНЫЕ ЦЕЛИ ({len(full_dataset)} статей):
+"""
+    
+    targets_added = 0
+    for article in full_dataset[:15]:  # Топ-15 для экономии токенов
+        if article not in batch and targets_added < 10:  # Максимум 10 целей
+            batch_context += f"• {article['title'][:50]} | {article['link'][:60]}\n"
+            targets_added += 1
+    
+    # Создаем компактный но эффективный промпт
+    comprehensive_prompt = f"""{batch_context}
+
+ЗАДАЧА: Найди логичные внутренние ссылки между статьями
+
+КРИТЕРИИ:
+• Тематическая связь
+• Польза для читателя  
+• SEO-ценность
+
+ПРАВИЛА анкоров:
+• Описывать содержание целевой страницы
+• НЕ использовать: "сайт", "ресурс", "портал"
+• Примеры: "подробное руководство", "полный обзор"
+
+Найди ВСЕ качественные связи для статей этого батча.
+
+ФОРМАТ: ИСТОЧНИК -> ЦЕЛЬ | анкор | обоснование
+
+ОТВЕТ:"""
+    
+    try:
+        if client_id:
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "processing_batch",
+                "batch": f"{batch_idx}/{total_batches}",
+                "articles_in_batch": len(batch),
+                "total_context_size": len(comprehensive_prompt),
+                "model": OLLAMA_MODEL
+            })
+        
+        print(f"🤖 Обрабатываю батч {batch_idx} через Ollama (размер промпта: {len(comprehensive_prompt)} символов)")
+        
+        start_time = datetime.now()
+        async with httpx.AsyncClient(timeout=300.0) as client:  # Увеличиваем тайм-аут до 5 минут
+            response = await client.post(
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": comprehensive_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3,    # Немного повышаем для креативности
+                        "num_ctx": 4096,       # Уменьшаем контекст для стабильности
+                        "num_predict": 800,    # Сбалансированное количество токенов
+                        "top_p": 0.8,
+                        "top_k": 40,
+                        "repeat_penalty": 1.05,
+                        "num_thread": 6        # Оптимальное количество потоков
+                    }
+                },
+                timeout=300  # 5 минут на батч
+            )
+        
+        request_time = (datetime.now() - start_time).total_seconds()
+        
+        if client_id:
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "batch_completed",
+                "batch": f"{batch_idx}/{total_batches}",
+                "processing_time": f"{request_time:.1f}s",
+                "response_length": len(response.text) if response.status_code == 200 else 0
+            })
+        
+        if response.status_code != 200:
+            print(f"❌ Ollama ошибка для батча {batch_idx}: код {response.status_code}")
+            return []
+        
+        data = response.json()
+        content = data.get("response", "")
+        
+        print(f"📝 Батч {batch_idx}: получен ответ {len(content)} символов за {request_time:.1f}с")
+        
+        # Парсим рекомендации для этого батча
+        batch_recommendations = parse_ollama_recommendations(content, domain, full_dataset)
+        
+        return batch_recommendations
+        
+    except Exception as e:
+        print(f"❌ Ошибка обработки батча {batch_idx}: {e}")
+        return []
+
+
+def deduplicate_and_rank_recommendations(recommendations: List[Dict], domain: str) -> List[Dict]:
+    """Дедуплицирует и ранжирует финальные рекомендации."""
+    
+    # Дедупликация по паре источник->цель
+    seen_pairs = set()
+    unique_recommendations = []
+    
+    for rec in recommendations:
+        pair_key = (rec['from'], rec['to'])
+        if pair_key not in seen_pairs:
+            seen_pairs.add(pair_key)
+            unique_recommendations.append(rec)
+    
+    # Ранжирование по качеству анкора и обоснования
+    def quality_score(rec):
+        anchor_score = len(rec['anchor']) * 0.1  # Длина анкора
+        comment_score = len(rec['comment']) * 0.05  # Длина обоснования
+        
+        # Бонусы за качественные слова в анкоре
+        quality_words = ['подробный', 'полный', 'детальный', 'руководство', 'инструкция', 'обзор', 'гайд']
+        anchor_quality = sum(1 for word in quality_words if word in rec['anchor'].lower()) * 2
+        
+        return anchor_score + comment_score + anchor_quality
+    
+    # Сортируем по качеству
+    ranked_recommendations = sorted(unique_recommendations, key=quality_score, reverse=True)
+    
+    print(f"🎯 Дедупликация: {len(recommendations)} -> {len(unique_recommendations)} уникальных рекомендаций")
+    
+    return ranked_recommendations[:50]  # Топ-50 самых качественных
+
+
 async def generate_rag_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
     """Генерирует рекомендации используя RAG-подход с векторной БД."""
     print(f"🚀 Запуск RAG-анализа для домена {domain} (client: {client_id})")
@@ -913,7 +1237,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         if client_id:
             await websocket_manager.send_step(client_id, "Анализ контента", 3, 7, "Выбор наиболее релевантных статей...")
         
-        articles = await rag_manager.get_semantic_recommendations(domain, limit=5)  # Уменьшаем для стабильности
+        articles = await rag_manager.get_semantic_recommendations(domain, limit=12)  # Увеличиваем для более полного анализа
         if not articles:
             error_msg = "❌ Не найдены статьи в базе знаний"
             print(error_msg)
@@ -927,26 +1251,52 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         if client_id:
             await websocket_manager.send_step(client_id, "Подготовка ИИ", 4, 7, "Создание контекста для Ollama...")
         
-        # Создаем более качественный промпт
+        # Создаем более качественный и полный промпт с семантическими данными
         articles_context = ""
         for i, article in enumerate(articles, 1):
             title = article['title'][:80]
-            content_snippet = article['content'][:150] if article.get('content') else ""
-            articles_context += f"Статья {i}: {title}\nURL: {article['link']}\nКратко: {content_snippet}...\n\n"
-        
-        # Краткий промпт для стабильности qwen2.5
-        qwen_optimized_prompt = f"""Анализ сайта {domain}
+            content_snippet = article['content'][:200] if article.get('content') else ""  # Увеличиваем сниппет
+            key_concepts = article.get('key_concepts', [])[:5]  # Топ-5 концепций
+            content_type = article.get('content_type', 'article')
+            linkability = article.get('linkability_score', 0.5)
+            
+            articles_context += f"""Статья {i}: {title}
+URL: {article['link']}
+Тип: {content_type} | Связность: {linkability:.2f}
+Концепции: {', '.join(key_concepts) if key_concepts else 'не определены'}
+Содержание: {content_snippet}...
 
-Статьи ({len(articles)}):
+"""
+        
+        # Умный промпт - пусть ИИ сама определяет количество рекомендаций
+        qwen_optimized_prompt = f"""Глубокий анализ внутренней перелинковки сайта {domain}
+
+ВАЖНО: Создаются ВНУТРЕННИЕ ссылки между страницами ОДНОГО сайта {domain}
+
+Доступно {len(articles)} статей для анализа:
 {articles_context}
 
-ЗАДАЧА: Создать 3-5 внутренних ссылок
+ЗАДАЧА: Проанализировать все статьи и создать МАКСИМАЛЬНОЕ количество качественных внутренних ссылок
+
+КРИТЕРИИ качества:
+✅ Тематическая связь между статьями
+✅ Логичность перехода для читателя  
+✅ SEO-ценность для сайта
+✅ Естественность анкора в контексте
+
+ПРАВИЛА для анкоров:
+- Описывать СОДЕРЖАНИЕ целевой страницы
+- НЕ использовать: "официальный сайт", "перейти на сайт", "главная страница"
+- Примеры качественных анкоров: "подробное руководство", "полное описание процесса", "детальный обзор"
+- Анкор должен органично вписываться в текст источника
+
+ИНСТРУКЦИЯ: Создай столько рекомендаций, сколько найдешь логичных и качественных связей между статьями. Минимум 5, максимум определи сам на основе контента.
 
 ФОРМАТ:
-ИСТОЧНИК -> ЦЕЛЬ | анкор | причина
+ИСТОЧНИК -> ЦЕЛЬ | анкор_текст | обоснование_связи
 
 ПРИМЕР:
-{articles[0]['link']} -> {articles[1]['link'] if len(articles) > 1 else articles[0]['link']} | подробное руководство | связанные темы
+{articles[0]['link']} -> {articles[1]['link'] if len(articles) > 1 else articles[0]['link']} | детальное руководство по теме | статьи дополняют друг друга тематически
 
 ОТВЕТ:"""
 
@@ -957,11 +1307,12 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             await websocket_manager.send_ollama_info(client_id, {
                 "status": "starting",
                 "model": OLLAMA_MODEL,
-                "model_info": "qwen2.5:7b - сбалансированная для качества и скорости",
+                "model_info": "qwen2.5:7b - настроенная для максимального количества рекомендаций",
                 "articles_count": len(articles),
                 "prompt_length": len(qwen_optimized_prompt),
                 "timeout": 120,
-                "settings": "temperature=0.3, ctx=4096, predict=300, threads=6"
+                "settings": "temperature=0.3, ctx=6144, predict=600, threads=6",
+                "expected_recommendations": "минимум 5, максимум определяется ИИ"
             })
         
         print("🤖 Отправляю оптимизированный запрос для qwen2.5...")
@@ -978,8 +1329,8 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
                     "stream": False,
                     "options": {
                         "temperature": 0.3,    # Немного повышаем для креативности
-                        "num_ctx": 4096,       # Увеличиваем контекст
-                        "num_predict": 300,    # Больше токенов для качественного ответа
+                        "num_ctx": 6144,       # Увеличиваем контекст для большего количества статей
+                        "num_predict": 600,    # Больше токенов для больших результатов
                         "top_p": 0.8,         # Оптимизируем top_p
                         "top_k": 40,          # Увеличиваем выбор
                         "repeat_penalty": 1.05, # Снижаем repeat_penalty
@@ -1035,7 +1386,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         print(f"✅ RAG-анализ завершен: {len(recommendations)} рекомендаций за {total_analysis_time:.1f}с")
         
         # Возвращаем рекомендации и время для дальнейшего использования
-        return recommendations[:15], total_analysis_time  # Топ-15 для баланса качества и производительности
+        return recommendations[:25], total_analysis_time  # Увеличиваем до 25 для большего покрытия
         
     except Exception as e:
         error_msg = f"❌ Ошибка RAG-анализа: {e}"
@@ -1088,9 +1439,19 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
                 print(f"      - Анкор: {anchor}")
                 print(f"      - Комментарий: {comment[:50]}...")
                 
-                # Смягчаем проверку качества
+                # Проверка качества анкора для внутренних ссылок
                 if len(anchor) < 3 or len(comment) < 10:
                     print(f"      ❌ Качество: анкор {len(anchor)} символов, комментарий {len(comment)} символов")
+                    continue
+                
+                # Фильтруем неподходящие анкоры для внутренних ссылок
+                bad_anchor_patterns = [
+                    'официальный сайт', 'перейти на сайт', 'сайт', 'главная страница',
+                    'домен', 'ресурс', 'портал', 'веб-сайт', 'интернет-ресурс'
+                ]
+                anchor_lower = anchor.lower()
+                if any(pattern in anchor_lower for pattern in bad_anchor_patterns):
+                    print(f"      ❌ Неподходящий анкор для внутренней ссылки: {anchor}")
                     continue
                 
                 if '->' in link_part:
@@ -1180,20 +1541,39 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
     """RAG-анализ WordPress сайта с векторной базой данных."""
     try:
+        # Определяем тип анализа
+        analysis_type = "Полная индексация домена" if req.comprehensive else "Стандартный RAG-анализ"
+        steps_count = 9 if req.comprehensive else 3
+        
         if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Начало анализа", 0, 3, "Инициализация анализа WordPress...")
+            await websocket_manager.send_step(
+                req.client_id, 
+                "Начало анализа", 
+                0, 
+                steps_count, 
+                f"Инициализация: {analysis_type}"
+            )
         
         # Этап 1: Загружаем и сохраняем посты
         if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 1, 3, "Получение статей с сайта...")
+            await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 1, steps_count, "Получение статей с сайта...")
         
         posts = await fetch_and_store_wp_posts(req.domain)
         
-        # Этап 2: Генерируем рекомендации через RAG
-        if req.client_id:
-            await websocket_manager.send_step(req.client_id, "RAG анализ", 2, 3, "Запуск интеллектуального анализа...")
+        # Этап 2: Выбираем тип анализа
+        if req.comprehensive:
+            # Полная индексация домена
+            if req.client_id:
+                await websocket_manager.send_step(req.client_id, "Полная индексация", 2, steps_count, "Запуск исчерпывающего анализа...")
+            
+            rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
+        else:
+            # Стандартный RAG-анализ
+            if req.client_id:
+                await websocket_manager.send_step(req.client_id, "RAG анализ", 2, steps_count, "Запуск стандартного анализа...")
+            
+            rag_result = await generate_rag_recommendations(req.domain, req.client_id)
         
-        rag_result = await generate_rag_recommendations(req.domain, req.client_id)
         if isinstance(rag_result, tuple) and len(rag_result) == 2:
             recs, total_analysis_time = rag_result
         else:
@@ -1201,9 +1581,9 @@ async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
             recs = rag_result if isinstance(rag_result, list) else []
             total_analysis_time = 0.0
         
-        # Этап 3: Сохраняем историю
+        # Финальный этап: Сохраняем историю
         if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Сохранение", 3, 3, "Сохранение результатов...")
+            await websocket_manager.send_step(req.client_id, "Сохранение", steps_count, steps_count, "Сохранение результатов...")
         
         async with AsyncSessionLocal() as session:
             # Получаем домен для связи
@@ -1266,6 +1646,124 @@ async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
         
         if req.client_id:
             await websocket_manager.send_error(req.client_id, "Критическая ошибка", error_msg)
+        
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/api/v1/wp_comprehensive")
+async def wp_comprehensive_analysis(req: WPRequest) -> dict[str, list[dict[str, str]]]:
+    """Полная индексация домена с исчерпывающим анализом всех статей."""
+    try:
+        if req.client_id:
+            await websocket_manager.send_step(
+                req.client_id, 
+                "Инициализация полной индексации", 
+                0, 
+                10, 
+                f"Подготовка к исчерпывающему анализу домена {req.domain}"
+            )
+        
+        # Этап 1: Проверяем и загружаем посты
+        if req.client_id:
+            await websocket_manager.send_step(req.client_id, "Проверка данных", 1, 10, "Проверка статей в БД...")
+        
+        # Проверяем, есть ли уже статьи в БД
+        async with AsyncSessionLocal() as session:
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == req.domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            posts_count = 0
+            if domain_obj:
+                posts_result = await session.execute(
+                    select(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
+                )
+                posts_count = len(posts_result.scalars().all())
+        
+        if posts_count == 0:
+            # Загружаем посты если их нет
+            if req.client_id:
+                await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 2, 10, "Получение статей с сайта...")
+            
+            posts = await fetch_and_store_wp_posts(req.domain)
+            posts_count = len(posts)
+        else:
+            if req.client_id:
+                await websocket_manager.send_step(req.client_id, "Использование кеша", 2, 10, f"Найдено {posts_count} статей в БД")
+        
+        print(f"🏗️ Начинаю полную индексацию {posts_count} статей домена {req.domain}")
+        
+        # Этапы 3-10: Полная индексация
+        rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
+        
+        if isinstance(rag_result, tuple) and len(rag_result) == 2:
+            recs, total_analysis_time = rag_result
+        else:
+            recs = rag_result if isinstance(rag_result, list) else []
+            total_analysis_time = 0.0
+        
+        # Сохраняем расширенную историю анализа
+        async with AsyncSessionLocal() as session:
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == req.domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if domain_obj:
+                domain_obj.total_analyses += 1
+                domain_obj.last_analysis_at = datetime.utcnow()
+                
+                analysis = AnalysisHistory(
+                    domain_id=domain_obj.id,
+                    posts_analyzed=posts_count,
+                    connections_found=len(recs),
+                    recommendations_generated=len(recs),
+                    recommendations=recs,
+                    thematic_analysis={
+                        "analysis_type": "comprehensive_domain_indexing",
+                        "total_posts_indexed": posts_count,
+                        "batch_processing": True,
+                        "comprehensive_analysis": True,
+                        "coverage": "exhaustive"
+                    },
+                    semantic_metrics={
+                        "indexing_depth": "maximum",
+                        "context_utilization": "full_database",
+                        "batch_analysis": True,
+                        "semantic_links_found": len(recs)
+                    },
+                    quality_assessment={
+                        "methodology": "comprehensive_domain_indexing",
+                        "completeness": "exhaustive",
+                        "quality_ranking": "applied",
+                        "deduplication": "performed"
+                    },
+                    llm_model_used=f"{OLLAMA_MODEL} (batch_processing)",
+                    processing_time_seconds=total_analysis_time,
+                    completed_at=datetime.utcnow()
+                )
+                session.add(analysis)
+                await session.commit()
+        
+        if req.client_id:
+            await websocket_manager.send_progress(req.client_id, {
+                "type": "complete",
+                "message": "Полная индексация завершена успешно!",
+                "recommendations_count": len(recs),
+                "posts_count": posts_count,
+                "analysis_type": "comprehensive",
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        return {"recommendations": recs}
+        
+    except Exception as e:
+        error_msg = f"Ошибка полной индексации: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        if req.client_id:
+            await websocket_manager.send_error(req.client_id, "Критическая ошибка полной индексации", error_msg)
         
         raise HTTPException(status_code=500, detail=error_msg)
 
