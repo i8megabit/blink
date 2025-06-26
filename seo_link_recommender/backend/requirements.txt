@@ -4,3 +4,6 @@ httpx
 pytest
 pytest-asyncio
 respx
+sqlalchemy[asyncio]
+asyncpg
+aiosqlite

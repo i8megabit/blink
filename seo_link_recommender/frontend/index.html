@@ -8,27 +8,42 @@
   <h1>SEO Link Recommender</h1>
   <textarea id="text" rows="10" cols="80" placeholder="Введите текст"></textarea><br>
   <button id="send">Получить рекомендации</button>
+  <button id="load">Загрузить историю</button>
   <ul id="result"></ul>
-<script>
-  document.getElementById('send').addEventListener('click', async () => {
-    const text = document.getElementById('text').value;
-    const response = await fetch('/api/v1/recommend', {
-      method: 'POST',
+  <h2>История</h2>
+  <ul id="history"></ul>
+  <script>
+    document.getElementById('send').addEventListener('click', async () => {
+      const text = document.getElementById('text').value;
+      const response = await fetch('/api/v1/recommend', {
+        method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     });
     const data = await response.json();
     const ul = document.getElementById('result');
-    ul.innerHTML = '';
-    (data.links || []).forEach(link => {
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.href = link;
-      a.textContent = link;
-      li.appendChild(a);
-      ul.appendChild(li);
+      ul.innerHTML = '';
+      (data.links || []).forEach(link => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = link;
+        a.textContent = link;
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
     });
-  });
-</script>
+
+    document.getElementById('load').addEventListener('click', async () => {
+      const response = await fetch('/api/v1/recommendations');
+      const data = await response.json();
+      const history = document.getElementById('history');
+      history.innerHTML = '';
+      data.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item.text + ' -> ' + (item.links || []).join(', ');
+        history.appendChild(li);
+      });
+    });
+  </script>
 </body>
 </html>

@@ -17,6 +17,7 @@ cd seo_link_recommender
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r seo_link_recommender/backend/requirements.txt
+export DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@localhost/seo_db
 uvicorn app.main:app --app-dir seo_link_recommender/backend/app --reload
 ```
 
@@ -29,8 +30,11 @@ docker compose -f seo_link_recommender/docker-compose.yml up --build
 ```
 
 После сборки приложение доступно по адресу http://localhost:8000.
+PostgreSQL запускается как отдельный сервис в Docker и доступен по адресу
+`postgresql://seo_user:seo_pass@localhost:5432/seo_db`.
 Фронтэнд поставляется вместе с бэкендом и открывается в браузере по тому же
-адресу. Он отправляет текст на сервер и отображает список предложенных ссылок.
+адресу. Он позволяет отправить текст на сервер, получить список ссылок и
+просмотреть историю сохранённых рекомендаций.
 Для генерации ссылок нужен запущенный локальный сервер Ollama. Его адрес можно
 задать переменной окружения `OLLAMA_URL` (по умолчанию используется
 `http://localhost:11434/api/generate`).
