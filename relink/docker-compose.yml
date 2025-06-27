@@ -20,6 +20,36 @@ services:
       - db
       - ollama
 
+  docs:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=docs:
+      - DOCS_PATH=/app/static
+      - VERSION_FILE=/app/VERSION
+      - README_FILE=/app/README.md
+      - CORS_ORIGINS=["http://localhost:3000","http://frontend:80"]
+    volumes:
+      - ./VERSION:/app/VERSION:ro
+      - ./README.md:/app/README.md:ro
+      - ./TECHNICAL_ROADMAP.md:/app/static/TECHNICAL_ROADMAP.md:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+
   frontend:
     build:
       context: ./frontend
@@ -28,6 +58,22 @@ services:
       - "3000:80"
     depends_on:
       - backend
+      - docs
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
   db:
     image: postgres:16
@@ -167,6 +213,7 @@ services:
     security_opt:
       - seccomp:unconfined
     ipc: host
-    
-# volumes:
-  # Все данные теперь хранятся в bind mounts на диске Mac
+
+volumes:
+  redis_data:
+    driver: local

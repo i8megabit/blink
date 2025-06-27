@@ -1,24 +1,33 @@
 """
-Основной файл FastAPI приложения для микросервиса документации
+Основное FastAPI приложение для микросервиса документации
 """
 
+import logging
 import time
-from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Optional
+
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 import structlog
 
 from .config import settings
 from .cache import cache
 from .services import docs_service
 from .models import (
-    DocumentType, DocumentationResponse, VersionResponse, 
-    FAQResponse, AboutResponse, HowItWorksResponse,
-    HealthResponse, CacheStatsResponse
+    HealthResponse, VersionInfo, ReadmeInfo, RoadmapInfo,
+    FAQEntry, AboutInfo, HowItWorksInfo, CacheStats,
+    APIResponse, ErrorResponse
 )
 
 # Настройка логирования
+logging.basicConfig(
+    level=getattr(logging, settings.log_level),
+    format=settings.log_format
+)
+
+# Настройка structlog
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -37,40 +46,15 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-logger = structlog.get_logger(__name__)
-
-# Время запуска для расчета uptime
-start_time = time.time()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения"""
-    # Запуск
-    logger.info("Запуск микросервиса документации")
-    
-    # Подключение к Redis
-    try:
-        await cache.connect()
-        logger.info("Redis подключен успешно")
-    except Exception as e:
-        logger.error("Ошибка подключения к Redis", error=str(e))
-    
-    yield
-    
-    # Остановка
-    logger.info("Остановка микросервиса документации")
-    await cache.disconnect()
-
+logger = structlog.get_logger()
 
 # Создание FastAPI приложения
 app = FastAPI(
     title=settings.app_name,
-    description="Микросервис документации и управления версиями для SEO Link Recommender",
+    description="Микросервис документации и управления версиями",
     version=settings.app_version,
     docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
+    redoc_url="/redoc"
 )
 
 # Настройка CORS
@@ -82,99 +66,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Корневой эндпоинт с информацией о сервисе"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>SEO Link Recommender - Документация</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-            .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { color: #333; text-align: center; }
-            .endpoints { margin-top: 30px; }
-            .endpoint { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
-            .method { font-weight: bold; color: #007bff; }
-            .url { font-family: monospace; color: #666; }
-            .description { margin-top: 5px; color: #555; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🚀 SEO Link Recommender - Документация</h1>
-            <p>Микросервис документации и управления версиями</p>
-            
-            <div class="endpoints">
-                <h2>Доступные эндпоинты:</h2>
-                
-                <div class="endpoint">
-                    <div class="method">GET</div>
-                    <div class="url">/api/v1/health</div>
-                    <div class="description">Проверка состояния сервиса</div>
-                </div>
-                
-                <div class="endpoint">
-                    <div class="method">GET</div>
-                    <div class="url">/api/v1/version</div>
-                    <div class="description">Информация о версии</div>
-                </div>
-                
-                <div class="endpoint">
-                    <div class="method">GET</div>
-                    <div class="url">/api/v1/docs/{type}</div>
-                    <div class="description">Получение документации (readme, roadmap, cicd, faq, about, how_it_works)</div>
-                </div>
-                
-                <div class="endpoint">
-                    <div class="method">GET</div>
-                    <div class="url">/api/v1/cache/stats</div>
-                    <div class="description">Статистика кэша Redis</div>
-                </div>
-                
-                <div class="endpoint">
-                    <div class="method">DELETE</div>
-                    <div class="url">/api/v1/cache/clear</div>
-                    <div class="description">Очистка кэша</div>
-                </div>
-            </div>
-            
-            <p style="text-align: center; margin-top: 30px; color: #666;">
-                <a href="/docs">📖 Swagger документация</a> | 
-                <a href="/redoc">📋 ReDoc документация</a>
-            </p>
-        </div>
-    </body>
-    </html>
-    """
+# Глобальные переменные
+start_time = time.time()
 
 
-@app.get(f"{settings.api_prefix}/health", response_model=HealthResponse)
+@app.on_event("startup")
+async def startup_event():
+    """Событие запуска приложения"""
+    logger.info("Starting documentation service", version=settings.app_version)
+    
+    # Подключаемся к Redis
+    await cache.connect()
+    logger.info("Documentation service started successfully")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Событие остановки приложения"""
+    logger.info("Shutting down documentation service")
+    
+    # Отключаемся от Redis
+    await cache.disconnect()
+    logger.info("Documentation service shutdown complete")
+
+
+@app.get("/api/v1/health", response_model=HealthResponse)
 async def health_check():
-    """Проверка состояния сервиса"""
-    try:
-        # Проверяем Redis
-        redis_status = "connected" if cache.redis else "disconnected"
-        
-        # Рассчитываем uptime
-        uptime = time.time() - start_time
-        
-        return HealthResponse(
-            status="healthy",
-            version=settings.app_version,
-            redis_status=redis_status,
-            uptime=uptime
-        )
-    except Exception as e:
-        logger.error("Ошибка проверки здоровья", error=str(e))
-        raise HTTPException(status_code=500, detail="Service unhealthy")
+    """Проверка здоровья сервиса"""
+    uptime = time.time() - start_time
+    
+    # Проверяем статус кэша
+    cache_stats = await cache.get_stats()
+    cache_status = "connected" if cache_stats.get("connected", False) else "disconnected"
+    
+    return HealthResponse(
+        status="healthy",
+        timestamp=datetime.utcnow(),
+        version=settings.app_version,
+        cache_status=cache_status,
+        uptime=uptime
+    )
 
 
-@app.get(f"{settings.api_prefix}/version", response_model=VersionResponse)
+@app.get("/api/v1/version", response_model=APIResponse)
 async def get_version(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
@@ -182,143 +116,204 @@ async def get_version(
     try:
         version_info = await docs_service.get_version_info(force_refresh=force_refresh)
         
-        # Проверяем, был ли кэш-хит
-        cache_hit = await cache.exists("version_info") and not force_refresh
+        if not version_info:
+            raise HTTPException(status_code=404, detail="Version information not found")
         
-        return VersionResponse(
+        return APIResponse(
             success=True,
-            data=version_info,
-            cache_hit=cache_hit
+            message="Version information retrieved successfully",
+            data=version_info.dict()
         )
-    except Exception as e:
-        logger.error("Ошибка получения версии", error=str(e))
-        return VersionResponse(
-            success=False,
-            error=str(e)
-        )
-
-
-@app.get(f"{settings.api_prefix}/docs/{{doc_type}}", response_model=DocumentationResponse)
-async def get_document(
-    doc_type: DocumentType,
-    force_refresh: bool = Query(False, description="Принудительное обновление кэша")
-):
-    """Получение документации по типу"""
-    try:
-        document = await docs_service.get_document(doc_type, force_refresh=force_refresh)
         
-        # Проверяем, был ли кэш-хит
-        cache_hit = await cache.exists(f"document_{doc_type.value}") and not force_refresh
-        
-        return DocumentationResponse(
-            success=True,
-            data=document,
-            cache_hit=cache_hit
-        )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Ошибка получения документа", doc_type=doc_type, error=str(e))
-        return DocumentationResponse(
-            success=False,
-            error=str(e)
-        )
+        logger.error("Error getting version info", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(f"{settings.api_prefix}/docs", response_model=DocumentationResponse)
-async def get_document_by_type(
-    type: str = Query(..., description="Тип документа"),
-    force_refresh: bool = Query(False, description="Принудительное обновление кэша")
-):
-    """Получение документации по строковому типу"""
-    try:
-        doc_type = DocumentType(type.lower())
-        return await get_document(doc_type, force_refresh)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Неизвестный тип документа: {type}. Доступные типы: {[t.value for t in DocumentType]}"
-        )
-
-
-@app.get(f"{settings.api_prefix}/cache/stats", response_model=CacheStatsResponse)
-async def get_cache_stats():
-    """Получение статистики кэша"""
-    try:
-        stats = await cache.get_stats()
-        return CacheStatsResponse(
-            success=True,
-            data=stats
-        )
-    except Exception as e:
-        logger.error("Ошибка получения статистики кэша", error=str(e))
-        return CacheStatsResponse(
-            success=False,
-            error=str(e)
-        )
-
-
-@app.delete(f"{settings.api_prefix}/cache/clear")
-async def clear_cache():
-    """Очистка кэша"""
-    try:
-        # Очищаем все ключи с префиксом docs:
-        cleared = await cache.clear_pattern("*")
-        logger.info("Кэш очищен", cleared_keys=cleared)
-        return {"success": True, "cleared_keys": cleared}
-    except Exception as e:
-        logger.error("Ошибка очистки кэша", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Ошибка очистки кэша: {str(e)}")
-
-
-@app.get(f"{settings.api_prefix}/docs/readme", response_model=DocumentationResponse)
+@app.get("/api/v1/docs/readme", response_model=APIResponse)
 async def get_readme(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
     """Получение README документации"""
-    return await get_document(DocumentType.README, force_refresh)
+    try:
+        readme_info = await docs_service.get_readme_info(force_refresh=force_refresh)
+        
+        if not readme_info:
+            raise HTTPException(status_code=404, detail="README not found")
+        
+        return APIResponse(
+            success=True,
+            message="README retrieved successfully",
+            data=readme_info.dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting README", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(f"{settings.api_prefix}/docs/roadmap", response_model=DocumentationResponse)
+@app.get("/api/v1/docs/roadmap", response_model=APIResponse)
 async def get_roadmap(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
-    """Получение технической дорожной карты"""
-    return await get_document(DocumentType.ROADMAP, force_refresh)
+    """Получение технического roadmap"""
+    try:
+        roadmap_info = await docs_service.get_roadmap_info(force_refresh=force_refresh)
+        
+        if not roadmap_info:
+            raise HTTPException(status_code=404, detail="Roadmap not found")
+        
+        return APIResponse(
+            success=True,
+            message="Roadmap retrieved successfully",
+            data=roadmap_info.dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting roadmap", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(f"{settings.api_prefix}/docs/cicd", response_model=DocumentationResponse)
-async def get_cicd(
-    force_refresh: bool = Query(False, description="Принудительное обновление кэша")
-):
-    """Получение CI/CD документации"""
-    return await get_document(DocumentType.CICD, force_refresh)
-
-
-@app.get(f"{settings.api_prefix}/docs/faq", response_model=DocumentationResponse)
+@app.get("/api/v1/docs/faq", response_model=APIResponse)
 async def get_faq(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
     """Получение FAQ"""
-    return await get_document(DocumentType.FAQ, force_refresh)
+    try:
+        faq_entries = await docs_service.get_faq_entries(force_refresh=force_refresh)
+        
+        return APIResponse(
+            success=True,
+            message="FAQ retrieved successfully",
+            data=[entry.dict() for entry in faq_entries]
+        )
+        
+    except Exception as e:
+        logger.error("Error getting FAQ", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(f"{settings.api_prefix}/docs/about", response_model=DocumentationResponse)
+@app.get("/api/v1/docs/about", response_model=APIResponse)
 async def get_about(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
-    """Получение информации о программе"""
-    return await get_document(DocumentType.ABOUT, force_refresh)
+    """Получение информации о проекте"""
+    try:
+        about_info = await docs_service.get_about_info(force_refresh=force_refresh)
+        
+        if not about_info:
+            raise HTTPException(status_code=404, detail="About information not found")
+        
+        return APIResponse(
+            success=True,
+            message="About information retrieved successfully",
+            data=about_info.dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting about info", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(f"{settings.api_prefix}/docs/how-it-works", response_model=DocumentationResponse)
+@app.get("/api/v1/docs/how-it-works", response_model=APIResponse)
 async def get_how_it_works(
     force_refresh: bool = Query(False, description="Принудительное обновление кэша")
 ):
-    """Получение описания работы системы"""
-    return await get_document(DocumentType.HOW_IT_WORKS, force_refresh)
+    """Получение информации о том, как работает система"""
+    try:
+        how_it_works_info = await docs_service.get_how_it_works_info(force_refresh=force_refresh)
+        
+        if not how_it_works_info:
+            raise HTTPException(status_code=404, detail="How it works information not found")
+        
+        return APIResponse(
+            success=True,
+            message="How it works information retrieved successfully",
+            data=how_it_works_info.dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting how it works info", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/cache/stats", response_model=APIResponse)
+async def get_cache_stats():
+    """Получение статистики кэша"""
+    try:
+        stats = await cache.get_stats()
+        
+        return APIResponse(
+            success=True,
+            message="Cache statistics retrieved successfully",
+            data=stats
+        )
+        
+    except Exception as e:
+        logger.error("Error getting cache stats", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.delete("/api/v1/cache/clear", response_model=APIResponse)
+async def clear_cache():
+    """Очистка кэша"""
+    try:
+        success = await cache.clear()
+        
+        if success:
+            return APIResponse(
+                success=True,
+                message="Cache cleared successfully"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to clear cache")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error clearing cache", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    """Обработчик HTTP исключений"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            error=exc.detail,
+            error_code=str(exc.status_code)
+        ).dict()
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    """Обработчик общих исключений"""
+    logger.error("Unhandled exception", error=str(exc), exc_info=True)
+    
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            error="Internal server error",
+            error_code="INTERNAL_ERROR"
+        ).dict()
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
+    
     uvicorn.run(
         "app.main:app",
         host=settings.host,
