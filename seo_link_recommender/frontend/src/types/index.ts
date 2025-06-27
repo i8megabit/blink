@@ -40,23 +40,28 @@ export interface Recommendation {
 }
 
 export interface AnalysisStats {
-  current: number
-  total: number
+  current?: number
+  total?: number
   details?: string
+  postsAnalyzed?: number
+  connectionsFound?: number
+  recommendationsGenerated?: number
+  processingTime?: number
 }
 
 export interface AIThought {
-  id: string
-  type: 'ai_thinking' | 'enhanced_ai_thinking' | 'progress' | 'ollama' | 'error'
+  id?: string
+  thought_id?: string
+  type?: 'ai_thinking' | 'enhanced_ai_thinking' | 'progress' | 'ollama' | 'error'
   thought?: string
   thinking_stage?: string
   emoji?: string
-  stage?: string
-  content?: string
-  confidence?: number
-  semantic_weight?: number
-  related_concepts?: string[]
-  reasoning_chain?: string[]
+  stage: string
+  content: string
+  confidence: number
+  semantic_weight: number
+  related_concepts: string[]
+  reasoning_chain: string[]
   timestamp: string
 }
 
@@ -233,4 +238,123 @@ export interface BenchmarkRequest {
   models: string[]
   iterations: number
   client_id?: string
+}
+
+// ===== ДОПОЛНИТЕЛЬНЫЕ ТИПЫ =====
+
+export interface BenchmarkRun {
+  id: number
+  name: string
+  benchmark_type: string
+  status: string
+  overall_score?: number
+  quality_score?: number
+  performance_score?: number
+  duration_seconds?: number
+  created_at: string
+  completed_at?: string
+}
+
+export interface ModelConfiguration {
+  id: number
+  model_name: string
+  display_name: string
+  description?: string
+  model_type: string
+  is_active: boolean
+  is_available: boolean
+  quality_score?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SemanticConnection {
+  id: number
+  source_post_id: number
+  target_post_id: number
+  connection_type: string
+  strength: number
+  confidence: number
+  connection_context?: string
+  suggested_anchor?: string
+  created_at: string
+}
+
+export interface ThematicCluster {
+  id: number
+  cluster_name: string
+  cluster_keywords: string[]
+  article_count: number
+  coherence_score: number
+  linkability_potential: number
+  evolution_stage: string
+  created_at: string
+}
+
+export interface AppSettings {
+  theme: 'light' | 'dark' | 'system'
+  language: string
+  autoRefresh: boolean
+  refreshInterval: number
+  notifications: boolean
+  sound: boolean
+}
+
+export interface SearchFilters {
+  domain?: string
+  dateFrom?: string
+  dateTo?: string
+  status?: string
+  type?: string
+  limit?: number
+}
+
+export interface PaginationInfo {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+export interface ExportOptions {
+  format: 'json' | 'csv' | 'xlsx'
+  includeHistory: boolean
+  includeStats: boolean
+  dateRange?: {
+    from: string
+    to: string
+  }
+}
+
+export interface SystemMetrics {
+  cpu_usage: number
+  memory_usage: number
+  disk_usage: number
+  active_connections: number
+  requests_per_minute: number
+  average_response_time: number
+  timestamp: string
+}
+
+export interface ErrorLog {
+  id: string
+  level: 'debug' | 'info' | 'warning' | 'error' | 'critical'
+  message: string
+  stack?: string
+  context?: Record<string, any>
+  timestamp: string
+  user_id?: string
+  session_id?: string
+}
+
+export interface ExtendedUserPreferences {
+  default_comprehensive_analysis: boolean
+  auto_save_results: boolean
+  email_notifications: boolean
+  dashboard_layout: 'grid' | 'list' | 'compact'
+  results_per_page: number
+  favorite_domains: string[]
+  custom_filters: SearchFilters[]
 } 
