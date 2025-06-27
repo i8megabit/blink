@@ -115,14 +115,15 @@ coverage/
 temp/
 
 # 🐍 Project Specific
-relink_db/ollama_models/
-relink_db/postgres_data/
-relink_db/chroma_db/
-relink_db/benchmark_results/
-relink_db/test_results/
-relink_db/analysis_cache/
-relink_db/semantic_cache/
-relink_db/vector_cache/
+relink_db/
+ollama_models/
+postgres_data/
+chroma_db/
+benchmark_results/
+test_results/
+analysis_cache/
+semantic_cache/
+vector_cache/
 
 # 🐍 Large Files
 *.zip

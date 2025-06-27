@@ -6,6 +6,15 @@
 
 Интеллектуальная система для генерации внутренних ссылок с использованием AI и семантического анализа.
 
+## 📊 Метрики проекта
+
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-18,429-brightgreen)
+![Files](https://img.shields.io/badge/files-95-blue)
+![Python](https://img.shields.io/badge/python-3.11+-yellow)
+![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue)
+![Docker](https://img.shields.io/badge/docker-20.10+-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 ## 🎯 Возможности
 
 - 🤖 **AI-генерация ссылок** с использованием Ollama

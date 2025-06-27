@@ -16,10 +16,10 @@ RUN addgroup -g 1001 -S nginx-app && \
     adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx-app -g nginx-app nginx-app
 
 # Копируем конфигурацию nginx
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Копируем готовые статические файлы
-COPY frontend/dist/ /usr/share/nginx/html/
+COPY dist/ /usr/share/nginx/html/
 
 # Устанавливаем правильные права доступа
 RUN chown -R nginx-app:nginx-app /var/cache/nginx && \
