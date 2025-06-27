@@ -1,421 +1,436 @@
 """
-Модуль валидации и обработки ошибок для Blink
+Модуль валидации и обработки ошибок для reLink
 Pydantic модели, кастомные валидаторы и централизованная обработка ошибок
 """
 
 import re
 import ipaddress
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union, Callable
+from functools import wraps
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, validator, root_validator, ValidationError
-from pydantic.types import constr
+from pydantic import BaseModel, Field, validator, ValidationError
 from fastapi import HTTPException, status
-from fastapi.responses import JSONResponse
+import logging
 
-from .monitoring import monitoring
+from .exceptions import ValidationException, RelinkBaseException
 
-# Кастомные типы данных
-DomainName = constr(regex=r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$')
-EmailStr = constr(regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-URLStr = constr(regex=r'^https?://[^\s/$.?#].[^\s]*$')
+logger = logging.getLogger(__name__)
 
-class ValidationErrorResponse(BaseModel):
-    """Модель ответа для ошибок валидации"""
-    error: str
-    message: str
-    details: Optional[Dict[str, Any]] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class ErrorResponse(BaseModel):
-    """Модель ответа для ошибок"""
-    error: str
-    message: str
-    code: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-# Базовые модели валидации
-class BaseRequestModel(BaseModel):
-    """Базовая модель для всех запросов"""
+class BaseValidationModel(BaseModel):
+    """Базовая модель для валидации"""
     
     class Config:
         extra = "forbid"  # Запрещаем дополнительные поля
-        validate_assignment = True  # Валидируем при присваивании
+        validate_assignment = True  # Валидация при присвоении
         json_encoders = {
-            datetime: lambda v: v.isoformat()
+            # Кастомные энкодеры для JSON
         }
 
-class BaseResponseModel(BaseModel):
-    """Базовая модель для всех ответов"""
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
 
-# Модели для SEO анализа
-class DomainAnalysisRequest(BaseRequestModel):
-    """Модель запроса для анализа домена"""
-    domain: DomainName = Field(..., description="Домен для анализа")
-    depth: int = Field(default=3, ge=1, le=10, description="Глубина анализа")
-    include_competitors: bool = Field(default=False, description="Включить анализ конкурентов")
-    analysis_type: str = Field(default="comprehensive", regex="^(basic|comprehensive|advanced)$")
-    
-    @validator('domain')
-    def validate_domain(cls, v):
-        """Валидация домена"""
-        if not v:
-            raise ValueError("Домен не может быть пустым")
-        
-        # Проверяем длину
-        if len(v) > 253:
-            raise ValueError("Домен слишком длинный")
-        
-        # Проверяем, что домен не является IP адресом
-        try:
-            ipaddress.ip_address(v)
-            raise ValueError("Домен не может быть IP адресом")
-        except ValueError:
-            pass
-        
-        return v.lower()
-    
-    @root_validator
-    def validate_analysis_config(cls, values):
-        """Валидация конфигурации анализа"""
-        depth = values.get('depth')
-        analysis_type = values.get('analysis_type')
-        
-        if analysis_type == "basic" and depth > 5:
-            raise ValueError("Для базового анализа глубина не может превышать 5")
-        
-        return values
-
-class SEOAnalysisResult(BaseResponseModel):
-    """Модель результата SEO анализа"""
-    domain: str
-    analysis_date: datetime
-    score: float = Field(ge=0, le=100)
-    recommendations: List[Dict[str, Any]]
-    metrics: Dict[str, Any]
-    status: str = Field(regex="^(pending|processing|completed|failed)$")
-    
-    @validator('score')
-    def validate_score(cls, v):
-        """Валидация SEO score"""
-        if v < 0 or v > 100:
-            raise ValueError("SEO score должен быть от 0 до 100")
-        return round(v, 2)
-
-class CompetitorAnalysisRequest(BaseRequestModel):
-    """Модель запроса для анализа конкурентов"""
-    domain: DomainName
-    competitors: List[DomainName] = Field(..., min_items=1, max_items=10)
-    metrics: List[str] = Field(default=["traffic", "backlinks", "keywords"])
-    
-    @validator('competitors')
-    def validate_competitors(cls, v):
-        """Валидация списка конкурентов"""
-        if not v:
-            raise ValueError("Список конкурентов не может быть пустым")
-        
-        # Проверяем уникальность
-        if len(set(v)) != len(v):
-            raise ValueError("Конкуренты должны быть уникальными")
-        
-        return [domain.lower() for domain in v]
-    
-    @validator('metrics')
-    def validate_metrics(cls, v):
-        """Валидация метрик"""
-        allowed_metrics = ["traffic", "backlinks", "keywords", "rankings", "content"]
-        for metric in v:
-            if metric not in allowed_metrics:
-                raise ValueError(f"Неподдерживаемая метрика: {metric}")
-        return v
-
-# Модели для пользователей
-class UserRegistrationRequest(BaseRequestModel):
-    """Модель запроса регистрации пользователя"""
-    email: EmailStr
-    username: str = Field(..., min_length=3, max_length=50, regex=r'^[a-zA-Z0-9_]+$')
-    password: str = Field(..., min_length=8, max_length=128)
-    confirm_password: str
-    
-    @validator('username')
-    def validate_username(cls, v):
-        """Валидация имени пользователя"""
-        if not v.isalnum() and '_' not in v:
-            raise ValueError("Имя пользователя может содержать только буквы, цифры и подчеркивания")
-        return v.lower()
-    
-    @root_validator
-    def validate_passwords(cls, values):
-        """Валидация паролей"""
-        password = values.get('password')
-        confirm_password = values.get('confirm_password')
-        
-        if password != confirm_password:
-            raise ValueError("Пароли не совпадают")
-        
-        # Проверяем сложность пароля
-        if not re.search(r'[A-Z]', password):
-            raise ValueError("Пароль должен содержать хотя бы одну заглавную букву")
-        if not re.search(r'[a-z]', password):
-            raise ValueError("Пароль должен содержать хотя бы одну строчную букву")
-        if not re.search(r'\d', password):
-            raise ValueError("Пароль должен содержать хотя бы одну цифру")
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-            raise ValueError("Пароль должен содержать хотя бы один специальный символ")
-        
-        return values
-
-class UserLoginRequest(BaseRequestModel):
-    """Модель запроса входа пользователя"""
-    email: EmailStr
-    password: str = Field(..., min_length=1)
-
-class UserProfileUpdateRequest(BaseRequestModel):
-    """Модель запроса обновления профиля пользователя"""
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    first_name: Optional[str] = Field(None, max_length=100)
-    last_name: Optional[str] = Field(None, max_length=100)
-    company: Optional[str] = Field(None, max_length=200)
-    website: Optional[URLStr]
-    
-    @validator('website')
-    def validate_website(cls, v):
-        """Валидация веб-сайта"""
-        if v:
-            parsed = urlparse(v)
-            if not parsed.scheme or not parsed.netloc:
-                raise ValueError("Некорректный URL")
-        return v
-
-# Модели для истории и экспорта
-class AnalysisHistoryRequest(BaseRequestModel):
-    """Модель запроса истории анализов"""
-    user_id: int = Field(..., gt=0)
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
-    status: Optional[str] = Field(None, regex="^(pending|processing|completed|failed)$")
-    date_from: Optional[datetime]
-    date_to: Optional[datetime]
-    
-    @root_validator
-    def validate_date_range(cls, values):
-        """Валидация диапазона дат"""
-        date_from = values.get('date_from')
-        date_to = values.get('date_to')
-        
-        if date_from and date_to and date_from > date_to:
-            raise ValueError("Дата начала не может быть позже даты окончания")
-        
-        if date_from and date_from > datetime.utcnow():
-            raise ValueError("Дата начала не может быть в будущем")
-        
-        return values
-
-class ExportRequest(BaseRequestModel):
-    """Модель запроса экспорта данных"""
-    analysis_ids: List[int] = Field(..., min_items=1, max_items=50)
-    format: str = Field(..., regex="^(json|csv|pdf|excel)$")
-    include_recommendations: bool = Field(default=True)
-    include_metrics: bool = Field(default=True)
-    
-    @validator('analysis_ids')
-    def validate_analysis_ids(cls, v):
-        """Валидация ID анализов"""
-        if not all(isinstance(id, int) and id > 0 for id in v):
-            raise ValueError("Все ID анализов должны быть положительными целыми числами")
-        return v
-
-# Кастомные валидаторы
-class Validators:
-    """Класс с кастомными валидаторами"""
+class URLValidator:
+    """Валидатор URL"""
     
     @staticmethod
     def validate_url(url: str) -> str:
         """Валидация URL"""
+        if not url:
+            raise ValidationException("URL не может быть пустым")
+        
+        # Проверяем формат URL
         try:
             parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                raise ValueError("Некорректный URL")
+            if not all([parsed.scheme, parsed.netloc]):
+                raise ValidationException("Неверный формат URL")
+            
+            # Проверяем схему
+            if parsed.scheme not in ['http', 'https']:
+                raise ValidationException("URL должен использовать HTTP или HTTPS")
+            
+            # Проверяем домен
+            if not parsed.netloc or '.' not in parsed.netloc:
+                raise ValidationException("Неверный домен в URL")
+            
             return url
         except Exception as e:
-            raise ValueError(f"Ошибка валидации URL: {e}")
+            raise ValidationException(f"Ошибка валидации URL: {str(e)}")
     
     @staticmethod
-    def validate_phone(phone: str) -> str:
-        """Валидация номера телефона"""
-        # Удаляем все нецифровые символы
-        digits = re.sub(r'\D', '', phone)
+    def validate_domain(domain: str) -> str:
+        """Валидация домена"""
+        if not domain:
+            raise ValidationException("Домен не может быть пустым")
         
-        if len(digits) < 10 or len(digits) > 15:
-            raise ValueError("Номер телефона должен содержать от 10 до 15 цифр")
+        # Убираем протокол если есть
+        domain = domain.replace('http://', '').replace('https://', '')
         
-        return digits
-    
-    @staticmethod
-    def validate_postal_code(postal_code: str) -> str:
-        """Валидация почтового индекса"""
-        # Российский формат: 6 цифр
-        if not re.match(r'^\d{6}$', postal_code):
-            raise ValueError("Почтовый индекс должен содержать 6 цифр")
+        # Убираем путь если есть
+        domain = domain.split('/')[0]
         
-        return postal_code
-    
-    @staticmethod
-    def validate_inn(inn: str) -> str:
-        """Валидация ИНН"""
-        # Удаляем пробелы и дефисы
-        inn_clean = re.sub(r'[\s-]', '', inn)
+        # Проверяем формат домена
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        if not re.match(domain_pattern, domain):
+            raise ValidationException("Неверный формат домена")
         
-        if not inn_clean.isdigit():
-            raise ValueError("ИНН должен содержать только цифры")
-        
-        if len(inn_clean) not in [10, 12]:
-            raise ValueError("ИНН должен содержать 10 или 12 цифр")
-        
-        return inn_clean
+        return domain
 
-# Обработчики ошибок
-class ValidationErrorHandler:
-    """Обработчик ошибок валидации"""
+
+class EmailValidator:
+    """Валидатор email"""
     
     @staticmethod
-    def handle_validation_error(exc: ValidationError) -> JSONResponse:
-        """Обработка ошибок валидации Pydantic"""
-        errors = []
+    def validate_email(email: str) -> str:
+        """Валидация email"""
+        if not email:
+            raise ValidationException("Email не может быть пустым")
         
-        for error in exc.errors():
-            field = " -> ".join(str(loc) for loc in error["loc"])
-            errors.append({
-                "field": field,
-                "message": error["msg"],
-                "type": error["type"]
-            })
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            raise ValidationException("Неверный формат email")
         
-        error_response = ValidationErrorResponse(
-            error="validation_error",
-            message="Ошибка валидации данных",
-            details={"errors": errors}
-        )
-        
-        # Логируем ошибку
-        monitoring.log_error(
-            ValueError(f"Validation error: {errors}"),
-            {"validation_errors": errors}
-        )
-        
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=error_response.dict()
-        )
+        return email.lower()
+
+
+class PasswordValidator:
+    """Валидатор пароля"""
     
     @staticmethod
-    def handle_http_error(exc: HTTPException) -> JSONResponse:
-        """Обработка HTTP ошибок"""
-        error_response = ErrorResponse(
-            error="http_error",
-            message=exc.detail,
-            code=str(exc.status_code)
-        )
+    def validate_password(password: str) -> str:
+        """Валидация пароля"""
+        if not password:
+            raise ValidationException("Пароль не может быть пустым")
         
-        # Логируем ошибку
-        monitoring.log_error(
-            exc,
-            {"status_code": exc.status_code, "detail": exc.detail}
-        )
+        if len(password) < 8:
+            raise ValidationException("Пароль должен содержать минимум 8 символов")
         
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=error_response.dict()
-        )
+        if not re.search(r'[A-Z]', password):
+            raise ValidationException("Пароль должен содержать хотя бы одну заглавную букву")
+        
+        if not re.search(r'[a-z]', password):
+            raise ValidationException("Пароль должен содержать хотя бы одну строчную букву")
+        
+        if not re.search(r'\d', password):
+            raise ValidationException("Пароль должен содержать хотя бы одну цифру")
+        
+        return password
+
+
+class IPValidator:
+    """Валидатор IP адресов"""
+    
+    @staticmethod
+    def validate_ip(ip: str) -> str:
+        """Валидация IP адреса"""
+        try:
+            ipaddress.ip_address(ip)
+            return ip
+        except ValueError:
+            raise ValidationException("Неверный формат IP адреса")
+    
+    @staticmethod
+    def validate_ip_range(ip_range: str) -> str:
+        """Валидация диапазона IP адресов"""
+        try:
+            ipaddress.ip_network(ip_range, strict=False)
+            return ip_range
+        except ValueError:
+            raise ValidationException("Неверный формат диапазона IP адресов")
+
+
+# Pydantic модели для валидации
+class UserRegistrationModel(BaseValidationModel):
+    """Модель для регистрации пользователя"""
+    email: str = Field(..., description="Email пользователя")
+    username: str = Field(..., min_length=3, max_length=50, description="Имя пользователя")
+    password: str = Field(..., min_length=8, description="Пароль")
+    
+    @validator('email')
+    def validate_email(cls, v):
+        return EmailValidator.validate_email(v)
+    
+    @validator('username')
+    def validate_username(cls, v):
+        if not re.match(r'^[a-zA-Z0-9_]+$', v):
+            raise ValidationException("Имя пользователя может содержать только буквы, цифры и подчеркивания")
+        return v.lower()
+    
+    @validator('password')
+    def validate_password(cls, v):
+        return PasswordValidator.validate_password(v)
+
+
+class UserLoginModel(BaseValidationModel):
+    """Модель для входа пользователя"""
+    email: str = Field(..., description="Email пользователя")
+    password: str = Field(..., description="Пароль")
+    
+    @validator('email')
+    def validate_email(cls, v):
+        return EmailValidator.validate_email(v)
+
+
+class DomainAnalysisModel(BaseValidationModel):
+    """Модель для анализа домена"""
+    url: str = Field(..., description="URL для анализа")
+    depth: int = Field(default=2, ge=1, le=5, description="Глубина анализа")
+    include_subdomains: bool = Field(default=False, description="Включить поддомены")
+    
+    @validator('url')
+    def validate_url(cls, v):
+        return URLValidator.validate_url(v)
+    
+    @validator('depth')
+    def validate_depth(cls, v):
+        if v < 1 or v > 5:
+            raise ValidationException("Глубина анализа должна быть от 1 до 5")
+        return v
+
+
+class SEORecommendationModel(BaseValidationModel):
+    """Модель для SEO рекомендаций"""
+    domain: str = Field(..., description="Домен для анализа")
+    keywords: List[str] = Field(default=[], description="Ключевые слова")
+    competitor_urls: List[str] = Field(default=[], description="URL конкурентов")
+    
+    @validator('domain')
+    def validate_domain(cls, v):
+        return URLValidator.validate_domain(v)
+    
+    @validator('keywords')
+    def validate_keywords(cls, v):
+        if len(v) > 20:
+            raise ValidationException("Максимум 20 ключевых слов")
+        return [kw.strip().lower() for kw in v if kw.strip()]
+    
+    @validator('competitor_urls')
+    def validate_competitor_urls(cls, v):
+        validated_urls = []
+        for url in v:
+            try:
+                validated_urls.append(URLValidator.validate_url(url))
+            except ValidationException as e:
+                logger.warning(f"Invalid competitor URL: {url} - {e}")
+        return validated_urls
+
+
+class ExportModel(BaseValidationModel):
+    """Модель для экспорта данных"""
+    format: str = Field(..., description="Формат экспорта")
+    include_metadata: bool = Field(default=True, description="Включить метаданные")
+    compression: bool = Field(default=False, description="Сжатие файла")
+    
+    @validator('format')
+    def validate_format(cls, v):
+        allowed_formats = ['json', 'csv', 'xml', 'pdf']
+        if v.lower() not in allowed_formats:
+            raise ValidationException(f"Поддерживаемые форматы: {', '.join(allowed_formats)}")
+        return v.lower()
+
+
+class PaginationModel(BaseValidationModel):
+    """Модель для пагинации"""
+    page: int = Field(default=1, ge=1, description="Номер страницы")
+    per_page: int = Field(default=20, ge=1, le=100, description="Элементов на странице")
+    sort_by: str = Field(default="created_at", description="Поле для сортировки")
+    sort_order: str = Field(default="desc", description="Порядок сортировки")
+    
+    @validator('sort_order')
+    def validate_sort_order(cls, v):
+        if v.lower() not in ['asc', 'desc']:
+            raise ValidationException("Порядок сортировки должен быть 'asc' или 'desc'")
+        return v.lower()
+
 
 # Декораторы для валидации
-def validate_request(model_class: type[BaseRequestModel]):
+def validate_request(model_class: type[BaseValidationModel]):
     """Декоратор для валидации запросов"""
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
         async def wrapper(*args, **kwargs):
             try:
-                # Валидируем данные запроса
-                if 'request_data' in kwargs:
-                    validated_data = model_class(**kwargs['request_data'])
-                    kwargs['request_data'] = validated_data
+                # Валидируем данные
+                validated_data = model_class(**kwargs)
                 
-                return await func(*args, **kwargs)
+                # Заменяем kwargs на валидированные данные
+                validated_kwargs = validated_data.dict()
+                
+                # Вызываем функцию с валидированными данными
+                return await func(*args, **validated_kwargs)
                 
             except ValidationError as e:
-                return ValidationErrorHandler.handle_validation_error(e)
-            except Exception as e:
-                monitoring.log_error(e, {"function": func.__name__})
+                # Преобразуем Pydantic ошибки в наши исключения
+                error_messages = []
+                for error in e.errors():
+                    field = " -> ".join(str(loc) for loc in error["loc"])
+                    message = error["msg"]
+                    error_messages.append(f"{field}: {message}")
+                
+                raise ValidationException(
+                    message="Ошибка валидации данных",
+                    field="request_data",
+                    value=error_messages
+                )
+            except RelinkBaseException:
                 raise
+            except Exception as e:
+                logger.error(f"Unexpected error in validation: {e}")
+                raise ValidationException("Внутренняя ошибка валидации")
         
         return wrapper
     return decorator
 
-def validate_response(model_class: type[BaseResponseModel]):
+
+def validate_response(model_class: type[BaseValidationModel]):
     """Декоратор для валидации ответов"""
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
         async def wrapper(*args, **kwargs):
+            result = await func(*args, **kwargs)
+            
             try:
-                result = await func(*args, **kwargs)
-                
                 # Валидируем ответ
                 if isinstance(result, dict):
                     validated_result = model_class(**result)
                     return validated_result.dict()
-                
-                return result
-                
+                elif isinstance(result, list):
+                    validated_results = []
+                    for item in result:
+                        if isinstance(item, dict):
+                            validated_item = model_class(**item)
+                            validated_results.append(validated_item.dict())
+                        else:
+                            validated_results.append(item)
+                    return validated_results
+                else:
+                    return result
+                    
             except ValidationError as e:
-                return ValidationErrorHandler.handle_validation_error(e)
+                logger.error(f"Response validation error: {e}")
+                raise ValidationException("Ошибка валидации ответа")
             except Exception as e:
-                monitoring.log_error(e, {"function": func.__name__})
-                raise
+                logger.error(f"Unexpected error in response validation: {e}")
+                return result  # Возвращаем исходный результат
         
         return wrapper
     return decorator
+
+
+# Функции для валидации
+def validate_and_clean_data(data: Dict[str, Any], model_class: type[BaseValidationModel]) -> Dict[str, Any]:
+    """Валидация и очистка данных"""
+    try:
+        validated_model = model_class(**data)
+        return validated_model.dict()
+    except ValidationError as e:
+        raise ValidationException(
+            message="Ошибка валидации данных",
+            field="data",
+            value=str(e.errors())
+        )
+
+
+def validate_file_upload(filename: str, content_type: str, max_size: int = 10 * 1024 * 1024) -> bool:
+    """Валидация загружаемого файла"""
+    # Проверяем расширение файла
+    allowed_extensions = ['.txt', '.html', '.xml', '.json', '.csv']
+    file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    if f'.{file_extension}' not in allowed_extensions:
+        raise ValidationException(
+            message="Неподдерживаемый тип файла",
+            field="filename",
+            value=filename
+        )
+    
+    # Проверяем MIME тип
+    allowed_mime_types = [
+        'text/plain', 'text/html', 'application/xml', 
+        'application/json', 'text/csv'
+    ]
+    
+    if content_type not in allowed_mime_types:
+        raise ValidationException(
+            message="Неподдерживаемый MIME тип",
+            field="content_type",
+            value=content_type
+        )
+    
+    return True
+
+
+def validate_api_key(api_key: str) -> bool:
+    """Валидация API ключа"""
+    if not api_key:
+        raise ValidationException("API ключ не может быть пустым")
+    
+    # Проверяем формат API ключа (пример)
+    if len(api_key) < 32:
+        raise ValidationException("API ключ должен содержать минимум 32 символа")
+    
+    if not re.match(r'^[a-zA-Z0-9_-]+$', api_key):
+        raise ValidationException("API ключ содержит недопустимые символы")
+    
+    return True
+
 
 # Утилиты для валидации
 class ValidationUtils:
     """Утилиты для валидации"""
     
     @staticmethod
-    def sanitize_input(text: str) -> str:
-        """Очистка пользовательского ввода"""
-        if not text:
-            return ""
+    def sanitize_string(value: str, max_length: int = 1000) -> str:
+        """Очистка строки"""
+        if not isinstance(value, str):
+            raise ValidationException("Значение должно быть строкой")
         
-        # Удаляем потенциально опасные символы
-        text = re.sub(r'[<>"\']', '', text)
+        # Убираем лишние пробелы
+        cleaned = ' '.join(value.split())
         
-        # Удаляем лишние пробелы
-        text = re.sub(r'\s+', ' ', text).strip()
+        # Ограничиваем длину
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length]
         
-        return text
+        return cleaned
     
     @staticmethod
-    def validate_file_extension(filename: str, allowed_extensions: List[str]) -> bool:
-        """Валидация расширения файла"""
-        if not filename:
-            return False
+    def validate_positive_integer(value: int, max_value: int = 1000000) -> int:
+        """Валидация положительного целого числа"""
+        if not isinstance(value, int):
+            raise ValidationException("Значение должно быть целым числом")
         
-        extension = filename.lower().split('.')[-1]
-        return extension in allowed_extensions
+        if value <= 0:
+            raise ValidationException("Значение должно быть положительным")
+        
+        if value > max_value:
+            raise ValidationException(f"Значение не может превышать {max_value}")
+        
+        return value
     
     @staticmethod
-    def validate_file_size(file_size: int, max_size: int) -> bool:
-        """Валидация размера файла"""
-        return file_size <= max_size
-    
-    @staticmethod
-    def validate_date_range(start_date: datetime, end_date: datetime, max_days: int = 365) -> bool:
-        """Валидация диапазона дат"""
-        if start_date >= end_date:
-            return False
+    def validate_percentage(value: float) -> float:
+        """Валидация процента"""
+        if not isinstance(value, (int, float)):
+            raise ValidationException("Значение должно быть числом")
         
-        delta = end_date - start_date
-        return delta.days <= max_days 
+        if value < 0 or value > 100:
+            raise ValidationException("Процент должен быть от 0 до 100")
+        
+        return float(value)
+
+
+# Экспорт для обратной совместимости
+BlinkValidation = {
+    "UserRegistrationModel": UserRegistrationModel,
+    "UserLoginModel": UserLoginModel,
+    "DomainAnalysisModel": DomainAnalysisModel,
+    "SEORecommendationModel": SEORecommendationModel,
+    "ExportModel": ExportModel,
+    "PaginationModel": PaginationModel,
+    "validate_request": validate_request,
+    "validate_response": validate_response,
+    "validate_and_clean_data": validate_and_clean_data,
+    "validate_file_upload": validate_file_upload,
+    "validate_api_key": validate_api_key,
+    "ValidationUtils": ValidationUtils,
+} 
