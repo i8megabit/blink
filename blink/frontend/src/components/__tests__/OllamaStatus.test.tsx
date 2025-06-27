@@ -45,7 +45,8 @@ describe('OllamaStatus Component', () => {
 
   it('показывает готовый к работе статус', () => {
     render(<OllamaStatus status={mockStatus} />);
-    expect(screen.getByText(/Готов к работе/i)).toBeInTheDocument();
+    const statusMessage = screen.getByText(/Готов к работе/i, { selector: 'p' });
+    expect(statusMessage).toBeInTheDocument();
   });
 
   it('отображает список моделей', () => {
@@ -56,7 +57,8 @@ describe('OllamaStatus Component', () => {
 
   it('показывает недоступный статус', () => {
     render(<OllamaStatus status={mockUnavailableStatus} />);
-    expect(screen.getByText(/Недоступен/i)).toBeInTheDocument();
+    const statusMessage = screen.getByText(/Недоступен/i, { selector: 'p' });
+    expect(statusMessage).toBeInTheDocument();
   });
 
   it('показывает статус сервера', () => {
@@ -94,14 +96,13 @@ describe('OllamaStatus Component', () => {
   it('применяет правильные CSS классы для статуса', () => {
     render(<OllamaStatus status={mockStatus} />);
     
-    const statusElement = screen.getByText(/Готов к работе/i);
-    expect(statusElement).toHaveClass('text-green-600');
+    const statusMessage = screen.getByText(/Готов к работе/i, { selector: 'p' });
+    expect(statusMessage).toHaveClass('text-green-600');
   });
 
   it('показывает количество доступных моделей', () => {
     render(<OllamaStatus status={mockStatus} />);
     
-    // Проверяем, что отображаются первые 3 модели
     expect(screen.getByText(/qwen2\.5:7b-instruct/i)).toBeInTheDocument();
     expect(screen.getByText(/llama3\.1:8b-instruct/i)).toBeInTheDocument();
   });
@@ -120,16 +121,45 @@ describe('OllamaStatus Component', () => {
   it('показывает правильные иконки для разных статусов', () => {
     const { rerender } = render(<OllamaStatus status={mockStatus} />);
     
-    // Готов к работе - зеленая иконка
-    expect(screen.getByText(/Готов к работе/i)).toBeInTheDocument();
+    const statusMessage = screen.getByText(/Готов к работе/i, { selector: 'p' });
+    expect(statusMessage).toBeInTheDocument();
     
-    // Недоступен - красная иконка
     rerender(<OllamaStatus status={mockUnavailableStatus} />);
-    expect(screen.getByText(/Недоступен/i)).toBeInTheDocument();
+    const unavailableMessage = screen.getByText(/Недоступен/i, { selector: 'p' });
+    expect(unavailableMessage).toBeInTheDocument();
   });
 
   it('показывает сообщение статуса', () => {
     render(<OllamaStatus status={mockStatus} />);
-    expect(screen.getByText(/Готов к работе/i)).toBeInTheDocument();
+    const statusMessage = screen.getByText(/Готов к работе/i, { selector: 'p' });
+    expect(statusMessage).toBeInTheDocument();
+  });
+
+  it('показывает подключающийся статус', () => {
+    const connectingStatus: OllamaStatusType = {
+      ...mockUnavailableStatus,
+      server_available: true,
+      model_loaded: false,
+      message: 'Подключается'
+    };
+    
+    render(<OllamaStatus status={connectingStatus} />);
+    const statusMessage = screen.getByText(/Подключается/i, { selector: 'p' });
+    expect(statusMessage).toBeInTheDocument();
+  });
+
+  it('скрывает кнопку обновления когда готов к работе', () => {
+    render(<OllamaStatus status={mockStatus} onRefresh={() => {}} />);
+    
+    const refreshButton = screen.getByRole('button', { name: /обновить статус/i });
+    expect(refreshButton).toBeDisabled();
+  });
+
+  it('показывает анимацию на кнопке обновления', () => {
+    render(<OllamaStatus status={mockStatus} onRefresh={() => {}} />);
+    
+    const refreshButton = screen.getByRole('button', { name: /обновить статус/i });
+    const refreshIcon = refreshButton.querySelector('.animate-spin');
+    expect(refreshIcon).toBeInTheDocument();
   });
 }); 

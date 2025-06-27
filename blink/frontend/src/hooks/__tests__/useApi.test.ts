@@ -1,201 +1,185 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useDomains, useOllamaStatus, useAnalysisHistory, useBenchmarkHistory } from '../useApi';
+import { useApi } from '../useApi';
 
-// Мокаем fetch
-global.fetch = vi.fn();
+describe('useApi Hook', () => {
+  const mockApiFunction = vi.fn();
 
-describe('API Hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('useDomains', () => {
-    it('успешно загружает домены', async () => {
-      const mockResponse = {
-        domains: [
-          { id: 1, name: 'example.com', status: 'analyzed' }
-        ]
-      };
+  it('инициализируется с правильными значениями по умолчанию', () => {
+    const { result } = renderHook(() => useApi(mockApiFunction));
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
-
-      const { result } = renderHook(() => useDomains());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockResponse.domains);
-        expect(result.current.loading).toBe(false);
-        expect(result.current.error).toBeNull();
-      });
-    });
-
-    it('обрабатывает ошибки загрузки доменов', async () => {
-      (global.fetch as any).mockResolvedValue({
-        ok: false,
-        json: async () => ({ error: 'Ошибка сервера' })
-      });
-
-      const { result } = renderHook(() => useDomains());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.error).toBe('Ошибка сервера');
-        expect(result.current.loading).toBe(false);
-      });
-    });
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.state).toBe('idle');
+    expect(typeof result.current.execute).toBe('function');
+    expect(typeof result.current.reset).toBe('function');
   });
 
-  describe('useOllamaStatus', () => {
-    it('успешно получает статус Ollama', async () => {
-      const mockResponse = {
-        status: 'available',
-        models: ['qwen2.5:7b-instruct'],
-        version: '0.1.0'
-      };
+  it('выполняет API запрос успешно', async () => {
+    const mockData = { id: 1, name: 'test' };
+    const mockResponse = { success: true, data: mockData };
+    mockApiFunction.mockResolvedValue(mockResponse);
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
+    const { result } = renderHook(() => useApi(mockApiFunction));
 
-      const { result } = renderHook(() => useOllamaStatus());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockResponse);
-        expect(result.current.loading).toBe(false);
-        expect(result.current.error).toBeNull();
-      });
+    await act(async () => {
+      const response = await result.current.execute('test-arg');
+      expect(response).toEqual(mockData);
     });
 
-    it('обрабатывает ошибки статуса Ollama', async () => {
-      (global.fetch as any).mockRejectedValue(new Error('Network error'));
-
-      const { result } = renderHook(() => useOllamaStatus());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.error).toBe('Network error');
-        expect(result.current.loading).toBe(false);
-      });
-    });
+    expect(result.current.data).toEqual(mockData);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.state).toBe('success');
+    expect(mockApiFunction).toHaveBeenCalledWith('test-arg');
   });
 
-  describe('useAnalysisHistory', () => {
-    it('успешно загружает историю анализов', async () => {
-      const mockResponse = {
-        history: [
-          { id: 1, domain: 'example.com', date: '2024-01-01' }
-        ]
-      };
+  it('обрабатывает ошибки API', async () => {
+    const mockError = 'API Error';
+    const mockResponse = { success: false, error: mockError };
+    mockApiFunction.mockResolvedValue(mockResponse);
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
+    const { result } = renderHook(() => useApi(mockApiFunction));
 
-      const { result } = renderHook(() => useAnalysisHistory());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockResponse.history);
-        expect(result.current.loading).toBe(false);
-        expect(result.current.error).toBeNull();
-      });
+    await act(async () => {
+      const response = await result.current.execute();
+      expect(response).toBeNull();
     });
 
-    it('загружает историю для конкретного домена', async () => {
-      const mockResponse = {
-        history: [
-          { id: 1, domain: 'example.com', date: '2024-01-01' }
-        ]
-      };
-
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
-
-      const { result } = renderHook(() => useAnalysisHistory('example.com'));
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockResponse.history);
-        expect(global.fetch).toHaveBeenCalledWith('/api/v1/analysis_history?domain=example.com');
-      });
-    });
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe(mockError);
+    expect(result.current.state).toBe('error');
   });
 
-  describe('useBenchmarkHistory', () => {
-    it('успешно загружает историю бенчмарков', async () => {
-      const mockResponse = {
-        benchmarks: [
-          { id: 1, name: 'SEO Benchmark', score: 90 }
-        ]
-      };
+  it('обрабатывает исключения', async () => {
+    const mockError = new Error('Network error');
+    mockApiFunction.mockRejectedValue(mockError);
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
+    const { result } = renderHook(() => useApi(mockApiFunction));
 
-      const { result } = renderHook(() => useBenchmarkHistory());
-      
-      await result.current.execute();
-      
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockResponse.benchmarks);
-        expect(result.current.loading).toBe(false);
-        expect(result.current.error).toBeNull();
-      });
+    await act(async () => {
+      const response = await result.current.execute();
+      expect(response).toBeNull();
     });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe('Network error');
+    expect(result.current.state).toBe('error');
   });
 
-  describe('Общие функции хуков', () => {
-    it('показывает состояние загрузки', async () => {
-      (global.fetch as any).mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve({
-          ok: true,
-          json: async () => ({ domains: [] })
-        }), 100))
-      );
+  it('вызывает onSuccess callback при успехе', async () => {
+    const mockData = { id: 1, name: 'test' };
+    const mockResponse = { success: true, data: mockData };
+    const onSuccess = vi.fn();
+    
+    mockApiFunction.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useDomains());
-      
-      result.current.execute();
-      
-      expect(result.current.loading).toBe(true);
-      expect(result.current.state).toBe('loading');
+    const { result } = renderHook(() => 
+      useApi(mockApiFunction, { onSuccess })
+    );
+
+    await act(async () => {
+      await result.current.execute();
     });
 
-    it('сбрасывает состояние', async () => {
-      const mockResponse = { domains: [] };
+    expect(onSuccess).toHaveBeenCalledWith(mockData);
+  });
 
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse
-      });
+  it('вызывает onError callback при ошибке', async () => {
+    const mockError = 'API Error';
+    const mockResponse = { success: false, error: mockError };
+    const onError = vi.fn();
+    
+    mockApiFunction.mockResolvedValue(mockResponse);
 
-      const { result } = renderHook(() => useDomains());
-      
+    const { result } = renderHook(() => 
+      useApi(mockApiFunction, { onError })
+    );
+
+    await act(async () => {
       await result.current.execute();
-      
+    });
+
+    expect(onError).toHaveBeenCalledWith(mockError);
+  });
+
+  it('вызывает onFinally callback', async () => {
+    const mockData = { id: 1, name: 'test' };
+    const mockResponse = { success: true, data: mockData };
+    const onFinally = vi.fn();
+    
+    mockApiFunction.mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => 
+      useApi(mockApiFunction, { onFinally })
+    );
+
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(onFinally).toHaveBeenCalled();
+  });
+
+  it('сбрасывает состояние при вызове reset', async () => {
+    const mockData = { id: 1, name: 'test' };
+    const mockResponse = { success: true, data: mockData };
+    mockApiFunction.mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => useApi(mockApiFunction));
+
+    // Сначала выполняем запрос
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    // Проверяем, что данные загружены
+    expect(result.current.data).toEqual(mockData);
+    expect(result.current.state).toBe('success');
+
+    // Сбрасываем состояние
+    act(() => {
       result.current.reset();
-      
-      expect(result.current.data).toBeNull();
-      expect(result.current.loading).toBe(false);
-      expect(result.current.error).toBeNull();
-      expect(result.current.state).toBe('idle');
     });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.state).toBe('idle');
+  });
+
+  it('устанавливает loading состояние во время выполнения', async () => {
+    let resolvePromise: (value: any) => void;
+    const promise = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
+    
+    mockApiFunction.mockReturnValue(promise);
+
+    const { result } = renderHook(() => useApi(mockApiFunction));
+
+    // Запускаем запрос
+    act(() => {
+      result.current.execute();
+    });
+
+    // Проверяем, что loading установлен
+    expect(result.current.loading).toBe(true);
+    expect(result.current.state).toBe('loading');
+
+    // Завершаем запрос
+    await act(async () => {
+      resolvePromise!({ success: true, data: { test: 'data' } });
+      await promise;
+    });
+
+    expect(result.current.loading).toBe(false);
   });
 }); 
