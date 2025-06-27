@@ -1,4 +1,5 @@
 import React from 'react';
+import { AIThought } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Progress } from './ui/Progress';
 import { Badge } from './ui/Badge';
@@ -13,17 +14,6 @@ import {
   TrendingUp,
   Zap
 } from 'lucide-react';
-
-interface AIThought {
-  thought_id: string;
-  stage: string;
-  content: string;
-  confidence: number;
-  semantic_weight: number;
-  related_concepts: string[];
-  reasoning_chain: string[];
-  timestamp: string;
-}
 
 interface AnalysisProgressProps {
   isActive: boolean;
@@ -169,41 +159,45 @@ export function AnalysisProgress({
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {aiThoughts.slice(-5).reverse().map((thought) => (
-                <div
-                  key={thought.thought_id}
-                  className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-100"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "p-2 rounded-full text-white",
-                      getStageColor(thought.stage)
-                    )}>
-                      {getStageIcon(thought.stage)}
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {thought.stage}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Уверенность: {Math.round(thought.confidence * 100)}%
-                        </span>
+              {aiThoughts.slice(-5).reverse().map((thought) => {
+                const thoughtId = thought.id || thought.thought_id || `thought_${Date.now()}`;
+                
+                return (
+                  <div
+                    key={thoughtId}
+                    className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-100"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "p-2 rounded-full text-white",
+                        getStageColor(thought.stage)
+                      )}>
+                        {getStageIcon(thought.stage)}
                       </div>
-                      <p className="text-sm">{thought.content}</p>
-                      {thought.related_concepts.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {thought.related_concepts.slice(0, 3).map((concept, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
-                              {concept}
-                            </Badge>
-                          ))}
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {thought.stage}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Уверенность: {Math.round(thought.confidence * 100)}%
+                          </span>
                         </div>
-                      )}
+                        <p className="text-sm">{thought.content}</p>
+                        {thought.related_concepts.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {thought.related_concepts.slice(0, 3).map((concept, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-xs">
+                                {concept}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

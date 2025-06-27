@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 interface StatsProps {
-  domain?: Domain
+  domain?: Domain | null
   analysisHistory?: AnalysisHistory[]
   className?: string
 }

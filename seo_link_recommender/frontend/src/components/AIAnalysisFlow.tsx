@@ -1,4 +1,5 @@
 import React from 'react';
+import { AIThought } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -15,17 +16,6 @@ import {
   Target,
   BarChart3
 } from 'lucide-react';
-
-interface AIThought {
-  thought_id: string;
-  stage: string;
-  content: string;
-  confidence: number;
-  semantic_weight: number;
-  related_concepts: string[];
-  reasoning_chain: string[];
-  timestamp: string;
-}
 
 interface AIAnalysisFlowProps {
   isVisible: boolean;
@@ -241,10 +231,11 @@ export function AIAnalysisFlow({
                 <div className="space-y-4">
                   {aiThoughts.slice().reverse().map((thought) => {
                     const stageInfo = getStageInfo(thought.stage);
+                    const thoughtId = thought.id || thought.thought_id || `thought_${Date.now()}`;
                     
                     return (
                       <div
-                        key={thought.thought_id}
+                        key={thoughtId}
                         className={cn(
                           "p-4 rounded-lg border",
                           stageInfo.bgColor

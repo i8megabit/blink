@@ -17,6 +17,9 @@ import { DomainsList } from './components/DomainsList';
 import { OllamaStatus as OllamaStatusComponent } from './components/OllamaStatus';
 import { AIAnalysisFlow } from './components/AIAnalysisFlow';
 import { Stats } from './components/Stats';
+import { AnalysisHistory } from './components/AnalysisHistory';
+import { Benchmarks } from './components/Benchmarks';
+import { Settings } from './components/Settings';
 import { Button } from './components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
@@ -29,7 +32,6 @@ import {
   CheckCircle,
   AlertCircle,
   BarChart3,
-  Settings,
   History,
   Target,
   Menu,
@@ -72,24 +74,10 @@ function App() {
 
   // WebSocket и уведомления
   const { notifications, addNotification, removeNotification, clearNotifications } = useNotifications();
-  const { connectionStatus, connectWebSocket, disconnectWebSocket } = useWebSocket({
+  const { status: connectionStatus, sendMessage, reconnect: connectWebSocket, error: wsError } = useWebSocket({
+    url: 'ws://localhost:8000/ws',
+    clientId,
     onMessage: handleWebSocketMessage,
-    onConnect: () => {
-      console.log('WebSocket подключен');
-      addNotification({
-        type: 'success',
-        title: 'Подключение установлено',
-        message: 'WebSocket соединение активно'
-      });
-    },
-    onDisconnect: () => {
-      console.log('WebSocket отключен');
-      addNotification({
-        type: 'warning',
-        title: 'Соединение потеряно',
-        message: 'Попытка переподключения...'
-      });
-    },
     onError: (error) => {
       console.error('WebSocket ошибка:', error);
       addNotification({
@@ -99,6 +87,23 @@ function App() {
       });
     }
   });
+
+  // Обработчики WebSocket событий
+  useEffect(() => {
+    if (connectionStatus === 'connected') {
+      addNotification({
+        type: 'success',
+        title: 'Подключение установлено',
+        message: 'WebSocket соединение активно'
+      });
+    } else if (connectionStatus === 'disconnected') {
+      addNotification({
+        type: 'warning',
+        title: 'Соединение потеряно',
+        message: 'Попытка переподключения...'
+      });
+    }
+  }, [connectionStatus, addNotification]);
 
   function handleWebSocketMessage(data: WebSocketMessage) {
     console.log('WebSocket сообщение:', data);
@@ -303,9 +308,9 @@ function App() {
     
     return () => {
       clearInterval(interval);
-      disconnectWebSocket();
+      connectWebSocket();
     };
-  }, [loadDomains, checkOllamaStatus, disconnectWebSocket]);
+  }, [loadDomains, checkOllamaStatus, connectWebSocket]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -330,7 +335,7 @@ function App() {
                 progress={analysisProgress}
                 totalSteps={12}
                 aiThoughts={aiThoughts}
-                analysisStats={analysisStats}
+                analysisStats={analysisStats || {}}
                 error={analysisError}
               />
             )}
@@ -344,7 +349,7 @@ function App() {
             )}
 
             <Stats 
-              domain={domains.find(d => d.name === currentDomain)}
+              domain={domains.find(d => d.name === currentDomain) || null}
               analysisHistory={[]}
             />
           </div>
