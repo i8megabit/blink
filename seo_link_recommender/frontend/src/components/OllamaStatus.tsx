@@ -1,21 +1,14 @@
-import { useState, useEffect } from 'react';
 import { OllamaStatus as OllamaStatusType } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
-import { Progress } from './ui/Progress';
 import { 
   Server, 
   CheckCircle, 
   AlertCircle, 
   Clock, 
   RefreshCw,
-  Play,
-  Pause,
-  Settings,
-  Zap,
-  Brain,
   Activity
 } from 'lucide-react';
 

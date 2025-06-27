@@ -6,15 +6,11 @@ import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { 
   History,
-  FileText,
   Link,
   Timer,
   CheckCircle,
   AlertCircle,
-  RefreshCw,
-  Download,
-  Eye,
-  Trash2
+  Eye
 } from 'lucide-react';
 
 interface AnalysisHistoryProps {
