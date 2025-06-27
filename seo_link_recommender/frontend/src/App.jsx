@@ -6,6 +6,7 @@ import AnalysisProgress from './components/AnalysisProgress'
 import Recommendations from './components/Recommendations'
 import Notifications from './components/Notifications'
 import OllamaStatus from './components/OllamaStatus'
+import AIAnalysisFlow from './components/AIAnalysisFlow'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useNotifications } from './hooks/useNotifications'
 
@@ -28,9 +29,9 @@ function App() {
     available_models: []
   })
   
-  // AI состояния
-  const [aiThoughts, setAiThoughts] = useState([])
-  const [currentThought, setCurrentThought] = useState(null)
+  // AI состояния для нового компонента
+  const [aiMessages, setAiMessages] = useState([])
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
   
   // Хуки
   const { 
@@ -107,6 +108,15 @@ function App() {
   function handleWebSocketMessage(data) {
     console.log('📨 WebSocket сообщение:', data)
     
+    // Добавляем сообщение в AI поток
+    const messageWithId = {
+      ...data,
+      id: Date.now() + Math.random(),
+      timestamp: data.timestamp || new Date().toISOString()
+    }
+    
+    setAiMessages(prev => [...prev, messageWithId])
+    
     switch (data.type) {
       case 'progress':
         setAnalysisStats({
@@ -119,35 +129,11 @@ function App() {
         break
         
       case 'ai_thinking':
-        setCurrentThought({
-          content: data.thought,
-          stage: data.thinking_stage,
-          emoji: data.emoji,
-          timestamp: data.timestamp
-        })
-        
-        setAiThoughts(prev => [...prev.slice(-9), {
-          id: Date.now(),
-          content: data.thought,
-          stage: data.thinking_stage,
-          emoji: data.emoji,
-          timestamp: data.timestamp
-        }])
+        // Сообщение уже добавлено выше
         break
         
       case 'enhanced_ai_thinking':
-        const enhancedThought = {
-          id: data.thought_id,
-          content: data.content,
-          stage: data.stage,
-          confidence: data.confidence,
-          concepts: data.related_concepts,
-          reasoning: data.reasoning_chain,
-          timestamp: data.timestamp
-        }
-        
-        setCurrentThought(enhancedThought)
-        setAiThoughts(prev => [...prev.slice(-9), enhancedThought])
+        // Сообщение уже добавлено выше
         break
         
       case 'ollama':
@@ -184,8 +170,8 @@ function App() {
     setAnalysisError(null)
     setAnalysisStats(null)
     setRecommendations([])
-    setAiThoughts([])
-    setCurrentThought(null)
+    setAiMessages([]) // Очищаем сообщения ИИ
+    setShowAIAnalysis(true) // Показываем AI анализ
 
     try {
       addNotification('info', `Начинаем анализ домена ${targetDomain}`)
@@ -219,8 +205,13 @@ function App() {
     } finally {
       setIsAnalyzing(false)
       setAnalysisStats(null)
-      setCurrentThought(null)
     }
+  }
+
+  // Закрытие AI анализа
+  const handleCloseAIAnalysis = () => {
+    setShowAIAnalysis(false)
+    setAiMessages([])
   }
 
   return (
@@ -261,8 +252,7 @@ function App() {
         
         <AnalysisProgress 
           analysisStats={analysisStats}
-          currentThought={currentThought}
-          aiThoughts={aiThoughts}
+          isAnalyzing={isAnalyzing}
         />
         
         <DomainsList domains={domains} />
@@ -288,6 +278,13 @@ function App() {
         hideNotificationDetails={hideNotificationDetails}
         pauseNotification={pauseNotification}
         resumeNotification={resumeNotification}
+      />
+      
+      {/* Новый компонент AI анализа */}
+      <AIAnalysisFlow
+        isVisible={showAIAnalysis}
+        messages={aiMessages}
+        onClose={handleCloseAIAnalysis}
       />
     </div>
   )
