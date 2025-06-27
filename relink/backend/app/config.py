@@ -92,6 +92,8 @@ class APISettings(BaseSettings):
     description: str = Field(default="AI-powered SEO platform API", env="API_DESCRIPTION")
     version: str = Field(default="1.0.0", env="API_VERSION")
     debug: bool = Field(default=False, env="API_DEBUG")
+    docs_url: str = Field(default="/docs", env="API_DOCS_URL")
+    redoc_url: str = Field(default="/redoc", env="API_REDOC_URL")
     cors_origins: list = Field(default=["*"], env="CORS_ORIGINS")
     rate_limit_per_minute: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")
 

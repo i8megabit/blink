@@ -49,7 +49,8 @@ from .middleware import (
 )
 from .monitoring import (
     logger, metrics_collector, performance_monitor, 
-    get_metrics, get_health_status, monitor_operation
+    get_metrics, get_health_status, monitor_operation,
+    MonitoringMiddleware
 )
 from .cache import (
     cache_manager, cache_result, invalidate_cache,
@@ -245,7 +246,7 @@ app.add_middleware(
 
 # Добавляем middleware мониторинга
 if settings.monitoring.enable_metrics:
-    app.add_middleware(monitoring_middleware)
+    app.add_middleware(MonitoringMiddleware)
 
 # Добавляем middleware кэширования
 if settings.cache.enable_memory or settings.cache.enable_redis:
