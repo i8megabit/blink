@@ -137,7 +137,7 @@ export default {
         'bounce-slow': 'bounce 2s infinite',
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'reLinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'monospace'],
       },
       spacing: {

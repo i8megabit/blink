@@ -69,7 +69,7 @@ describe('App Component', () => {
 
   it('рендерится без ошибок', () => {
     render(<App />);
-    expect(screen.getByText(/reLink/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/reLink/i).length).toBeGreaterThan(0);
   });
 
   it('отображает основные навигационные вкладки', () => {
@@ -84,7 +84,7 @@ describe('App Component', () => {
 
   it('показывает правильный заголовок', () => {
     render(<App />);
-    expect(screen.getByText('reLink')).toBeInTheDocument();
+    expect(screen.getAllByText('reLink').length).toBeGreaterThan(0);
   });
 
   it('отображает содержимое дашборда', () => {
@@ -130,7 +130,7 @@ describe('App Component', () => {
   it('показывает версию приложения', () => {
     render(<App />);
     // Версия отображается в заголовке приложения
-    expect(screen.getByText(/reLink/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/reLink/i).length).toBeGreaterThan(0);
   });
 
   it('обрабатывает ошибки API корректно', async () => {
@@ -140,7 +140,7 @@ describe('App Component', () => {
     render(<App />);
     
     // Приложение должно отрендериться даже при ошибке API
-    expect(screen.getByText(/reLink/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/reLink/i).length).toBeGreaterThan(0);
   });
 
   it('отображает индикатор загрузки при инициализации', () => {
@@ -155,6 +155,6 @@ describe('App Component', () => {
     render(<App />);
     
     // Проверяем, что приложение отображается
-    expect(screen.getByText(/reLink/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/reLink/i).length).toBeGreaterThan(0);
   });
 }); 
