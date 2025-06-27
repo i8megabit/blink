@@ -28,7 +28,7 @@ opentelemetry-instrumentation-fastapi==0.42b0
 opentelemetry-instrumentation-sqlalchemy==0.42b0
 opentelemetry-instrumentation-requests==0.42b0
 opentelemetry-instrumentation-httpx==0.42b0
-opentelemetry-exporter-prometheus==1.21.0
+opentelemetry-exporter-prometheus==0.55b1
 opentelemetry-exporter-jaeger==1.21.0
 
 # Кэширование

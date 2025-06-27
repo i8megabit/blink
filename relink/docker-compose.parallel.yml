@@ -86,7 +86,7 @@ services:
       POSTGRES_PASSWORD: seo_pass
       POSTGRES_DB: seo_db
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ../relink_db:/var/lib/postgresql/data
     networks:
       - seo-network
     healthcheck:

@@ -1,6 +1,8 @@
 services:
   backend:
-    image: eberil/relink-backend:4.0.0
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -19,7 +21,9 @@ services:
       - ollama
 
   frontend:
-    image: eberil/relink-frontend:4.0.0
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:80"
     depends_on:
@@ -33,7 +37,7 @@ services:
       POSTGRES_PASSWORD: seo_pass
       POSTGRES_DB: seo_db
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ../relink_db:/var/lib/postgresql/data
 
   ollama:
     image: ollama/ollama:latest
