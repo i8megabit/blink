@@ -1,148 +1,126 @@
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@layer base {
-  :root {
-    /* 🎨 ПРОФЕССИОНАЛЬНАЯ ЦВЕТОВАЯ ПАЛИТРА */
-    /* Основана на принципах Material Design 3 и современных UI систем */
-    
-    /* Основные цвета - нейтральные и профессиональные */
-    --background: 0 0% 100%;           /* Чистый белый */
-    --foreground: 240 10% 3.9%;        /* Почти черный для максимального контраста */
-    --card: 0 0% 100%;                 /* Белые карточки */
-    --card-foreground: 240 10% 3.9%;   /* Темный текст на карточках */
-    
-    /* Поповеры и модальные окна */
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    
-    /* Основной акцент - профессиональный синий */
-    --primary: 221 83% 53%;            /* Google Blue - проверенный и надежный */
-    --primary-foreground: 0 0% 100%;   /* Белый текст на синем */
-    
-    /* Вторичные элементы - мягкие серые */
-    --secondary: 240 4.8% 95.9%;       /* Светло-серый фон */
-    --secondary-foreground: 240 5.9% 10%; /* Темно-серый текст */
-    
-    /* Приглушенные элементы */
-    --muted: 240 4.8% 95.9%;           /* Светло-серый фон */
-    --muted-foreground: 240 3.8% 46.1%; /* Средне-серый текст */
-    
-    /* Акцентные элементы */
-    --accent: 240 4.8% 95.9%;          /* Светло-серый */
-    --accent-foreground: 240 5.9% 10%; /* Темно-серый */
-    
-    /* Деструктивные действия - красный */
-    --destructive: 0 84% 60%;          /* Яркий красный для предупреждений */
-    --destructive-foreground: 0 0% 100%; /* Белый текст */
-    
-    /* Границы и поля ввода */
-    --border: 240 5.9% 90%;            /* Светло-серые границы */
-    --input: 240 5.9% 90%;             /* Светло-серые поля ввода */
-    --ring: 221 83% 53%;               /* Синий для фокуса */
-    
-    /* Дополнительные цвета для статусов */
-    --success: 142 76% 36%;            /* Зеленый для успеха */
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;             /* Оранжевый для предупреждений */
-    --warning-foreground: 0 0% 100%;
-    --info: 221 83% 53%;               /* Синий для информации */
-    --info-foreground: 0 0% 100%;
-    
-    /* Радиус скругления */
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    /* 🌙 ТЕМНАЯ ТЕМА - ПРОФЕССИОНАЛЬНАЯ */
-    /* Основана на принципах GitHub Dark и VS Code Dark */
-    
-    --background: 240 10% 3.9%;        /* Темно-серый фон */
-    --foreground: 0 0% 98%;            /* Почти белый текст */
-    --card: 240 10% 3.9%;              /* Темные карточки */
-    --card-foreground: 0 0% 98%;       /* Светлый текст на карточках */
-    
-    /* Поповеры */
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    
-    /* Основной акцент - яркий синий для темной темы */
-    --primary: 217 91% 60%;            /* Яркий синий */
-    --primary-foreground: 240 10% 3.9%; /* Темный текст на синем */
-    
-    /* Вторичные элементы */
-    --secondary: 240 3.7% 15.9%;       /* Темно-серый */
-    --secondary-foreground: 0 0% 98%;  /* Светлый текст */
-    
-    /* Приглушенные элементы */
-    --muted: 240 3.7% 15.9%;           /* Темно-серый */
-    --muted-foreground: 240 5% 64.9%;  /* Средне-серый текст */
-    
-    /* Акцентные элементы */
-    --accent: 240 3.7% 15.9%;          /* Темно-серый */
-    --accent-foreground: 0 0% 98%;     /* Светлый текст */
-    
-    /* Деструктивные действия */
-    --destructive: 0 63% 31%;          /* Темно-красный */
-    --destructive-foreground: 0 0% 98%; /* Светлый текст */
-    
-    /* Границы и поля ввода */
-    --border: 240 3.7% 15.9%;          /* Темно-серые границы */
-    --input: 240 3.7% 15.9%;           /* Темно-серые поля ввода */
-    --ring: 217 91% 60%;               /* Яркий синий для фокуса */
-    
-    /* Дополнительные цвета для статусов */
-    --success: 142 76% 36%;            /* Зеленый для успеха */
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;             /* Оранжевый для предупреждений */
-    --warning-foreground: 0 0% 100%;
-    --info: 217 91% 60%;               /* Синий для информации */
-    --info-foreground: 0 0% 100%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
+/* 🎨 СОВРЕМЕННАЯ ЦВЕТОВАЯ ПАЛИТРА */
+:root {
+  /* Основные цвета */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 84% 4.9%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222.2 84% 4.9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.75rem;
   
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    /* Улучшенная типографика */
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+  /* Дополнительные цвета для лучшего UX */
+  --success: 142.1 76.2% 36.3%;
+  --success-foreground: 355.7 100% 97.3%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 48 96% 89%;
+  --info: 199 89% 48%;
+  --info-foreground: 210 40% 98%;
+  
+  /* Градиенты */
+  --gradient-primary: linear-gradient(135deg, hsl(221.2 83.2% 53.3%) 0%, hsl(221.2 83.2% 45%) 100%);
+  --gradient-secondary: linear-gradient(135deg, hsl(210 40% 96%) 0%, hsl(210 40% 90%) 100%);
+  
+  /* Тени */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* 🌙 ТЕМНАЯ ТЕМА */
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 84% 4.9%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 94.1%;
+  
+  /* Дополнительные цвета для темной темы */
+  --success: 142.1 70.6% 45.3%;
+  --success-foreground: 144.9 80.4% 10%;
+  --warning: 38 95.7% 53.1%;
+  --warning-foreground: 48 96% 89%;
+  --info: 199 89% 48%;
+  --info-foreground: 210 40% 98%;
 }
 
-/* 🎯 ПРОФЕССИОНАЛЬНЫЙ AI-ИНТЕРФЕЙС */
-/* Основан на принципах ChatGPT, Open WebUI, Shadcn/ui */
+/* 🎯 БАЗОВЫЕ СТИЛИ */
+* {
+  border-color: hsl(var(--border));
+}
 
-/* ===== ДИЗАЙН-СИСТЕМА ===== */
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-/* ===== БАЗОВЫЕ СТИЛИ ===== */
+/* 📝 ТИПОГРАФИКА */
+.text-balance {
+  text-wrap: balance;
+}
 
-/* ===== КОМПОНЕНТЫ ===== */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
 
-/* Кнопки - улучшенная доступность */
+h1 { font-size: 2.25rem; }
+h2 { font-size: 1.875rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.25rem; }
+h5 { font-size: 1.125rem; }
+h6 { font-size: 1rem; }
+
+/* 🎨 КОМПОНЕНТЫ */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
   font-weight: 500;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: 1px solid transparent;
-  user-select: none;
+  text-decoration: none;
   position: relative;
   overflow: hidden;
 }
@@ -153,21 +131,20 @@
 }
 
 .btn:disabled {
-  pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .btn-primary {
-  background-color: hsl(var(--primary));
+  background: var(--gradient-primary);
   color: hsl(var(--primary-foreground));
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  background-color: hsl(var(--primary) / 0.9);
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-primary:active {
@@ -175,23 +152,23 @@
 }
 
 .btn-secondary {
-  background-color: hsl(var(--secondary));
+  background: var(--gradient-secondary);
   color: hsl(var(--secondary-foreground));
   border: 1px solid hsl(var(--border));
 }
 
 .btn-secondary:hover {
-  background-color: hsl(var(--secondary) / 0.8);
-  border-color: hsl(var(--border) / 0.8);
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .btn-ghost {
-  background-color: transparent;
+  background: transparent;
   color: hsl(var(--foreground));
 }
 
 .btn-ghost:hover {
-  background-color: hsl(var(--accent));
+  background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
 }
 
@@ -213,31 +190,30 @@
   font-size: 1rem;
 }
 
-/* Карточки - улучшенные тени */
+/* 🃏 КАРТОЧКИ */
 .card {
-  background-color: hsl(var(--card));
-  color: hsl(var(--card-foreground));
-  border-radius: var(--radius);
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  transition: box-shadow 0.2s ease-in-out;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .card:hover {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .card-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid hsl(var(--border));
+  padding: 1.5rem 1.5rem 0;
 }
 
 .card-title {
   font-size: 1.125rem;
   font-weight: 600;
-  line-height: 1.75rem;
-  letter-spacing: -0.025em;
-  color: hsl(var(--foreground));
+  line-height: 1.25;
+  color: hsl(var(--card-foreground));
 }
 
 .card-content {
@@ -245,35 +221,31 @@
 }
 
 .card-footer {
-  padding: 1.5rem;
-  border-top: 1px solid hsl(var(--border));
+  padding: 0 1.5rem 1.5rem;
 }
 
-/* Формы - улучшенная доступность */
+/* 📝 ФОРМЫ */
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .form-label {
+  display: block;
   font-size: 0.875rem;
   font-weight: 500;
   color: hsl(var(--foreground));
   margin-bottom: 0.5rem;
-  display: block;
-  line-height: 1.4;
 }
 
 .form-input {
   width: 100%;
-  height: 2.5rem;
-  padding: 0 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  border: 1px solid hsl(var(--input));
-  background-color: hsl(var(--background));
+  background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-size: 0.875rem;
-  transition: all 0.2s ease-in-out;
-  line-height: 1.4;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .form-input:focus {
@@ -284,10 +256,9 @@
 
 .form-input::placeholder {
   color: hsl(var(--muted-foreground));
-  opacity: 0.7;
 }
 
-/* Статусные индикаторы */
+/* 📊 СТАТУСЫ */
 .status-indicator {
   display: inline-flex;
   align-items: center;
@@ -296,51 +267,47 @@
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .status-success {
-  background-color: hsl(var(--success) / 0.1);
+  background: hsl(var(--success) / 0.1);
   color: hsl(var(--success));
   border: 1px solid hsl(var(--success) / 0.2);
 }
 
 .status-error {
-  background-color: hsl(var(--destructive) / 0.1);
+  background: hsl(var(--destructive) / 0.1);
   color: hsl(var(--destructive));
   border: 1px solid hsl(var(--destructive) / 0.2);
 }
 
 .status-warning {
-  background-color: hsl(var(--warning) / 0.1);
+  background: hsl(var(--warning) / 0.1);
   color: hsl(var(--warning));
   border: 1px solid hsl(var(--warning) / 0.2);
 }
 
 .status-loading {
-  background-color: hsl(var(--info) / 0.1);
-  color: hsl(var(--info));
-  border: 1px solid hsl(var(--info) / 0.2);
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
 }
 
-/* Прогресс-бары */
+/* 📈 ПРОГРЕСС */
 .progress-container {
   width: 100%;
-  height: 0.5rem;
-  background-color: hsl(var(--muted));
+  background: hsl(var(--muted));
   border-radius: 9999px;
   overflow: hidden;
 }
 
 .progress-bar {
-  height: 100%;
-  background-color: hsl(var(--primary));
-  border-radius: 9999px;
-  transition: width 0.3s ease-in-out;
+  height: 0.5rem;
+  background: var(--gradient-primary);
+  transition: width 0.3s ease;
 }
 
-/* Уведомления */
+/* 🔔 УВЕДОМЛЕНИЯ */
 .notifications-container {
   position: fixed;
   top: 1rem;
@@ -353,11 +320,10 @@
 }
 
 .notification {
-  background-color: hsl(var(--card));
-  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-lg);
   padding: 1rem;
   animation: slideIn 0.3s ease-out;
 }
@@ -385,54 +351,55 @@
 }
 
 .notification-close:hover {
-  background-color: hsl(var(--accent));
+  background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
 }
 
 .notification-message {
   font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
-/* Модальные окна */
+/* 🪟 МОДАЛЬНЫЕ ОКНА */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgb(0 0 0 / 0.5);
+  background: hsl(var(--background) / 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  padding: 1rem;
   animation: fadeIn 0.2s ease-out;
 }
 
 .modal {
-  background-color: hsl(var(--card));
-  color: hsl(var(--card-foreground));
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
-  max-width: 90vw;
+  box-shadow: var(--shadow-xl);
+  max-width: 32rem;
+  width: 100%;
   max-height: 90vh;
-  overflow: auto;
+  overflow-y: auto;
   animation: modalSlideIn 0.3s ease-out;
 }
 
 .modal-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid hsl(var(--border));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 1.5rem 1.5rem 0;
 }
 
 .modal-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: hsl(var(--foreground));
 }
 
 .modal-close {
@@ -446,7 +413,7 @@
 }
 
 .modal-close:hover {
-  background-color: hsl(var(--accent));
+  background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
 }
 
@@ -455,30 +422,27 @@
 }
 
 .modal-footer {
-  padding: 1.5rem;
-  border-top: 1px solid hsl(var(--border));
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0 1.5rem 1.5rem;
 }
 
-/* Основной контейнер приложения */
+/* 🏗️ МАКЕТ */
 .app-container {
-  min-height: 100vh;
   display: flex;
-  background-color: hsl(var(--background));
+  min-height: 100vh;
+  background: hsl(var(--background));
 }
 
-/* Боковая панель */
 .sidebar {
-  width: 280px;
-  background-color: hsl(var(--card));
+  width: 16rem;
+  background: hsl(var(--card));
   border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
-  position: fixed;
-  height: 100vh;
-  z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .sidebar-header {
@@ -492,19 +456,17 @@
   overflow-y: auto;
 }
 
-/* Основной контент */
 .main-content {
   flex: 1;
-  margin-left: 280px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-width: 0;
 }
 
 .content-header {
-  padding: 1.5rem;
+  padding: 1.5rem 2rem 0;
   border-bottom: 1px solid hsl(var(--border));
-  background-color: hsl(var(--card));
+  background: hsl(var(--background));
   position: sticky;
   top: 0;
   z-index: 10;
@@ -512,11 +474,11 @@
 
 .content-body {
   flex: 1;
-  padding: 1.5rem;
-  background-color: hsl(var(--background));
+  padding: 2rem;
+  overflow-y: auto;
 }
 
-/* Текстовые утилиты */
+/* 🎨 ДОПОЛНИТЕЛЬНЫЕ СТИЛИ */
 .text-muted {
   color: hsl(var(--muted-foreground));
 }
@@ -525,26 +487,24 @@
   color: hsl(var(--accent-foreground));
 }
 
-/* Бейджи */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid transparent;
+  transition: all 0.2s;
 }
 
 .badge-primary {
-  background-color: hsl(var(--primary) / 0.1);
+  background: hsl(var(--primary) / 0.1);
   color: hsl(var(--primary));
-  border: 1px solid hsl(var(--primary) / 0.2);
+  border-color: hsl(var(--primary) / 0.2);
 }
 
-/* Анимации */
+/* 🎬 АНИМАЦИИ */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -576,30 +536,34 @@
   }
 }
 
-/* Адаптивность */
+/* 📱 АДАПТИВНОСТЬ */
 @media (max-width: 768px) {
   .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-in-out;
+    position: fixed;
+    left: -100%;
+    top: 0;
+    height: 100vh;
+    z-index: 50;
   }
-  
+
   .sidebar.open {
-    transform: translateX(0);
+    left: 0;
   }
-  
+
   .main-content {
     margin-left: 0;
   }
-  
+
   .modal {
     margin: 1rem;
-    max-width: calc(100vw - 2rem);
+    max-width: none;
   }
 }
 
-/* Автоматическое переключение темы */
+/* 🌙 АВТОМАТИЧЕСКАЯ ТЕМА */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Автоматическое переключение на темную тему */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
   }
 } 

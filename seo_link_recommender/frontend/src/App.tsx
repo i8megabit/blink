@@ -14,6 +14,7 @@ import { AnalysisHistory } from './components/AnalysisHistory'
 import { Benchmarks } from './components/Benchmarks'
 import { Settings } from './components/Settings'
 import Insights from './components/Insights'
+import Analytics from './components/Analytics'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useNotifications } from './hooks/useNotifications'
 import { Domain, Recommendation, AnalysisStats, AIThought, OllamaStatus as OllamaStatusType, WebSocketMessage } from './types'
@@ -450,8 +451,15 @@ function App() {
       case 'insights':
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Аналитика</h2>
+            <h2 className="text-2xl font-semibold">AI Инсайты</h2>
             <Insights domain={domain} />
+          </div>
+        )
+
+      case 'analytics':
+        return (
+          <div className="space-y-6">
+            <Analytics domain={domain} />
           </div>
         )
 
@@ -474,7 +482,8 @@ function App() {
       export: 'Экспорт данных',
       status: 'Статус системы',
       settings: 'Настройки',
-      insights: 'Аналитика'
+      insights: 'AI Инсайты',
+      analytics: 'Аналитика'
     }
     return titles[activeTab] || 'SEO Link Recommender'
   }
@@ -505,7 +514,8 @@ function App() {
               { id: 'export', label: '📤 Экспорт', icon: '📤' },
               { id: 'status', label: '⚙️ Статус', icon: '⚙️' },
               { id: 'settings', label: '🔧 Настройки', icon: '🔧' },
-              { id: 'insights', label: '📊 Аналитика', icon: '📊' }
+              { id: 'insights', label: '📊 AI Инсайты', icon: '📊' },
+              { id: 'analytics', label: '📊 Аналитика', icon: '📊' }
             ].map((tab) => (
               <button
                 key={tab.id}
