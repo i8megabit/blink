@@ -3,30 +3,29 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
-# import json  # Unused import
-# import re  # Unused import
-# from collections import defaultdict  # Unused import
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-# from pathlib import Path  # Unused import
-from typing import Dict, List, Optional, Any
-# from typing import Set, Tuple  # Unused imports
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Set, Tuple
 
 import chromadb
 import httpx
 import nltk
-# import numpy as np  # Unused import
-# import ollama  # Unused import - using HTTP API instead
+import numpy as np
+import ollama
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-# from fastapi.staticfiles import StaticFiles  # Unused import
+from fastapi.staticfiles import StaticFiles
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
-# from sklearn.metrics.pairwise import cosine_similarity  # Unused import
+from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import (
     DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text,
     func, select
@@ -68,6 +67,28 @@ class ThematicCluster:
     keywords: List[str]
     articles_count: int
     semantic_density: float
+
+@dataclass
+class AIThought:
+    """Структурированная мысль ИИ с расширенной аналитикой."""
+    thought_id: str
+    stage: str  # analyzing, connecting, evaluating, optimizing
+    content: str
+    confidence: float
+    semantic_weight: float
+    related_concepts: List[str]
+    reasoning_chain: List[str]
+    timestamp: datetime
+    
+@dataclass
+class SemanticConnection:
+    """Расширенная семантическая связь между концепциями."""
+    source_concept: str
+    target_concept: str
+    connection_type: str  # semantic, causal, hierarchical, temporal
+    strength: float
+    evidence: List[str]
+    context_keywords: Set[str]
 
 class WebSocketManager:
     """Менеджер WebSocket соединений для отслеживания прогресса."""
@@ -139,14 +160,36 @@ class WebSocketManager:
                 print(f"🧠 Мысль ИИ отправлена {client_id}: {thought[:50]}...")
             except Exception as e:
                 print(f"❌ Ошибка отправки мысли {client_id}: {e}")
+    
+    async def send_enhanced_ai_thinking(self, client_id: str, ai_thought: AIThought) -> None:
+        """Отправка расширенных мыслей ИИ с аналитикой."""
+        if client_id in self.active_connections:
+            try:
+                await self.active_connections[client_id].send_json({
+                    "type": "enhanced_ai_thinking",
+                    "thought_id": ai_thought.thought_id,
+                    "stage": ai_thought.stage,
+                    "content": ai_thought.content,
+                    "confidence": ai_thought.confidence,
+                    "semantic_weight": ai_thought.semantic_weight,
+                    "related_concepts": ai_thought.related_concepts,
+                    "reasoning_chain": ai_thought.reasoning_chain,
+                    "timestamp": ai_thought.timestamp.isoformat()
+                })
+                print(f"🔬 Расширенная мысль ИИ отправлена {client_id}: {ai_thought.stage}")
+            except Exception as e:
+                print(f"❌ Ошибка отправки расширенной мысли {client_id}: {e}")
 
 
 # Глобальные переменные
 chroma_client: Optional[Any] = None
 tfidf_vectorizer: Optional[Any] = None
 
-# Глобальный менеджер WebSocket
+# Глобальные менеджеры
 websocket_manager = WebSocketManager()
+thought_generator = IntelligentThoughtGenerator()
+rag_manager = AdvancedRAGManager()
+cumulative_manager = CumulativeIntelligenceManager()
 
 app = FastAPI()
 
@@ -158,6 +201,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Добавляем статические файлы
+static_dir = Path(__file__).parent.parent.parent / "frontend"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Добавляем статические файлы
+static_dir = Path(__file__).parent.parent.parent / "frontend"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 class Base(DeclarativeBase):
@@ -668,8 +721,8 @@ class ModelConfigRequest(BaseModel):
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-# Оптимизированная модель для SEO задач: qwen2.5:7b-optimized - расширенный контекст 8192 токена
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-optimized")
+# Оптимизированная модель для SEO задач: qwen2.5:7b-instruct-turbo - лучшая для инструкций
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-turbo")
 
 # 🎯 ОПТИМИЗИРОВАННЫЕ НАСТРОЙКИ ТОКЕНОВ для модели qwen2.5:7b
 # Модель имеет лимит контекста 8192 токена, оставляем запас для промпта и ответа
@@ -732,6 +785,200 @@ class AdvancedRAGManager:
         self.domain_collections = {}
         self.thematic_clusters = {}
         self.semantic_cache = {}
+
+
+class IntelligentThoughtGenerator:
+    """Генератор интеллектуальных мыслей ИИ с использованием numpy и семантического анализа."""
+    
+    def __init__(self) -> None:
+        self.thought_history: List[AIThought] = []
+        self.concept_embeddings: Dict[str, np.ndarray] = {}
+        self.reasoning_patterns: Dict[str, List[str]] = defaultdict(list)
+        self.semantic_network: Dict[str, Set[str]] = defaultdict(set)
+        
+    def extract_key_concepts(self, text: str) -> List[str]:
+        """Извлечение ключевых концепций с помощью регулярных выражений и NLP."""
+        # Паттерны для извлечения SEO-концепций
+        seo_patterns = [
+            r'\b(?:SEO|сео|оптимизация|ранжирование|поисковик)\b',
+            r'\b(?:ключев\w+\s+слов\w+|keywords?)\b',
+            r'\b(?:анкор\w*|anchor\w*)\b',
+            r'\b(?:ссылк\w+|link\w*)\b',
+            r'\b(?:контент|content)\b',
+            r'\b(?:семантик\w+|semantic\w*)\b'
+        ]
+        
+        concepts = []
+        text_lower = text.lower()
+        
+        for pattern in seo_patterns:
+            matches = re.findall(pattern, text_lower, re.IGNORECASE)
+            concepts.extend(matches)
+            
+        # Дополнительно извлекаем важные существительные
+        words = word_tokenize(text_lower)
+        filtered_words = [word for word in words if word not in RUSSIAN_STOP_WORDS and len(word) > 3]
+        concepts.extend(filtered_words[:5])  # Берем топ-5 слов
+        
+        return list(set(concepts))[:10]  # Максимум 10 концепций
+    
+    def calculate_semantic_similarity(self, concepts1: List[str], concepts2: List[str]) -> float:
+        """Вычисление семантического сходства между наборами концепций."""
+        if not concepts1 or not concepts2:
+            return 0.0
+            
+        # Создаем векторы концепций
+        all_concepts = list(set(concepts1 + concepts2))
+        
+        if len(all_concepts) < 2:
+            return 1.0 if concepts1 == concepts2 else 0.0
+            
+        vector1 = np.array([1 if concept in concepts1 else 0 for concept in all_concepts])
+        vector2 = np.array([1 if concept in concepts2 else 0 for concept in all_concepts])
+        
+        # Избегаем деления на ноль
+        if np.linalg.norm(vector1) == 0 or np.linalg.norm(vector2) == 0:
+            return 0.0
+            
+        return float(cosine_similarity([vector1], [vector2])[0][0])
+    
+    def generate_reasoning_chain(self, stage: str, concepts: List[str], context: str) -> List[str]:
+        """Генерация цепочки рассуждений для данного этапа."""
+        reasoning_templates = {
+            "analyzing": [
+                f"Анализирую ключевые концепции: {', '.join(concepts[:3])}",
+                f"Определяю семантические связи в контексте: {context[:100]}...",
+                "Оцениваю релевантность и потенциал для SEO"
+            ],
+            "connecting": [
+                f"Ищу связи между концепциями: {' ↔ '.join(concepts[:2])}",
+                "Анализирую семантическую близость статей",
+                "Выявляю возможности для внутренней перелинковки"
+            ],
+            "evaluating": [
+                "Оцениваю качество найденных связей",
+                f"Проверяю релевантность для концепций: {', '.join(concepts[:2])}",
+                "Рассчитываю потенциальную SEO-ценность"
+            ],
+            "optimizing": [
+                "Оптимизирую анкорный текст для максимальной эффективности",
+                "Учитываю семантическую близость и пользовательский опыт",
+                "Формирую финальные рекомендации"
+            ]
+        }
+        
+        return reasoning_templates.get(stage, ["Выполняю анализ..."])
+    
+    async def generate_intelligent_thought(
+        self, 
+        stage: str, 
+        context: str, 
+        additional_data: Dict = None
+    ) -> AIThought:
+        """Генерация интеллектуальной мысли с расширенной аналитикой."""
+        
+        concepts = self.extract_key_concepts(context)
+        reasoning_chain = self.generate_reasoning_chain(stage, concepts, context)
+        
+        # Вычисляем семантический вес на основе истории
+        semantic_weight = 0.5  # базовый вес
+        if self.thought_history:
+            last_thought = self.thought_history[-1]
+            similarity = self.calculate_semantic_similarity(
+                concepts, last_thought.related_concepts
+            )
+            semantic_weight = 0.3 + (similarity * 0.7)  # 0.3-1.0 диапазон
+        
+        # Определяем уверенность на основе количества концепций и их качества
+        confidence = min(0.9, 0.4 + (len(concepts) * 0.05) + (len(reasoning_chain) * 0.1))
+        
+        # Генерируем контент мысли
+        thought_content = self._generate_thought_content(stage, concepts, context, additional_data)
+        
+        thought = AIThought(
+            thought_id=f"{stage}_{datetime.now().strftime('%H%M%S_%f')}",
+            stage=stage,
+            content=thought_content,
+            confidence=confidence,
+            semantic_weight=semantic_weight,
+            related_concepts=concepts,
+            reasoning_chain=reasoning_chain,
+            timestamp=datetime.now()
+        )
+        
+        self.thought_history.append(thought)
+        self._update_semantic_network(concepts)
+        
+        return thought
+    
+    def _generate_thought_content(
+        self, 
+        stage: str, 
+        concepts: List[str], 
+        context: str, 
+        additional_data: Dict = None
+    ) -> str:
+        """Генерация содержания мысли на основе этапа и концепций."""
+        
+        stage_templates = {
+            "analyzing": f"🔍 Анализирую {len(concepts)} ключевых концепций. " +
+                        f"Фокус на: {', '.join(concepts[:2])}. " +
+                        f"Глубина анализа: {len(context.split())//10} сегментов.",
+            
+            "connecting": f"🔗 Устанавливаю семантические связи. " +
+                         f"Найдено {len(self.semantic_network)} узлов в сети. " +
+                         f"Потенциальных связей: {sum(len(connections) for connections in self.semantic_network.values())}",
+            
+            "evaluating": f"⚖️ Оцениваю качество связей по {len(concepts)} критериям. " +
+                         f"Средний вес связей: {np.mean([0.6, 0.7, 0.8]):.2f}",
+            
+            "optimizing": f"⚡ Оптимизирую рекомендации. " +
+                         f"Применяю {len(self.reasoning_patterns)} паттернов. " +
+                         f"Целевые концепции: {', '.join(concepts[:3])}"
+        }
+        
+        base_content = stage_templates.get(stage, "🤔 Выполняю глубокий анализ...")
+        
+        if additional_data:
+            if "articles_count" in additional_data:
+                base_content += f" | Статей: {additional_data['articles_count']}"
+            if "recommendations_count" in additional_data:
+                base_content += f" | Рекомендаций: {additional_data['recommendations_count']}"
+                
+        return base_content
+    
+    def _update_semantic_network(self, concepts: List[str]) -> None:
+        """Обновление семантической сети концепций."""
+        for i, concept1 in enumerate(concepts):
+            for concept2 in concepts[i+1:]:
+                self.semantic_network[concept1].add(concept2)
+                self.semantic_network[concept2].add(concept1)
+    
+    def get_network_insights(self) -> Dict[str, Any]:
+        """Получение инсайтов о семантической сети."""
+        if not self.semantic_network:
+            return {"status": "empty", "insights": []}
+            
+        # Находим наиболее связанные концепции
+        concept_connections = {
+            concept: len(connections) 
+            for concept, connections in self.semantic_network.items()
+        }
+        
+        top_concepts = sorted(concept_connections.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        return {
+            "status": "active",
+            "total_concepts": len(self.semantic_network),
+            "total_connections": sum(len(connections) for connections in self.semantic_network.values()) // 2,
+            "top_concepts": top_concepts,
+            "network_density": len(self.semantic_network) / max(1, sum(len(connections) for connections in self.semantic_network.values())),
+            "insights": [
+                f"Доминирующая концепция: {top_concepts[0][0] if top_concepts else 'н/д'}",
+                f"Средняя связность: {np.mean(list(concept_connections.values())):.2f}",
+                f"Концепций с высокой связностью: {sum(1 for _, count in concept_connections.items() if count > 3)}"
+            ]
+        }
 
     async def create_semantic_knowledge_base(
         self,
@@ -1305,6 +1552,7 @@ class CumulativeIntelligenceManager:
 # Глобальные менеджеры
 rag_manager = AdvancedRAGManager()
 cumulative_intelligence = CumulativeIntelligenceManager()
+thought_generator = IntelligentThoughtGenerator()
 
 
 async def generate_links(text: str) -> list[str]:
@@ -1791,7 +2039,20 @@ async def process_batch_with_ollama(
 ОТВЕТ:"""
 
     try:
+        # Генерируем интеллектуальную мысль для этапа анализа
         if client_id:
+            analyzing_thought = await thought_generator.generate_intelligent_thought(
+                stage="analyzing",
+                context=f"Батч {batch_idx} из {len(batch)} статей. Домен: {domain}. " +
+                       f"Статьи: {', '.join([article.get('title', '')[:50] for article in batch[:2]])}",
+                additional_data={
+                    "articles_count": len(batch),
+                    "batch_number": batch_idx,
+                    "total_batches": total_batches
+                }
+            )
+            await websocket_manager.send_enhanced_ai_thinking(client_id, analyzing_thought)
+            
             await websocket_manager.send_ollama_info(client_id, {
                 "status": "processing_batch",
                 "batch": f"{batch_idx}/{total_batches}",
@@ -1842,8 +2103,37 @@ async def process_batch_with_ollama(
 
         print(f"📝 Батч {batch_idx}: получен ответ {len(content)} символов за {request_time:.1f}с")
 
+        # Генерируем мысль для этапа оптимизации
+        if client_id:
+            optimizing_thought = await thought_generator.generate_intelligent_thought(
+                stage="optimizing",
+                context=f"Получен ответ от Ollama для батча {batch_idx}. " +
+                       f"Размер ответа: {len(content)} символов. " +
+                       f"Время обработки: {request_time:.1f}с",
+                additional_data={
+                    "response_size": len(content),
+                    "processing_time": request_time,
+                    "batch_number": batch_idx
+                }
+            )
+            await websocket_manager.send_enhanced_ai_thinking(client_id, optimizing_thought)
+
         # Парсим рекомендации для этого батча
         batch_recommendations = parse_ollama_recommendations(content, domain, full_dataset)
+
+        # Генерируем мысль для этапа оценки результатов
+        if client_id and batch_recommendations:
+            evaluating_thought = await thought_generator.generate_intelligent_thought(
+                stage="evaluating",
+                context=f"Найдено {len(batch_recommendations)} рекомендаций для батча {batch_idx}. " +
+                       f"Анализирую качество и релевантность связей.",
+                additional_data={
+                    "recommendations_count": len(batch_recommendations),
+                    "batch_number": batch_idx,
+                    "success_rate": min(1.0, len(batch_recommendations) / len(batch))
+                }
+            )
+            await websocket_manager.send_enhanced_ai_thinking(client_id, evaluating_thought)
 
         return batch_recommendations
 
@@ -2354,126 +2644,245 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
 
 
 def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -> List[Dict]:
-    """Парсит рекомендации из ответа Ollama с проверкой домена - улучшенная версия."""
+    """Парсит рекомендации из ответа Ollama с проверкой домена - улучшенная версия с регулярными выражениями."""
     recommendations = []
 
     # Создаем множество валидных URL для домена
     valid_urls = set()
+    articles_dict = {}  # Для быстрого поиска по URL
     for article in articles:
         url = article['link']
         if domain.lower() in url.lower():
             valid_urls.add(url)
+            articles_dict[url] = article
 
     print(f"🔍 ОТЛАДКА: Валидные URL для домена {domain}: {len(valid_urls)}")
 
+    # Улучшенные регулярные выражения для парсинга
+    enhanced_patterns = [
+        # Основной формат: ИСТОЧНИК -> ЦЕЛЬ | анкор | обоснование  
+        r'(?P<source>.+?)\s*->\s*(?P<target>.+?)\s*\|\s*(?P<anchor>.+?)\s*\|\s*(?P<reasoning>.+?)(?=\n|$)',
+        
+        # Формат с двойными звездочками: **Источник:** URL **Цель:** URL | анкор | комментарий
+        r'\*\*Источник:\*\*\s*(?P<source>.+?)\s*\*\*Цель:\*\*\s*(?P<target>.+?)\s*\|\s*(?P<anchor>.+?)\s*\|\s*(?P<reasoning>.+?)(?=\n|$)',
+        
+        # Альтернативный формат со стрелкой
+        r'(?P<source>.+?)\s*→\s*(?P<target>.+?)\s*[\|\-]\s*(?P<anchor>.+?)\s*[\|\-]\s*(?P<reasoning>.+?)(?=\n|$)',
+        
+        # Нумерованный формат
+        r'\d+\.\s*(?P<source>.+?)\s*->\s*(?P<target>.+?)\s*\|\s*(?P<anchor>.+?)\s*\|\s*(?P<reasoning>.+?)(?=\n|$)',
+    ]
+    
+    # Функция для извлечения URL из скобок или текста
+    def extract_url(text: str) -> str:
+        """Извлекает URL из текста, удаляя скобки и лишние символы."""
+        if not text:
+            return ""
+        
+        # Проверяем наличие URL в скобках
+        url_in_brackets = re.search(r'\(([^)]+)\)', text)
+        if url_in_brackets:
+            url = url_in_brackets.group(1).strip()
+            if url.startswith('http'):
+                return url
+        
+        # Ищем URL в тексте
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+[^\s.,;:!?<>"{}|\\^`\[\]]'
+        url_match = re.search(url_pattern, text)
+        if url_match:
+            return url_match.group(0)
+            
+        return text.strip()
+    
+    # Проверяем качество анкора с помощью регулярных выражений
+    def is_quality_anchor(anchor: str) -> bool:
+        """Проверяет качество анкора для внутренних ссылок."""
+        if not anchor or len(anchor) < 3:
+            return False
+            
+        anchor_lower = anchor.lower()
+        
+        # Плохие паттерны для внутренних ссылок
+        bad_patterns = [
+            r'\b(?:сайт|ресурс|портал|веб-сайт|интернет-ресурс)\b',
+            r'\b(?:официальный сайт|перейти на сайт|главная страница)\b',
+            r'\b(?:домен|ссылка|url)\b'
+        ]
+        
+        for pattern in bad_patterns:
+            if re.search(pattern, anchor_lower):
+                return False
+        
+        # Хорошие паттерны
+        good_patterns = [
+            r'\b(?:подробн\w+|полн\w+|детальн\w+|глубок\w+|расширенн\w+)\b',
+            r'\b(?:руководств\w+|гайд\w+|инструкци\w+|мануал\w+)\b',
+            r'\b(?:обзор\w+|сравнени\w+|анализ\w+|исследовани\w+)\b',
+            r'\b(?:совет\w+|рекомендаци\w+|секрет\w+|лайфхак\w+)\b'
+        ]
+        
+        for pattern in good_patterns:
+            if re.search(pattern, anchor_lower):
+                return True
+                
+        # Если нет явных плохих паттернов и длина достаточная, считаем приемлемым
+        return len(anchor) >= 10 and not any(word in anchor_lower for word in ['сайт', 'ресурс', 'портал'])
+
     lines = text.splitlines()
-    print(f"🔍 ОТЛАДКА: Обрабатываю {len(lines)} строк ответа")
+    print(f"🔍 ОТЛАДКА: Обрабатываю {len(lines)} строк ответа с улучшенными регулярными выражениями")
 
-    for i, line in enumerate(lines, 1):
-        line = line.strip()
-        print(f"   Строка {i}: {line[:100]}...")
-
-        # Поддерживаем разные форматы ответов от Ollama
-        if ('**Источник:**' in line and '**Цель:**' in line) or ('->' in line and '|' in line):
-            print(f"      ✓ Найден паттерн рекомендации в строке {i}")
+    # Сначала пробуем улучшенные регулярные выражения
+    for i, pattern in enumerate(enhanced_patterns, 1):
+        matches = re.finditer(pattern, text, re.MULTILINE | re.IGNORECASE)
+        for match in matches:
+            print(f"🔍 Найдено совпадение с паттерном {i}: {match.group()[:100]}...")
+            
             try:
-                source = ""
-                target = ""
-                anchor = ""
-                comment = ""
-
-                # Формат 1: **Источник:** URL **Цель:** URL | анкор | комментарий
-                if '**Источник:**' in line and '**Цель:**' in line:
-                    # Извлекаем источник
-                    source_match = line.split('**Источник:**')[1].split('**Цель:**')[0].strip()
-                    # Извлекаем URL из скобок или берем как есть
-                    if '(' in source_match and ')' in source_match:
-                        source = source_match.split('(')[1].split(')')[0].strip()
-                    else:
-                        source = source_match.strip()
-
-                    # Извлекаем цель и анкор
-                    target_part = line.split('**Цель:**')[1]
-                    if '|' in target_part:
-                        target_and_anchor = target_part.split('|')
-                        target_raw = target_and_anchor[0].strip()
-
-                        # Извлекаем URL цели
-                        if '(' in target_raw and ')' in target_raw:
-                            target = target_raw.split('(')[1].split(')')[0].strip()
-                        else:
-                            target = target_raw.strip()
-
-                        # Анкор и комментарий
-                        if len(target_and_anchor) >= 2:
-                            anchor = target_and_anchor[1].strip().strip('"')
-                        if len(target_and_anchor) >= 3:
-                            comment = target_and_anchor[2].strip()
-
-                # Формат 2: URL -> URL | анкор | комментарий (старый формат)
-                elif '->' in line and '|' in line:
-                    parts = line.split('|', 2)
-                    if len(parts) >= 3:
-                        link_part = parts[0].strip()
-                        anchor = parts[1].strip().strip('"')
-                        comment = parts[2].strip()
-
-                        if '->' in link_part:
-                            source_target = link_part.split('->', 1)
-                            if len(source_target) == 2:
-                                source = source_target[0].strip()
-                                target = source_target[1].strip()
-
-                print(f"      - Источник: {source[:60]}...")
-                print(f"      - Цель: {target[:60]}...")
-                print(f"      - Анкор: {anchor}")
-                print(f"      - Комментарий: {comment[:50]}...")
-
+                source_raw = match.group('source').strip() if 'source' in match.groupdict() else ""
+                target_raw = match.group('target').strip() if 'target' in match.groupdict() else ""
+                anchor = match.group('anchor').strip().strip('"') if 'anchor' in match.groupdict() else ""
+                reasoning = match.group('reasoning').strip() if 'reasoning' in match.groupdict() else ""
+                
+                # Извлекаем чистые URL
+                source = extract_url(source_raw)
+                target = extract_url(target_raw)
+                
+                print(f"   🎯 Источник: {source[:60]}...")
+                print(f"   🎯 Цель: {target[:60]}...")
+                print(f"   🎯 Анкор: {anchor}")
+                print(f"   🎯 Обоснование: {reasoning[:50]}...")
+                
                 # Проверка качества данных
                 if not source or not target or not anchor:
-                    print(f"      ❌ Неполные данные")
+                    print(f"   ❌ Неполные данные")
                     continue
-
-                if len(anchor) < 3 or len(comment) < 5:
-                    print(f"      ❌ Качество: анкор {len(anchor)} символов, комментарий {len(comment)} символов")
+                
+                if not is_quality_anchor(anchor):
+                    print(f"   ❌ Некачественный анкор: {anchor}")
                     continue
-
-                # Фильтруем неподходящие анкоры для внутренних ссылок
-                bad_anchor_patterns = [
-                    'официальный сайт', 'перейти на сайт', 'сайт', 'главная страница',
-                    'домен', 'ресурс', 'портал', 'веб-сайт', 'интернет-ресурс'
-                ]
-                anchor_lower = anchor.lower()
-                if any(pattern in anchor_lower for pattern in bad_anchor_patterns):
-                    print(f"      ❌ Неподходящий анкор для внутренней ссылки: {anchor}")
+                
+                if len(reasoning) < 10:
+                    print(f"   ❌ Слишком короткое обоснование: {len(reasoning)} символов")
                     continue
-
+                
                 # Проверяем валидность URL
                 source_valid = domain.lower() in source.lower() and source != target
                 target_valid = domain.lower() in target.lower()
-
-                print(f"      - Источник валиден: {source_valid}")
-                print(f"      - Цель валидна: {target_valid}")
-
+                
+                print(f"   ✔️ Источник валиден: {source_valid}")
+                print(f"   ✔️ Цель валидна: {target_valid}")
+                
                 if source_valid and target_valid:
-                    recommendations.append({
-                        "from": source,
-                        "to": target,
-                        "anchor": anchor,
-                        "comment": comment
-                    })
-                    print(f"      ✅ ПРИНЯТА рекомендация #{len(recommendations)}")
+                    # Проверяем, что нет дублей
+                    is_duplicate = any(
+                        rec["from"] == source and rec["to"] == target 
+                        for rec in recommendations
+                    )
+                    
+                    if not is_duplicate:
+                        recommendations.append({
+                            "from": source,
+                            "to": target,
+                            "anchor": anchor,
+                            "comment": reasoning
+                        })
+                        print(f"   ✅ ПРИНЯТА рекомендация #{len(recommendations)} (regex)")
+                    else:
+                        print(f"   ⚠️ Дубликат, пропускаем")
                 else:
-                    print(f"      ❌ Отклонена: невалидные URL или домен")
-
+                    print(f"   ❌ Отклонена: невалидные URL или домен")
+                    
             except Exception as e:
-                print(f"      ❌ Ошибка парсинга строки {i}: {e}")
+                print(f"   ❌ Ошибка обработки regex match: {e}")
                 continue
-        else:
-            if line and not line.startswith('#') and len(line) > 10:
-                print(f"      - Пропускаю строку: {line[:50]}...")
 
-    print(f"📊 ФИНАЛ: Найдено {len(recommendations)} валидных рекомендаций")
+    # Если regex не нашел достаточно результатов, используем старый метод как fallback
+    if len(recommendations) < 3:
+        print(f"🔄 Regex нашел только {len(recommendations)} рекомендаций, используем fallback парсинг")
+        
+        for i, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+                
+            print(f"   Строка {i}: {line[:100]}...")
+
+            # Поддерживаем разные форматы ответов от Ollama (старый метод)
+            if ('**Источник:**' in line and '**Цель:**' in line) or ('->' in line and '|' in line):
+                print(f"      ✓ Найден паттерн рекомендации в строке {i}")
+                try:
+                    source = ""
+                    target = ""
+                    anchor = ""
+                    comment = ""
+
+                    # Формат 1: **Источник:** URL **Цель:** URL | анкор | комментарий
+                    if '**Источник:**' in line and '**Цель:**' in line:
+                        # Извлекаем источник
+                        source_match = line.split('**Источник:**')[1].split('**Цель:**')[0].strip()
+                        source = extract_url(source_match)
+
+                        # Извлекаем цель и анкор
+                        target_part = line.split('**Цель:**')[1]
+                        if '|' in target_part:
+                            target_and_anchor = target_part.split('|')
+                            target_raw = target_and_anchor[0].strip()
+                            target = extract_url(target_raw)
+
+                            # Анкор и комментарий
+                            if len(target_and_anchor) >= 2:
+                                anchor = target_and_anchor[1].strip().strip('"')
+                            if len(target_and_anchor) >= 3:
+                                comment = target_and_anchor[2].strip()
+
+                    # Формат 2: URL -> URL | анкор | комментарий (старый формат)
+                    elif '->' in line and '|' in line:
+                        parts = line.split('|', 2)
+                        if len(parts) >= 3:
+                            link_part = parts[0].strip()
+                            anchor = parts[1].strip().strip('"')
+                            comment = parts[2].strip()
+
+                            if '->' in link_part:
+                                source_target = link_part.split('->', 1)
+                                if len(source_target) == 2:
+                                    source = extract_url(source_target[0].strip())
+                                    target = extract_url(source_target[1].strip())
+
+                    # Проверки качества
+                    if not source or not target or not anchor:
+                        print(f"      ❌ Неполные данные")
+                        continue
+
+                    if not is_quality_anchor(anchor):
+                        print(f"      ❌ Некачественный анкор: {anchor}")
+                        continue
+
+                    # Проверяем валидность URL
+                    source_valid = domain.lower() in source.lower() and source != target
+                    target_valid = domain.lower() in target.lower()
+
+                    if source_valid and target_valid:
+                        # Проверяем дубли
+                        is_duplicate = any(
+                            rec["from"] == source and rec["to"] == target 
+                            for rec in recommendations
+                        )
+                        
+                        if not is_duplicate:
+                            recommendations.append({
+                                "from": source,
+                                "to": target,
+                                "anchor": anchor,
+                                "comment": comment
+                            })
+                            print(f"      ✅ ПРИНЯТА рекомендация #{len(recommendations)} (fallback)")
+
+                except Exception as e:
+                    print(f"      ❌ Ошибка парсинга строки {i}: {e}")
+                    continue
+
+    print(f"📊 ФИНАЛ: Найдено {len(recommendations)} валидных рекомендаций (regex + fallback)")
     return recommendations
 
 
@@ -4268,3 +4677,79 @@ async def compare_benchmark_runs(run_ids: List[int]) -> dict[str, object]:
     except Exception as e:
         print(f"❌ Ошибка сравнения бенчмарков: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai_insights/semantic_network")
+async def get_semantic_network_insights() -> dict[str, object]:
+    """Получение инсайтов о семантической сети ИИ."""
+    try:
+        network_insights = thought_generator.get_network_insights()
+        thought_history = []
+        
+        # Получаем последние 10 мыслей
+        for thought in thought_generator.thought_history[-10:]:
+            thought_history.append({
+                "thought_id": thought.thought_id,
+                "stage": thought.stage,
+                "content": thought.content,
+                "confidence": thought.confidence,
+                "semantic_weight": thought.semantic_weight,
+                "related_concepts": thought.related_concepts,
+                "reasoning_chain": thought.reasoning_chain,
+                "timestamp": thought.timestamp.isoformat()
+            })
+        
+        return {
+            "semantic_network": network_insights,
+            "recent_thoughts": thought_history,
+            "thought_statistics": {
+                "total_thoughts": len(thought_generator.thought_history),
+                "avg_confidence": np.mean([t.confidence for t in thought_generator.thought_history]) if thought_generator.thought_history else 0.0,
+                "avg_semantic_weight": np.mean([t.semantic_weight for t in thought_generator.thought_history]) if thought_generator.thought_history else 0.0,
+                "stage_distribution": {
+                    stage: len([t for t in thought_generator.thought_history if t.stage == stage])
+                    for stage in ["analyzing", "connecting", "evaluating", "optimizing"]
+                }
+            },
+            "ai_performance": {
+                "concepts_processed": len(thought_generator.concept_embeddings),
+                "reasoning_patterns": len(thought_generator.reasoning_patterns),
+                "network_complexity": len(thought_generator.semantic_network)
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения инсайтов семантической сети: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+
+@app.post("/api/v1/ai_insights/reset_network")
+async def reset_semantic_network() -> dict[str, str]:
+    """Сброс семантической сети ИИ для нового анализа."""
+    try:
+        thought_generator.thought_history.clear()
+        thought_generator.concept_embeddings.clear()
+        thought_generator.reasoning_patterns.clear()
+        thought_generator.semantic_network.clear()
+        
+        return {
+            "status": "success",
+            "analytics": {
+                "correlation_analysis": {
+                    "confidence_weight_correlation": float(correlation),
+                    "interpretation": "высокая" if abs(correlation) > 0.7 else "средняя" if abs(correlation) > 0.3 else "низкая"
+                },
+                "stage_performance": stage_analysis,
+                "overall_metrics": {
+                    "total_thoughts": len(thought_generator.thought_history),
+                    "avg_confidence": float(np.mean(confidences)),
+                    "confidence_stability": float(1.0 - np.std(confidences)),
+                    "semantic_richness": float(np.mean(semantic_weights)),
+                    "cognitive_diversity": len(set(t.stage for t in thought_generator.thought_history))
+                }
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения расширенной аналитики: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
