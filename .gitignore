@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 pytest_cache/
 *.mdc
+.pytest_cache/
+.vscode/
+.cursor/
+.vscode/settings.json

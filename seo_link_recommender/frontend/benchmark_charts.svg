@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <!-- Определения стилей и градиентов -->
+  <defs>
+    <!-- Градиенты для диаграмм -->
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#007AFF;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#5AC8FA;stop-opacity:0.6" />
+    </linearGradient>
+    
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#34C759;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#30D158;stop-opacity:0.6" />
+    </linearGradient>
+    
+    <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9500;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#FFAD33;stop-opacity:0.6" />
+    </linearGradient>
+    
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF3B30;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#FF6B66;stop-opacity:0.6" />
+    </linearGradient>
+    
+    <!-- Фильтры для эффектов -->
+    <filter id="dropshadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+    
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Фон с градиентом -->
+  <rect width="1200" height="800" fill="url(#backgroundGradient)"/>
+  <linearGradient id="backgroundGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#F8F9FA;stop-opacity:1" />
+    <stop offset="100%" style="stop-color:#E9ECEF;stop-opacity:1" />
+  </linearGradient>
+  
+  <!-- Заголовок -->
+  <text x="600" y="40" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" 
+        font-size="28" font-weight="700" fill="#1C1C1E">
+    🚀 SEO Benchmark Results Dashboard
+  </text>
+  
+  <!-- Карточка общей статистики -->
+  <g id="overallStats">
+    <rect x="50" y="70" width="280" height="120" rx="16" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <text x="190" y="100" text-anchor="middle" font-family="Inter" font-size="14" 
+          font-weight="600" fill="#007AFF">ОБЩИЙ РЕЙТИНГ</text>
+    
+    <circle cx="120" cy="140" r="25" fill="url(#blueGradient)" filter="url(#glow)"/>
+    <text x="120" y="147" text-anchor="middle" font-family="Inter" 
+          font-size="18" font-weight="700" fill="#FFFFFF">9.1</text>
+    
+    <text x="170" y="135" font-family="Inter" font-size="11" fill="#6B7280">Лучшая модель:</text>
+    <text x="170" y="150" font-family="Inter" font-size="13" font-weight="600" 
+          fill="#1C1C1E">qwen2.5:7b-instruct-turbo</text>
+  </g>
+  
+  <!-- Диаграмма производительности -->
+  <g id="performanceChart">
+    <rect x="370" y="70" width="360" height="120" rx="16" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <text x="550" y="100" text-anchor="middle" font-family="Inter" font-size="14" 
+          font-weight="600" fill="#34C759">ПРОИЗВОДИТЕЛЬНОСТЬ</text>
+    
+    <!-- Столбцы диаграммы -->
+    <rect x="390" y="160" width="40" height="20" fill="url(#greenGradient)" rx="4"/>
+    <text x="410" y="185" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">19.1 tok/s</text>
+    
+    <rect x="450" y="150" width="40" height="30" fill="url(#blueGradient)" rx="4"/>
+    <text x="470" y="185" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">18.8 tok/s</text>
+    
+    <rect x="510" y="165" width="40" height="15" fill="url(#orangeGradient)" rx="4"/>
+    <text x="530" y="185" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">15.2 tok/s</text>
+    
+    <!-- Легенда -->
+    <text x="580" y="125" font-family="Inter" font-size="11" fill="#6B7280">Токенов в секунду</text>
+  </g>
+  
+  <!-- Радарная диаграмма качества -->
+  <g id="qualityRadar">
+    <rect x="770" y="70" width="380" height="300" rx="16" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <text x="960" y="100" text-anchor="middle" font-family="Inter" font-size="14" 
+          font-weight="600" fill="#FF9500">АНАЛИЗ КАЧЕСТВА</text>
+    
+    <!-- Центральная точка радара -->
+    <circle cx="960" cy="220" r="80" fill="none" stroke="#F0F0F0" stroke-width="1"/>
+    <circle cx="960" cy="220" r="60" fill="none" stroke="#F0F0F0" stroke-width="1"/>
+    <circle cx="960" cy="220" r="40" fill="none" stroke="#F0F0F0" stroke-width="1"/>
+    <circle cx="960" cy="220" r="20" fill="none" stroke="#F0F0F0" stroke-width="1"/>
+    
+    <!-- Оси радара -->
+    <line x1="960" y1="140" x2="960" y2="300" stroke="#E5E5EA" stroke-width="1"/>
+    <line x1="880" y1="220" x2="1040" y2="220" stroke="#E5E5EA" stroke-width="1"/>
+    <line x1="913" y1="163" x2="1007" y2="277" stroke="#E5E5EA" stroke-width="1"/>
+    <line x1="1007" y1="163" x2="913" y2="277" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <!-- Данные модели (пятиугольник) -->
+    <polygon points="960,160 990,190 980,250 940,250 930,190" 
+             fill="url(#blueGradient)" fill-opacity="0.3" stroke="#007AFF" stroke-width="2"/>
+    
+    <!-- Точки данных -->
+    <circle cx="960" cy="160" r="4" fill="#007AFF"/>
+    <circle cx="990" cy="190" r="4" fill="#007AFF"/>
+    <circle cx="980" cy="250" r="4" fill="#007AFF"/>
+    <circle cx="940" cy="250" r="4" fill="#007AFF"/>
+    <circle cx="930" cy="190" r="4" fill="#007AFF"/>
+    
+    <!-- Подписи осей -->
+    <text x="960" y="135" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">SEO</text>
+    <text x="1050" y="225" text-anchor="start" font-family="Inter" font-size="10" fill="#6B7280">Язык</text>
+    <text x="990" y="285" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">RAG</text>
+    <text x="920" y="285" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">Скорость</text>
+    <text x="870" y="225" text-anchor="end" font-family="Inter" font-size="10" fill="#6B7280">Качество</text>
+  </g>
+  
+  <!-- Временная диаграмма -->
+  <g id="timeChart">
+    <rect x="50" y="220" width="680" height="200" rx="16" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <text x="390" y="250" text-anchor="middle" font-family="Inter" font-size="14" 
+          font-weight="600" fill="#FF3B30">ВРЕМЯ ОТВЕТА ПО МОДЕЛЯМ</text>
+    
+    <!-- Линия тренда -->
+    <polyline points="100,360 200,340 300,350 400,330 500,345 600,335 700,340" 
+              fill="none" stroke="url(#blueGradient)" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Точки данных -->
+    <circle cx="100" cy="360" r="6" fill="#007AFF" filter="url(#glow)"/>
+    <circle cx="200" cy="340" r="6" fill="#34C759" filter="url(#glow)"/>
+    <circle cx="300" cy="350" r="6" fill="#FF9500" filter="url(#glow)"/>
+    <circle cx="400" cy="330" r="6" fill="#007AFF" filter="url(#glow)"/>
+    <circle cx="500" cy="345" r="6" fill="#FF3B30" filter="url(#glow)"/>
+    <circle cx="600" cy="335" r="6" fill="#34C759" filter="url(#glow)"/>
+    <circle cx="700" cy="340" r="6" fill="#FF9500" filter="url(#glow)"/>
+    
+    <!-- Подписи моделей -->
+    <text x="100" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">qwen2.5:7b</text>
+    <text x="200" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">instruct</text>
+    <text x="300" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">turbo</text>
+    <text x="400" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">claude-3</text>
+    <text x="500" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">gpt-4</text>
+    <text x="600" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">gemini</text>
+    <text x="700" y="385" text-anchor="middle" font-family="Inter" font-size="10" fill="#6B7280">llama-3</text>
+    
+    <!-- Значения времени -->
+    <text x="100" y="375" text-anchor="middle" font-family="Inter" font-size="9" fill="#007AFF">8.1с</text>
+    <text x="200" y="325" text-anchor="middle" font-family="Inter" font-size="9" fill="#34C759">7.8с</text>
+    <text x="300" y="335" text-anchor="middle" font-family="Inter" font-size="9" fill="#FF9500">8.0с</text>
+    <text x="400" y="315" text-anchor="middle" font-family="Inter" font-size="9" fill="#007AFF">7.5с</text>
+    <text x="500" y="330" text-anchor="middle" font-family="Inter" font-size="9" fill="#FF3B30">7.9с</text>
+    <text x="600" y="320" text-anchor="middle" font-family="Inter" font-size="9" fill="#34C759">7.6с</text>
+    <text x="700" y="325" text-anchor="middle" font-family="Inter" font-size="9" fill="#FF9500">7.8с</text>
+  </g>
+  
+  <!-- Карточки метрик -->
+  <g id="metricsCards">
+    <!-- Карточка 1: Качество языка -->
+    <rect x="50" y="450" width="160" height="100" rx="12" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    <rect x="50" y="450" width="160" height="4" rx="2" fill="url(#greenGradient)"/>
+    
+    <text x="130" y="475" text-anchor="middle" font-family="Inter" font-size="12" 
+          font-weight="600" fill="#34C759">КАЧЕСТВО ЯЗЫКА</text>
+    <text x="130" y="510" text-anchor="middle" font-family="Inter" font-size="32" 
+          font-weight="700" fill="#1C1C1E">9.2</text>
+    <text x="130" y="530" text-anchor="middle" font-family="Inter" font-size="10" 
+          fill="#6B7280">из 10.0</text>
+    
+    <!-- Карточка 2: SEO экспертность -->
+    <rect x="230" y="450" width="160" height="100" rx="12" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    <rect x="230" y="450" width="160" height="4" rx="2" fill="url(#blueGradient)"/>
+    
+    <text x="310" y="475" text-anchor="middle" font-family="Inter" font-size="12" 
+          font-weight="600" fill="#007AFF">SEO ЭКСПЕРТНОСТЬ</text>
+    <text x="310" y="510" text-anchor="middle" font-family="Inter" font-size="32" 
+          font-weight="700" fill="#1C1C1E">8.8</text>
+    <text x="310" y="530" text-anchor="middle" font-family="Inter" font-size="10" 
+          fill="#6B7280">из 10.0</text>
+    
+    <!-- Карточка 3: RAG Интеграция -->
+    <rect x="410" y="450" width="160" height="100" rx="12" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    <rect x="410" y="450" width="160" height="4" rx="2" fill="url(#orangeGradient)"/>
+    
+    <text x="490" y="475" text-anchor="middle" font-family="Inter" font-size="12" 
+          font-weight="600" fill="#FF9500">RAG ИНТЕГРАЦИЯ</text>
+    <text x="490" y="510" text-anchor="middle" font-family="Inter" font-size="32" 
+          font-weight="700" fill="#1C1C1E">7.9</text>
+    <text x="490" y="530" text-anchor="middle" font-family="Inter" font-size="10" 
+          fill="#6B7280">из 10.0</text>
+    
+    <!-- Карточка 4: Производительность -->
+    <rect x="590" y="450" width="160" height="100" rx="12" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    <rect x="590" y="450" width="160" height="4" rx="2" fill="url(#redGradient)"/>
+    
+    <text x="670" y="475" text-anchor="middle" font-family="Inter" font-size="12" 
+          font-weight="600" fill="#FF3B30">ПРОИЗВОДИТЕЛЬНОСТЬ</text>
+    <text x="670" y="510" text-anchor="middle" font-family="Inter" font-size="32" 
+          font-weight="700" fill="#1C1C1E">9.4</text>
+    <text x="670" y="530" text-anchor="middle" font-family="Inter" font-size="10" 
+          fill="#6B7280">из 10.0</text>
+  </g>
+  
+  <!-- Статус индикаторы -->
+  <g id="statusIndicators">
+    <rect x="50" y="580" width="700" height="80" rx="12" fill="#FFFFFF" 
+          filter="url(#dropshadow)" stroke="#E5E5EA" stroke-width="1"/>
+    
+    <text x="400" y="605" text-anchor="middle" font-family="Inter" font-size="14" 
+          font-weight="600" fill="#1C1C1E">СТАТУС СИСТЕМЫ</text>
+    
+    <!-- Индикатор Ollama -->
+    <circle cx="120" cy="630" r="8" fill="#34C759"/>
+    <text x="140" y="635" font-family="Inter" font-size="12" font-weight="500" fill="#1C1C1E">Ollama: Готова</text>
+    
+    <!-- Индикатор моделей -->
+    <circle cx="280" cy="630" r="8" fill="#34C759"/>
+    <text x="300" y="635" font-family="Inter" font-size="12" font-weight="500" fill="#1C1C1E">Модели: 7 доступно</text>
+    
+    <!-- Индикатор WebSocket -->
+    <circle cx="480" cy="630" r="8" fill="#34C759"/>
+    <text x="500" y="635" font-family="Inter" font-size="12" font-weight="500" fill="#1C1C1E">WebSocket: Подключено</text>
+    
+    <!-- Индикатор RAG -->
+    <circle cx="650" cy="630" r="8" fill="#FF9500"/>
+    <text x="670" y="635" font-family="Inter" font-size="12" font-weight="500" fill="#1C1C1E">RAG: Индексация</text>
+  </g>
+  
+  <!-- Логотип и версия -->
+  <g id="footer">
+    <text x="600" y="750" text-anchor="middle" font-family="Inter" font-size="11" 
+          fill="#6B7280">🔥 SEO Link Recommender v2.0 • Powered by Apple M4 & Ollama</text>
+    <text x="600" y="770" text-anchor="middle" font-family="Inter" font-size="10" 
+          fill="#9CA3AF">Интеллектуальный анализ и рекомендации внутренних ссылок</text>
+  </g>
+  
+  <!-- Анимации -->
+  <style>
+    .glow-animation {
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes glow {
+      from { filter: drop-shadow(0 0 5px rgba(0, 122, 255, 0.5)); }
+      to { filter: drop-shadow(0 0 15px rgba(0, 122, 255, 0.8)); }
+    }
+    
+    .pulse-animation {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+  </style>
+  
+  <!-- Применяем анимации -->
+  <script>
+    // Добавляем класс анимации к элементам
+    document.querySelectorAll('circle[fill="#007AFF"]').forEach(el => {
+      el.classList.add('glow-animation');
+    });
+    
+    document.querySelectorAll('circle[fill="#34C759"]').forEach(el => {
+      el.classList.add('pulse-animation');
+    });
+  </script>
+</svg> 

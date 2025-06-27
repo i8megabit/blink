@@ -493,6 +493,127 @@ class AnalysisHistory(Base):
     )
 
 
+class ModelConfiguration(Base):
+    """Модель конфигураций для различных LLM моделей."""
+    
+    __tablename__ = "model_configurations"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(300))
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    model_type: Mapped[str] = mapped_column(String(50))  # ollama, openai, anthropic
+    
+    # Параметры модели
+    default_parameters: Mapped[dict] = mapped_column(JSON, default=dict)  # temperature, top_p, etc.
+    context_size: Mapped[int] = mapped_column(Integer, default=4096)
+    max_tokens: Mapped[int] = mapped_column(Integer, default=2048)
+    
+    # Специализированные настройки для разных задач
+    seo_optimized_params: Mapped[dict] = mapped_column(JSON, default=dict)
+    benchmark_params: Mapped[dict] = mapped_column(JSON, default=dict)
+    creative_params: Mapped[dict] = mapped_column(JSON, default=dict)
+    
+    # Характеристики производительности
+    avg_tokens_per_second: Mapped[float] = mapped_column(Float, nullable=True)
+    memory_usage_mb: Mapped[float] = mapped_column(Float, nullable=True)
+    quality_score: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Метаданные
+    is_active: Mapped[bool] = mapped_column(default=True)
+    is_available: Mapped[bool] = mapped_column(default=False)  # динамически обновляется
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Отношения
+    benchmark_runs: Mapped[List["BenchmarkRun"]] = relationship("BenchmarkRun", back_populates="model_config")
+    
+    __table_args__ = (
+        Index("idx_model_configs_active_available", "is_active", "is_available"),
+    )
+
+
+class BenchmarkRun(Base):
+    """Модель для хранения результатов бенчмарков."""
+    
+    __tablename__ = "benchmark_runs"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(300))
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    benchmark_type: Mapped[str] = mapped_column(String(100))  # seo_basic, seo_advanced, performance
+    
+    # Ссылки на модели
+    model_config_id: Mapped[int] = mapped_column(Integer, ForeignKey("model_configurations.id"), index=True)
+    
+    # Конфигурация бенчмарка
+    test_cases_config: Mapped[dict] = mapped_column(JSON)  # конфигурация тестовых кейсов
+    iterations: Mapped[int] = mapped_column(Integer, default=3)
+    
+    # Результаты
+    results: Mapped[dict] = mapped_column(JSON)  # детальные результаты
+    metrics: Mapped[dict] = mapped_column(JSON)  # агрегированные метрики
+    
+    # Временные метрики
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    duration_seconds: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # Статус выполнения
+    status: Mapped[str] = mapped_column(String(50), default='pending')  # pending, running, completed, failed
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Сравнительные метрики
+    overall_score: Mapped[float] = mapped_column(Float, nullable=True)
+    quality_score: Mapped[float] = mapped_column(Float, nullable=True)
+    performance_score: Mapped[float] = mapped_column(Float, nullable=True)
+    efficiency_score: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    model_config: Mapped["ModelConfiguration"] = relationship("ModelConfiguration", back_populates="benchmark_runs")
+    comparisons: Mapped[List["BenchmarkComparison"]] = relationship("BenchmarkComparison", foreign_keys="BenchmarkComparison.run_id", back_populates="run")
+    
+    __table_args__ = (
+        Index("idx_benchmark_runs_model_status", "model_config_id", "status"),
+        Index("idx_benchmark_runs_type_score", "benchmark_type", "overall_score"),
+    )
+
+
+class BenchmarkComparison(Base):
+    """Модель для сравнения результатов бенчмарков между моделями."""
+    
+    __tablename__ = "benchmark_comparisons"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    comparison_name: Mapped[str] = mapped_column(String(300))
+    
+    # Ссылки на сравниваемые запуски
+    run_id: Mapped[int] = mapped_column(Integer, ForeignKey("benchmark_runs.id"), index=True)
+    baseline_run_id: Mapped[int] = mapped_column(Integer, ForeignKey("benchmark_runs.id"), nullable=True)
+    
+    # Результаты сравнения
+    comparison_results: Mapped[dict] = mapped_column(JSON)  # детальное сравнение
+    performance_delta: Mapped[float] = mapped_column(Float, nullable=True)  # изменение производительности
+    quality_delta: Mapped[float] = mapped_column(Float, nullable=True)  # изменение качества
+    
+    # Выводы и рекомендации
+    summary: Mapped[str] = mapped_column(Text, nullable=True)
+    recommendations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    run: Mapped["BenchmarkRun"] = relationship("BenchmarkRun", foreign_keys=[run_id], back_populates="comparisons")
+    baseline_run: Mapped["BenchmarkRun"] = relationship("BenchmarkRun", foreign_keys=[baseline_run_id])
+    
+    __table_args__ = (
+        Index("idx_benchmark_comparisons_runs", "run_id", "baseline_run_id"),
+    )
+
+
 class Recommendation(Base):
     """Модель рекомендаций (оставляем для совместимости)."""
 
@@ -515,6 +636,28 @@ class WPRequest(BaseModel):
     domain: str
     client_id: Optional[str] = None
     comprehensive: Optional[bool] = False  # Флаг для полной индексации
+
+
+class BenchmarkRequest(BaseModel):
+    """Запрос для запуска бенчмарка."""
+    
+    name: str
+    description: Optional[str] = None
+    benchmark_type: str = "seo_advanced"  # seo_basic, seo_advanced, performance
+    models: List[str] = []  # список моделей для тестирования
+    iterations: int = 3
+    client_id: Optional[str] = None
+
+
+class ModelConfigRequest(BaseModel):
+    """Запрос для обновления конфигурации модели."""
+    
+    model_name: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    default_parameters: Optional[dict] = None
+    seo_optimized_params: Optional[dict] = None
+    benchmark_params: Optional[dict] = None
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
@@ -3678,3 +3821,443 @@ async def benchmark_model_endpoint(request: dict) -> dict[str, str]:
             "status": "error",
             "message": f"Ошибка переключения модели: {str(e)}"
         }
+
+
+# ========================================
+# 🎯 BENCHMARK API ENDPOINTS
+# ========================================
+
+@app.get("/api/v1/models/available")
+async def get_available_models() -> dict[str, list]:
+    """Получает список доступных моделей из Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{OLLAMA_URL.replace('/api/generate', '/api/tags')}")
+            
+            if response.status_code == 200:
+                models_data = response.json()
+                available_models = []
+                
+                for model in models_data.get("models", []):
+                    model_name = model["name"]
+                    model_size = model.get("size", 0)
+                    modified_at = model.get("modified_at", "")
+                    
+                    available_models.append({
+                        "name": model_name,
+                        "size_bytes": model_size,
+                        "size_gb": round(model_size / (1024**3), 2),
+                        "modified_at": modified_at,
+                        "family": model.get("details", {}).get("family", "unknown"),
+                        "format": model.get("details", {}).get("format", "unknown")
+                    })
+                
+                return {
+                    "status": "success",
+                    "models": available_models,
+                    "count": len(available_models)
+                }
+            else:
+                return {
+                    "status": "error",
+                    "models": [],
+                    "error": "Ollama server недоступен"
+                }
+                
+    except Exception as e:
+        return {
+            "status": "error", 
+            "models": [],
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/models/configurations")
+async def get_model_configurations() -> list[dict]:
+    """Получает конфигурации моделей из БД."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ModelConfiguration).order_by(ModelConfiguration.model_name)
+            )
+            configs = result.scalars().all()
+            
+            return [
+                {
+                    "id": config.id,
+                    "model_name": config.model_name,
+                    "display_name": config.display_name,
+                    "description": config.description,
+                    "model_type": config.model_type,
+                    "is_active": config.is_active,
+                    "is_available": config.is_available,
+                    "context_size": config.context_size,
+                    "max_tokens": config.max_tokens,
+                    "avg_tokens_per_second": config.avg_tokens_per_second,
+                    "quality_score": config.quality_score,
+                    "last_checked_at": config.last_checked_at.isoformat() if config.last_checked_at else None,
+                    "benchmark_runs_count": len(config.benchmark_runs)
+                }
+                for config in configs
+            ]
+            
+    except Exception as e:
+        print(f"❌ Ошибка получения конфигураций моделей: {e}")
+        return []
+
+
+@app.post("/api/v1/models/configurations")
+async def create_or_update_model_configuration(req: ModelConfigRequest) -> dict[str, str]:
+    """Создает или обновляет конфигурацию модели."""
+    try:
+        async with AsyncSessionLocal() as session:
+            # Проверяем, существует ли конфигурация
+            result = await session.execute(
+                select(ModelConfiguration).where(ModelConfiguration.model_name == req.model_name)
+            )
+            config = result.scalar_one_or_none()
+            
+            if config:
+                # Обновляем существующую
+                if req.display_name:
+                    config.display_name = req.display_name
+                if req.description:
+                    config.description = req.description
+                if req.default_parameters:
+                    config.default_parameters = req.default_parameters
+                if req.seo_optimized_params:
+                    config.seo_optimized_params = req.seo_optimized_params
+                if req.benchmark_params:
+                    config.benchmark_params = req.benchmark_params
+                
+                config.updated_at = datetime.utcnow()
+                action = "updated"
+            else:
+                # Создаем новую
+                config = ModelConfiguration(
+                    model_name=req.model_name,
+                    display_name=req.display_name or req.model_name,
+                    description=req.description,
+                    model_type="ollama",  # по умолчанию
+                    default_parameters=req.default_parameters or {},
+                    seo_optimized_params=req.seo_optimized_params or {},
+                    benchmark_params=req.benchmark_params or {}
+                )
+                session.add(config)
+                action = "created"
+            
+            await session.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Конфигурация модели {req.model_name} {action}",
+                "model_name": req.model_name
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Ошибка работы с конфигурацией: {str(e)}"
+        }
+
+
+@app.post("/api/v1/benchmark/run")
+async def run_benchmark(req: BenchmarkRequest) -> dict[str, object]:
+    """Запускает бенчмарк для указанных моделей."""
+    try:
+        if not req.models:
+            raise HTTPException(status_code=400, detail="Список моделей не может быть пустым")
+        
+        # Импортируем класс бенчмарка
+        from advanced_seo_benchmark import AdvancedSEOBenchmark
+        
+        benchmark = AdvancedSEOBenchmark()
+        
+        # Создаем записи в БД для каждой модели
+        benchmark_runs = []
+        
+        async with AsyncSessionLocal() as session:
+            for model_name in req.models:
+                # Получаем или создаем конфигурацию модели
+                result = await session.execute(
+                    select(ModelConfiguration).where(ModelConfiguration.model_name == model_name)
+                )
+                model_config = result.scalar_one_or_none()
+                
+                if not model_config:
+                    # Создаем базовую конфигурацию
+                    model_config = ModelConfiguration(
+                        model_name=model_name,
+                        display_name=model_name,
+                        model_type="ollama"
+                    )
+                    session.add(model_config)
+                    await session.flush()  # Получаем ID
+                
+                # Создаем запуск бенчмарка
+                benchmark_run = BenchmarkRun(
+                    name=req.name,
+                    description=req.description,
+                    benchmark_type=req.benchmark_type,
+                    model_config_id=model_config.id,
+                    iterations=req.iterations,
+                    status="pending",
+                    test_cases_config={
+                        "benchmark_type": req.benchmark_type,
+                        "iterations": req.iterations
+                    }
+                )
+                session.add(benchmark_run)
+                benchmark_runs.append(benchmark_run)
+            
+            await session.commit()
+        
+        # Запускаем бенчмарк асинхронно
+        results = {}
+        
+        # Отправляем WebSocket уведомление о начале
+        if req.client_id:
+            await websocket_manager.send_progress(req.client_id, {
+                "type": "benchmark_started", 
+                "models": req.models,
+                "benchmark_type": req.benchmark_type
+            })
+        
+        for idx, model_name in enumerate(req.models):
+            if req.client_id:
+                await websocket_manager.send_step(
+                    req.client_id,
+                    f"Тестирование модели {model_name}",
+                    idx + 1,
+                    len(req.models),
+                    f"Запуск {req.iterations} итераций..."
+                )
+            
+            # Запускаем бенчмарк для модели
+            try:
+                metrics = await benchmark.benchmark_model_advanced(model_name, req.iterations)
+                results[model_name] = metrics
+                
+                # Обновляем результаты в БД
+                async with AsyncSessionLocal() as session:
+                    run = next((r for r in benchmark_runs if r.model_config.model_name == model_name), None)
+                    if run:
+                        result = await session.execute(
+                            select(BenchmarkRun).where(BenchmarkRun.id == run.id)
+                        )
+                        db_run = result.scalar_one_or_none()
+                        if db_run:
+                            db_run.status = "completed"
+                            db_run.completed_at = datetime.utcnow()
+                            db_run.overall_score = metrics.overall_score
+                            db_run.quality_score = metrics.language_quality_score
+                            db_run.performance_score = metrics.tokens_per_second
+                            db_run.results = {
+                                "metrics": metrics.__dict__,
+                                "model_name": model_name
+                            }
+                            db_run.duration_seconds = (db_run.completed_at - db_run.started_at).total_seconds()
+                            await session.commit()
+                        
+            except Exception as e:
+                print(f"❌ Ошибка бенчмарка модели {model_name}: {e}")
+                results[model_name] = {"error": str(e)}
+                
+                # Помечаем как failed в БД
+                async with AsyncSessionLocal() as session:
+                    run = next((r for r in benchmark_runs if r.model_config.model_name == model_name), None)
+                    if run:
+                        result = await session.execute(
+                            select(BenchmarkRun).where(BenchmarkRun.id == run.id)
+                        )
+                        db_run = result.scalar_one_or_none()
+                        if db_run:
+                            db_run.status = "failed"
+                            db_run.error_message = str(e)
+                            await session.commit()
+        
+        # Отправляем финальное уведомление
+        if req.client_id:
+            await websocket_manager.send_progress(req.client_id, {
+                "type": "benchmark_completed",
+                "results": {k: v.__dict__ if hasattr(v, '__dict__') else v for k, v in results.items()}
+            })
+        
+        return {
+            "status": "success",
+            "message": f"Бенчмарк завершен для {len(req.models)} моделей",
+            "results": results,
+            "benchmark_runs": [run.id for run in benchmark_runs]
+        }
+        
+    except Exception as e:
+        error_msg = f"❌ Ошибка запуска бенчмарка: {e}"
+        print(error_msg)
+        
+        if req.client_id:
+            await websocket_manager.send_error(req.client_id, "Ошибка бенчмарка", str(e))
+        
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.get("/api/v1/benchmark/history")
+async def get_benchmark_history() -> list[dict]:
+    """Получает историю запусков бенчмарков."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(BenchmarkRun, ModelConfiguration)
+                .join(ModelConfiguration)
+                .order_by(BenchmarkRun.created_at.desc())
+                .limit(50)  # Последние 50 запусков
+            )
+            runs = result.all()
+            
+            history = []
+            for run, model_config in runs:
+                history.append({
+                    "id": run.id,
+                    "name": run.name,
+                    "description": run.description,
+                    "benchmark_type": run.benchmark_type,
+                    "model_name": model_config.model_name,
+                    "model_display_name": model_config.display_name,
+                    "status": run.status,
+                    "iterations": run.iterations,
+                    "overall_score": run.overall_score,
+                    "quality_score": run.quality_score,
+                    "performance_score": run.performance_score,
+                    "duration_seconds": run.duration_seconds,
+                    "started_at": run.started_at.isoformat(),
+                    "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                    "error_message": run.error_message
+                })
+            
+            return history
+            
+    except Exception as e:
+        print(f"❌ Ошибка получения истории бенчмарков: {e}")
+        return []
+
+
+@app.get("/api/v1/benchmark/{run_id}")
+async def get_benchmark_details(run_id: int) -> dict[str, object]:
+    """Получает детальную информацию о запуске бенчмарка."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(BenchmarkRun, ModelConfiguration)
+                .join(ModelConfiguration)
+                .where(BenchmarkRun.id == run_id)
+            )
+            run_data = result.first()
+            
+            if not run_data:
+                raise HTTPException(status_code=404, detail="Запуск бенчмарка не найден")
+            
+            run, model_config = run_data
+            
+            return {
+                "id": run.id,
+                "name": run.name,
+                "description": run.description,
+                "benchmark_type": run.benchmark_type,
+                "model_config": {
+                    "id": model_config.id,
+                    "name": model_config.model_name,
+                    "display_name": model_config.display_name,
+                    "model_type": model_config.model_type,
+                    "context_size": model_config.context_size,
+                    "max_tokens": model_config.max_tokens
+                },
+                "test_cases_config": run.test_cases_config,
+                "results": run.results,
+                "metrics": run.metrics,
+                "status": run.status,
+                "iterations": run.iterations,
+                "overall_score": run.overall_score,
+                "quality_score": run.quality_score,
+                "performance_score": run.performance_score,
+                "efficiency_score": run.efficiency_score,
+                "duration_seconds": run.duration_seconds,
+                "started_at": run.started_at.isoformat(),
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                "error_message": run.error_message
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка получения деталей бенчмарка: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/benchmark/compare")
+async def compare_benchmark_runs(run_ids: List[int]) -> dict[str, object]:
+    """Сравнивает результаты нескольких запусков бенчмарков."""
+    try:
+        if len(run_ids) < 2:
+            raise HTTPException(status_code=400, detail="Нужно минимум 2 запуска для сравнения")
+        
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(BenchmarkRun, ModelConfiguration)
+                .join(ModelConfiguration)
+                .where(BenchmarkRun.id.in_(run_ids))
+            )
+            runs_data = result.all()
+            
+            if len(runs_data) != len(run_ids):
+                raise HTTPException(status_code=404, detail="Некоторые запуски не найдены")
+            
+            comparison_data = []
+            for run, model_config in runs_data:
+                comparison_data.append({
+                    "run_id": run.id,
+                    "model_name": model_config.model_name,
+                    "overall_score": run.overall_score or 0,
+                    "quality_score": run.quality_score or 0,
+                    "performance_score": run.performance_score or 0,
+                    "duration_seconds": run.duration_seconds or 0,
+                    "results": run.results
+                })
+            
+            # Находим лучший результат по каждой метрике
+            best_overall = max(comparison_data, key=lambda x: x["overall_score"])
+            best_quality = max(comparison_data, key=lambda x: x["quality_score"])
+            best_performance = max(comparison_data, key=lambda x: x["performance_score"])
+            fastest = min(comparison_data, key=lambda x: x["duration_seconds"])
+            
+            return {
+                "comparison_data": comparison_data,
+                "winners": {
+                    "best_overall": {
+                        "model": best_overall["model_name"],
+                        "score": best_overall["overall_score"]
+                    },
+                    "best_quality": {
+                        "model": best_quality["model_name"],
+                        "score": best_quality["quality_score"]
+                    },
+                    "best_performance": {
+                        "model": best_performance["model_name"],
+                        "score": best_performance["performance_score"]
+                    },
+                    "fastest": {
+                        "model": fastest["model_name"],
+                        "duration": fastest["duration_seconds"]
+                    }
+                },
+                "analysis": {
+                    "total_runs": len(comparison_data),
+                    "avg_overall_score": sum(x["overall_score"] for x in comparison_data) / len(comparison_data),
+                    "avg_quality_score": sum(x["quality_score"] for x in comparison_data) / len(comparison_data),
+                    "avg_performance_score": sum(x["performance_score"] for x in comparison_data) / len(comparison_data)
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка сравнения бенчмарков: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

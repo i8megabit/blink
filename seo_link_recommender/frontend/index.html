@@ -896,6 +896,15 @@
       const [aiThoughts, setAiThoughts] = React.useState([]);
       const [currentThought, setCurrentThought] = React.useState(null);
       const [isThinking, setIsThinking] = React.useState(false);
+      
+      // Состояния для бенчмарков
+      const [availableModels, setAvailableModels] = React.useState([]);
+      const [benchmarkHistory, setBenchmarkHistory] = React.useState([]);
+      const [selectedModels, setSelectedModels] = React.useState([]);
+      const [benchmarkResults, setBenchmarkResults] = React.useState(null);
+      const [isBenchmarkRunning, setIsBenchmarkRunning] = React.useState(false);
+      const [benchmarkProgress, setBenchmarkProgress] = React.useState(null);
+      const [modelConfigurations, setModelConfigurations] = React.useState([]);
 
       React.useEffect(() => { 
         console.log('🚀 SEO Link Recommender загружен');
@@ -910,6 +919,8 @@
         
         loadDomains();
         loadAnalysisHistory();
+        loadAvailableModels();
+        loadBenchmarkHistory();
         connectWebSocket(newClientId);
         
         // Проверяем статус Ollama при загрузке
@@ -1086,6 +1097,35 @@
             setIsAnalyzing(false);
             break;
             
+          case 'benchmark_started':
+            addLog('info', '🚀 Бенчмарк запущен', 
+              `Модели: ${data.models.join(', ')}, Тип: ${data.benchmark_type}`);
+            addNotification('info', 'Бенчмарк начат', `Тестирование ${data.models.length} моделей`);
+            setIsBenchmarkRunning(true);
+            break;
+            
+          case 'benchmark_progress':
+            setBenchmarkProgress({
+              current_step: data.current_step,
+              total_steps: data.total_steps,
+              current_model: data.current_model,
+              details: data.details
+            });
+            addLog('info', `🧪 Тестирование ${data.current_model}`, data.details);
+            break;
+            
+          case 'benchmark_completed':
+            setBenchmarkResults(data.results);
+            setIsBenchmarkRunning(false);
+            setBenchmarkProgress(null);
+            addLog('success', '✅ Бенчмарк завершен!', 
+              `Протестировано ${Object.keys(data.results).length} моделей`);
+            addNotification('success', 'Бенчмарк завершен!', 
+              `Результаты для ${Object.keys(data.results).length} моделей готовы`);
+            // Обновляем историю
+            loadBenchmarkHistory();
+            break;
+            
           case 'complete':
             if (data.delta_stats) {
               // Завершение индексации
@@ -1159,6 +1199,116 @@
           addNotification('error', 'Ошибка загрузки', 'Не удалось загрузить историю анализов');
         }
       }
+      
+      // ========================================
+      // 🚀 BENCHMARK FUNCTIONS
+      // ========================================
+      
+      async function loadAvailableModels() {
+        try {
+          const resp = await fetch('http://localhost:8000/api/v1/models/available');
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          
+          const data = await resp.json();
+          if (data.status === 'success') {
+            setAvailableModels(data.models);
+            console.log('🤖 Доступные модели загружены:', data.models.length);
+            addNotification('info', 'Модели обновлены', `Найдено ${data.models.length} моделей`);
+          } else {
+            throw new Error(data.error || 'Неизвестная ошибка');
+          }
+        } catch (err) {
+          console.error('❌ Ошибка загрузки моделей:', err);
+          setError(`Ошибка загрузки моделей: ${err.message}`);
+          addNotification('error', 'Ошибка загрузки', 'Не удалось загрузить доступные модели');
+          setAvailableModels([]);
+        }
+      }
+      
+      async function loadBenchmarkHistory() {
+        try {
+          const resp = await fetch('http://localhost:8000/api/v1/benchmark/history');
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          
+          const data = await resp.json();
+          setBenchmarkHistory(data);
+          console.log('📊 История бенчмарков загружена:', data.length);
+        } catch (err) {
+          console.error('❌ Ошибка загрузки истории бенчмарков:', err);
+          setError(`Ошибка загрузки истории бенчмарков: ${err.message}`);
+          addNotification('error', 'Ошибка загрузки', 'Не удалось загрузить историю бенчмарков');
+          setBenchmarkHistory([]);
+        }
+      }
+      
+      async function startBenchmark() {
+        if (selectedModels.length === 0) {
+          addNotification('warning', 'Выберите модели', 'Для запуска бенчмарка нужно выбрать хотя бы одну модель');
+          return;
+        }
+        
+        if (!ollamaStatus.ready_for_work) {
+          addNotification('error', 'Ollama недоступна', 'Для бенчмарка нужна работающая Ollama');
+          return;
+        }
+        
+        try {
+          setIsBenchmarkRunning(true);
+          setBenchmarkProgress({
+            current_step: 0,
+            total_steps: selectedModels.length,
+            current_model: 'Подготовка...',
+            details: 'Инициализация бенчмарка...'
+          });
+          
+          addNotification('info', 'Бенчмарк запущен', `Тестирование ${selectedModels.length} моделей`);
+          
+          const requestBody = {
+            name: `Бенчмарк ${new Date().toLocaleString('ru-RU')}`,
+            description: `Автоматический бенчмарк для моделей: ${selectedModels.join(', ')}`,
+            benchmark_type: 'seo_advanced',
+            models: selectedModels,
+            iterations: 3,
+            client_id: clientId
+          };
+          
+          const resp = await fetch('http://localhost:8000/api/v1/benchmark/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+          
+          if (!resp.ok) {
+            const errorData = await resp.json();
+            throw new Error(errorData.detail || `HTTP ${resp.status}`);
+          }
+          
+          const result = await resp.json();
+          
+          if (result.status === 'success') {
+            setBenchmarkResults(result.results);
+            addNotification('success', 'Бенчмарк завершен!', `Протестировано ${selectedModels.length} моделей`);
+            
+            // Обновляем историю
+            await loadBenchmarkHistory();
+          } else {
+            throw new Error(result.message || 'Неизвестная ошибка');
+          }
+          
+        } catch (err) {
+          console.error('❌ Ошибка запуска бенчмарка:', err);
+          addNotification('error', 'Ошибка бенчмарка', err.message);
+        } finally {
+          setIsBenchmarkRunning(false);
+          setBenchmarkProgress(null);
+        }
+      }
+      
+             function stopBenchmark() {
+         setIsBenchmarkRunning(false);
+         setBenchmarkProgress(null);
+         addNotification('warning', 'Бенчмарк остановлен', 'Тестирование прервано пользователем');
+       }
       
       async function checkOllamaStatus() {
         if (isCheckingOllama) return;
@@ -1563,6 +1713,16 @@
                   <i data-feather="bar-chart" className="icon-apple"></i>
                   <span>История анализов</span>
                   <span className="sidebar-badge">{analysisHistory.length}</span>
+                </button>
+              </li>
+              <li className="sidebar-menu-item">
+                <button 
+                  className={`sidebar-menu-link ${currentView === 'benchmark' ? 'active' : ''}`}
+                  onClick={() => setCurrentView('benchmark')}
+                >
+                  <i data-feather="zap" className="icon-apple"></i>
+                  <span>Бенчмарки</span>
+                  <span className="sidebar-badge">🚀</span>
                 </button>
               </li>
               <li className="sidebar-menu-item">
@@ -2131,6 +2291,321 @@
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+              
+              {currentView === 'benchmark' && (
+                <div>
+                  <div className="text-center mb-5">
+                    <h2 style={{fontSize: '2.5rem', fontWeight: '600', marginBottom: '0.5rem', color: '#000000'}}>
+                      <i data-feather="zap" className="icon-apple" style={{marginRight: '12px'}}></i>
+                      🚀 Бенчмарк Система
+                    </h2>
+                    <p style={{color: '#000000', fontSize: '1.1rem'}}>
+                      Тестирование производительности и качества LLM моделей
+                    </p>
+                  </div>
+                  
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '32px'}}>
+                    {/* Статистика общая */}
+                    <div className="card-apple" style={{background: 'linear-gradient(135deg, #007AFF 0%, #5AC8FA 100%)', color: 'white'}}>
+                      <div style={{padding: '24px', textAlign: 'center'}}>
+                        <i data-feather="activity" style={{width: '48px', height: '48px', marginBottom: '16px'}}></i>
+                        <h3 style={{fontSize: '2rem', fontWeight: '700', marginBottom: '8px'}}>
+                          {benchmarkHistory.length}
+                        </h3>
+                        <p style={{margin: '0', opacity: '0.9'}}>Запусков бенчмарков</p>
+                      </div>
+                    </div>
+                    
+                    <div className="card-apple" style={{background: 'linear-gradient(135deg, #34C759 0%, #30D158 100%)', color: 'white'}}>
+                      <div style={{padding: '24px', textAlign: 'center'}}>
+                        <i data-feather="cpu" style={{width: '48px', height: '48px', marginBottom: '16px'}}></i>
+                        <h3 style={{fontSize: '2rem', fontWeight: '700', marginBottom: '8px'}}>
+                          {availableModels.length}
+                        </h3>
+                        <p style={{margin: '0', opacity: '0.9'}}>Доступно моделей</p>
+                      </div>
+                    </div>
+                    
+                    <div className="card-apple" style={{background: 'linear-gradient(135deg, #FF9500 0%, #FFAD33 100%)', color: 'white'}}>
+                      <div style={{padding: '24px', textAlign: 'center'}}>
+                        <i data-feather="trending-up" style={{width: '48px', height: '48px', marginBottom: '16px'}}></i>
+                        <h3 style={{fontSize: '2rem', fontWeight: '700', marginBottom: '8px'}}>
+                          {benchmarkResults ? benchmarkResults.best_model?.overall_score?.toFixed(1) : '--'}
+                        </h3>
+                        <p style={{margin: '0', opacity: '0.9'}}>Лучший результат</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Визуализация результатов */}
+                  {benchmarkResults && (
+                    <div className="step-card completed mb-5">
+                      <h3 style={{fontSize: '1.8rem', fontWeight: '600', marginBottom: '24px', textAlign: 'center'}}>
+                        📊 Результаты последнего бенчмарка
+                      </h3>
+                      
+                      <div style={{textAlign: 'center', marginBottom: '32px'}}>
+                        <img 
+                          src="benchmark_charts.svg" 
+                          alt="Результаты бенчмарка" 
+                          style={{
+                            maxWidth: '100%', 
+                            height: 'auto',
+                            borderRadius: 'var(--border-radius-large)',
+                            boxShadow: 'var(--shadow-medium)'
+                          }}
+                        />
+                      </div>
+                      
+                      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px'}}>
+                        {Object.entries(benchmarkResults.models || {}).map(([modelName, metrics]) => (
+                          <div key={modelName} className="card-apple" style={{padding: '16px'}}>
+                            <h4 style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '12px', color: '#000000'}}>
+                              {modelName}
+                            </h4>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                              <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                <span style={{color: '#666'}}>Общий балл:</span>
+                                <span style={{fontWeight: '600', color: '#000000'}}>
+                                  {metrics.overall_score?.toFixed(1) || '--'}
+                                </span>
+                              </div>
+                              <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                <span style={{color: '#666'}}>Скорость:</span>
+                                <span style={{fontWeight: '600', color: '#000000'}}>
+                                  {metrics.tokens_per_second?.toFixed(1) || '--'} т/с
+                                </span>
+                              </div>
+                              <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                <span style={{color: '#666'}}>Качество:</span>
+                                <span style={{fontWeight: '600', color: '#000000'}}>
+                                  {metrics.language_quality_score?.toFixed(1) || '--'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Панель запуска бенчмарка */}
+                  <div className="step-card active mb-5">
+                    <h3 style={{fontSize: '1.5rem', fontWeight: '600', marginBottom: '20px'}}>
+                      <i data-feather="play-circle" className="icon-apple" style={{marginRight: '8px', color: 'var(--apple-blue)'}}></i>
+                      Запуск нового бенчмарка
+                    </h3>
+                    
+                    <div style={{marginBottom: '24px'}}>
+                      <label style={{display: 'block', fontSize: '1.1rem', fontWeight: '500', marginBottom: '8px', color: '#000000'}}>
+                        Выберите модели для тестирования:
+                      </label>
+                      <div style={{
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+                        gap: '12px',
+                        padding: '16px',
+                        background: '#f8f9fa',
+                        borderRadius: 'var(--border-radius)',
+                        border: '2px solid #e5e5ea'
+                      }}>
+                        {availableModels.map(model => (
+                          <label key={model.name} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            background: selectedModels.includes(model.name) ? 'var(--apple-blue)' : 'white',
+                            color: selectedModels.includes(model.name) ? 'white' : 'var(--apple-gray-dark)',
+                            borderRadius: 'var(--border-radius)',
+                            border: '1px solid #e5e5ea',
+                            transition: 'var(--transition)'
+                          }}>
+                            <input 
+                              type="checkbox"
+                              checked={selectedModels.includes(model.name)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedModels([...selectedModels, model.name]);
+                                } else {
+                                  setSelectedModels(selectedModels.filter(m => m !== model.name));
+                                }
+                              }}
+                              style={{display: 'none'}}
+                            />
+                            <i data-feather={selectedModels.includes(model.name) ? 'check-square' : 'square'} 
+                               style={{width: '16px', height: '16px'}}></i>
+                            <span style={{fontSize: '0.9rem', fontWeight: '500'}}>
+                              {model.name}
+                            </span>
+                            <span style={{
+                              fontSize: '0.75rem', 
+                              opacity: '0.7',
+                              marginLeft: 'auto'
+                            }}>
+                              {model.size_gb}GB
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      
+                      {availableModels.length === 0 && (
+                        <div style={{
+                          textAlign: 'center',
+                          padding: '32px',
+                          color: '#666',
+                          fontStyle: 'italic'
+                        }}>
+                          <i data-feather="download-cloud" style={{width: '48px', height: '48px', marginBottom: '16px'}}></i>
+                          <p>Нет доступных моделей. Проверьте статус Ollama.</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {isBenchmarkRunning && benchmarkProgress && (
+                      <div style={{marginBottom: '24px'}}>
+                        <div style={{marginBottom: '12px'}}>
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span style={{fontWeight: '500', color: '#000000'}}>
+                              {benchmarkProgress.current_model || 'Подготовка...'}
+                            </span>
+                            <span style={{fontSize: '0.9rem', color: '#666'}}>
+                              {benchmarkProgress.current_step}/{benchmarkProgress.total_steps}
+                            </span>
+                          </div>
+                          <div style={{
+                            width: '100%',
+                            height: '8px',
+                            background: '#e5e5ea',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            marginTop: '8px'
+                          }}>
+                            <div style={{
+                              width: `${(benchmarkProgress.current_step / benchmarkProgress.total_steps) * 100}%`,
+                              height: '100%',
+                              background: 'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))',
+                              transition: 'width 0.3s ease'
+                            }}></div>
+                          </div>
+                        </div>
+                        <p style={{fontSize: '0.9rem', color: '#666', margin: '0'}}>
+                          {benchmarkProgress.details || 'Выполнение тестов...'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="text-center">
+                      <button 
+                        className={`btn-apple ${isBenchmarkRunning ? 'btn-secondary' : 'btn-primary'} btn-large`}
+                        onClick={isBenchmarkRunning ? stopBenchmark : startBenchmark}
+                        disabled={!isBenchmarkRunning && (selectedModels.length === 0 || !ollamaStatus.ready_for_work)}
+                        style={{marginRight: '12px'}}
+                      >
+                        <i data-feather={isBenchmarkRunning ? 'stop-circle' : 'play-circle'} className="icon-apple"></i>
+                        {isBenchmarkRunning ? 'Остановить бенчмарк' : `Запустить бенчмарк (${selectedModels.length} моделей)`}
+                      </button>
+                      
+                      <button 
+                        className="btn-apple btn-secondary"
+                        onClick={loadBenchmarkHistory}
+                        disabled={isBenchmarkRunning}
+                      >
+                        <i data-feather="refresh-cw" className="icon-apple"></i>
+                        Обновить данные
+                      </button>
+                    </div>
+                    
+                    <div className="text-center mt-3">
+                      <span className={`tag-apple ${ollamaStatus.ready_for_work ? 'tag-success' : 'tag-danger'}`}>
+                        <i data-feather={ollamaStatus.ready_for_work ? 'check-circle' : 'alert-circle'} className="icon-apple"></i>
+                        Ollama: {ollamaStatus.ready_for_work ? 'Готова к тестированию' : 'Недоступна'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* История бенчмарков */}
+                  <div className="step-card">
+                    <h3 style={{fontSize: '1.5rem', fontWeight: '600', marginBottom: '20px'}}>
+                      <i data-feather="history" className="icon-apple" style={{marginRight: '8px', color: 'var(--apple-gray)'}}></i>
+                      История бенчмарков
+                    </h3>
+                    
+                    {benchmarkHistory.length === 0 ? (
+                      <div className="notification-apple" style={{maxWidth: '600px', margin: '0 auto'}}>
+                        <div className="text-center">
+                          <div style={{fontSize: '3rem', marginBottom: '1rem'}}>📈</div>
+                          <div className="font-weight-semibold" style={{color: '#000000'}}>Нет истории бенчмарков</div>
+                          <div className="mt-1" style={{color: '#000000'}}>Запустите первый бенчмарк для начала!</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{display: 'grid', gap: '16px'}}>
+                        {benchmarkHistory.slice(0, 10).map(run => (
+                          <div key={run.id} className="card-apple">
+                                                         <div style={{padding: '20px'}}>
+                              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px'}}>
+                                <div>
+                                  <h4 style={{fontSize: '1.2rem', fontWeight: '600', marginBottom: '4px', color: '#000000'}}>
+                                    {run.name}
+                                  </h4>
+                                  <p style={{color: '#666', fontSize: '0.9rem', margin: '0'}}>
+                                    {run.model_display_name} • {run.benchmark_type}
+                                  </p>
+                                </div>
+                                <span className={`tag-apple ${
+                                  run.status === 'completed' ? 'tag-success' :
+                                  run.status === 'failed' ? 'tag-danger' :
+                                  run.status === 'running' ? 'tag-warning' : 'tag-secondary'
+                                }`}>
+                                  {run.status === 'completed' ? '✅ Завершено' :
+                                   run.status === 'failed' ? '❌ Ошибка' :
+                                   run.status === 'running' ? '⏳ Выполняется' : '⏸️ Ожидание'}
+                                </span>
+                              </div>
+                              
+                              {run.status === 'completed' && (
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '12px'}}>
+                                  <div style={{textAlign: 'center'}}>
+                                    <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-blue)'}}>
+                                      {run.overall_score?.toFixed(1) || '--'}
+                                    </div>
+                                    <div style={{fontSize: '0.8rem', color: '#666'}}>Общий балл</div>
+                                  </div>
+                                  <div style={{textAlign: 'center'}}>
+                                    <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-green)'}}>
+                                      {run.performance_score?.toFixed(1) || '--'}
+                                    </div>
+                                    <div style={{fontSize: '0.8rem', color: '#666'}}>Скорость</div>
+                                  </div>
+                                  <div style={{textAlign: 'center'}}>
+                                    <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-orange)'}}>
+                                      {run.quality_score?.toFixed(1) || '--'}
+                                    </div>
+                                    <div style={{fontSize: '0.8rem', color: '#666'}}>Качество</div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', color: '#666'}}>
+                                <span>
+                                  {new Date(run.started_at).toLocaleString('ru-RU')}
+                                </span>
+                                {run.duration_seconds && (
+                                  <span>
+                                    Длительность: {Math.round(run.duration_seconds)}с
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
