@@ -2,7 +2,7 @@
 
 > Мировая платформа для SEO-инженеров с искусственным интеллектом и современными технологиями
 
-![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.1.1-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-green.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)
@@ -10,7 +10,7 @@
 ![AI](https://img.shields.io/badge/AI-LLM%20+%20RAG-orange.svg)
 ![Tests](https://img.shields.io/badge/tests-vitest%20+%20playwright-brightgreen.svg)
 
-## 🚀 Что нового в reLink 4.0.0
+## 🚀 Что нового в reLink 4.1.1
 
 ### 🔥 Мажорный рефакторинг
 - **Полная переработка архитектуры** - удалены все legacy-компоненты

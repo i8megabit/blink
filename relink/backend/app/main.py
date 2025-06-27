@@ -397,17 +397,17 @@ async def generate_ai_thoughts_for_domain(domain: str, posts: List[dict], client
 @app.get("/")
 async def root():
     """Корневой endpoint."""
-    return {"message": "reLink SEO Platform v4.1.1.019 запущен!"}
+    return {"message": "reLink SEO Platform v4.1.1.022 запущен!"}
 
 @app.get("/health")
 async def health_check():
     """Проверка здоровья сервиса."""
-    return {"status": "healthy", "version": "4.1.1.019"}
+    return {"status": "healthy", "version": "4.1.1.022"}
 
 @app.get("/api/v1/health")
 async def api_health():
     """API health check."""
-    return {"status": "healthy", "version": "4.1.1.019"}
+    return {"status": "healthy", "version": "4.1.1.022"}
 
 @app.get("/api/v1/version")
 async def get_version():

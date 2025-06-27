@@ -190,9 +190,9 @@ def main():
   
 Примеры:
   python version_manager.py get
-  python version_manager.py set 4.0.0
+  python version_manager.py set 4.1.1
   python version_manager.py tag "Bug fixes and improvements"
-  python version_manager.py release 4.0.0
+  python version_manager.py release 4.1.1
         """)
         return
     

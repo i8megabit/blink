@@ -62,7 +62,7 @@ describe('App Component', () => {
       ok: true,
       json: async () => ({
         status: 'healthy',
-        version: '4.0.0'
+        version: '4.1.1'
       })
     });
   });
@@ -148,7 +148,7 @@ describe('App Component', () => {
     (global.fetch as any).mockImplementation(() => 
       new Promise(resolve => setTimeout(() => resolve({
         ok: true,
-        json: async () => ({ status: 'healthy', version: '4.0.0' })
+        json: async () => ({ status: 'healthy', version: '4.1.1' })
       }), 100))
     );
     

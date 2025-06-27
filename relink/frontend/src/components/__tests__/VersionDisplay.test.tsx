@@ -50,7 +50,7 @@ describe('VersionDisplay Component', () => {
     (global.fetch as any).mockResolvedValue({
       ok: true,
       json: async () => ({
-        version: '4.0.0',
+        version: '4.1.1',
         buildDate: '2024-01-01',
         commitHash: 'abc1234'
       })
