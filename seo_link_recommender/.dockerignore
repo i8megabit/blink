@@ -39,11 +39,6 @@ htmlcov/
 .coverage
 .nyc_output
 
-# Docker файлы (исключаем из контекста, если не нужны внутри контейнеров)
-Dockerfile*
-.dockerignore
-docker-compose*.yml
-
 # Базы данных и данные
 postgres_data/
 **/*.db
