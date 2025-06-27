@@ -20,7 +20,7 @@ export function useNotifications(): UseNotificationsReturn {
     const newNotification: Notification = {
       ...notification,
       id,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     };
 
     setNotifications(prev => [...prev, newNotification]);

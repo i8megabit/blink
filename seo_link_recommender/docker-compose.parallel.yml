@@ -1,0 +1,273 @@
+# ========================================
+# Docker Compose - Параллельный запуск
+# Обычный + Vite варианты одновременно
+# ========================================
+
+version: '3.8'
+
+services:
+  # ========================================
+  # BACKEND (общий для обоих вариантов)
+  # ========================================
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - OLLAMA_URL=http://ollama:11434/api/generate
+      - OLLAMA_MODEL=qwen2.5:7b-turbo
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - db
+      - ollama
+    networks:
+      - seo-network
+
+  # ========================================
+  # FRONTEND - ОБЫЧНЫЙ ВАРИАНТ (порт 3000)
+  # ========================================
+  frontend-classic:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - seo-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-classic.rule=Host(`localhost`) && PathPrefix(`/classic`)"
+      - "traefik.http.services.frontend-classic.loadbalancer.server.port=80"
+
+  # ========================================
+  # FRONTEND - VITE ВАРИАНТ (порт 3001)
+  # ========================================
+  frontend-vite:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.vite
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    networks:
+      - seo-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-vite.rule=Host(`localhost`) && PathPrefix(`/vite`)"
+      - "traefik.http.services.frontend-vite.loadbalancer.server.port=80"
+
+  # ========================================
+  # DATABASE (общая для обоих вариантов)
+  # ========================================
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: seo_user
+      POSTGRES_PASSWORD: seo_pass
+      POSTGRES_DB: seo_db
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - seo-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seo_user -d seo_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================================
+  # OLLAMA (общая для обоих вариантов)
+  # ========================================
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_models:/root/.ollama
+      - ./scripts:/scripts
+    environment:
+      # 🚀 ОПТИМИЗАЦИЯ ДЛЯ APPLE M4
+      - OLLAMA_KEEP_ALIVE=2h
+      - OLLAMA_REQUEST_TIMEOUT=300s
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_QUEUE=4
+      - OLLAMA_CONCURRENT_REQUESTS=2
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_LOAD_TIMEOUT=120s
+      - OLLAMA_RUNNER_TIMEOUT=300s
+      - OLLAMA_MODELS=/root/.ollama/models
+      - OLLAMA_DEBUG=0
+      
+      # 🎯 ОПТИМИЗАЦИЯ КОНТЕКСТА И БАТЧИНГА
+      - OLLAMA_MAX_TOKENS=4096
+      - OLLAMA_CONTEXT_LENGTH=4096
+      - OLLAMA_BATCH_SIZE=512
+      - OLLAMA_TEMPERATURE=0.7
+      - OLLAMA_TOP_P=0.9
+      - OLLAMA_REPEAT_PENALTY=1.1
+      - OLLAMA_SEED=42
+      
+      # 🔥 МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ ДЛЯ APPLE M4 КОНТЕЙНЕР
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_COMPUTE_UNIT_LIMIT=0
+      - OLLAMA_CPU_OPTIMIZATION=1
+      - OLLAMA_SIMD_ACCELERATION=1
+      - OLLAMA_NEON_OPTIMIZATION=1
+      
+      # ⚡ CPU ТУРБО-РЕЖИМ для Apple Silicon
+      - OLLAMA_THREADS=8
+      - OLLAMA_CPU_AFFINITY=0-7
+      - OLLAMA_PREFER_CPU=true
+      - OLLAMA_ARM64_OPTIMIZED=1
+      
+      # 🧠 ОПТИМИЗАЦИЯ ПАМЯТИ для M4
+      - OLLAMA_LOW_MEM=false
+      - OLLAMA_MEM_FRACTION=0.85
+      - OLLAMA_MMAP_ENABLED=1
+      - OLLAMA_HUGE_PAGES=1
+      
+      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-turbo
+      - OLLAMA_WORKERS=2
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "ollama serve & 
+      sleep 45 && 
+      echo '🚀 Загружаем модели для A/B тестирования...' && 
+      ollama pull qwen2.5:7b && 
+      ollama pull qwen2.5:7b-instruct && 
+      
+      echo '⚡ Создаем ТУРБО модель (базовая)...' && 
+      ollama create qwen2.5:7b-turbo -f /dev/stdin <<EOF
+      FROM qwen2.5:7b
+      # 🔥 ТУРБО параметры для Apple M4 CPU
+      PARAMETER num_ctx 4096
+      PARAMETER num_batch 512
+      PARAMETER num_thread 8
+      PARAMETER num_gpu 0
+      PARAMETER f16_kv true
+      PARAMETER use_mmap true
+      PARAMETER use_mlock true
+      PARAMETER num_predict 2048
+      PARAMETER temperature 0.7
+      PARAMETER top_p 0.9
+      PARAMETER repeat_penalty 1.1
+      PARAMETER seed 42
+      EOF
+      
+      echo '🎯 Создаем INSTRUCT ТУРБО модель...' && 
+      ollama create qwen2.5:7b-instruct-turbo -f /dev/stdin <<EOF
+      FROM qwen2.5:7b-instruct
+      # 🎯 INSTRUCT ТУРБО для SEO задач M4 CPU
+      PARAMETER num_ctx 4096
+      PARAMETER num_batch 512
+      PARAMETER num_thread 8
+      PARAMETER num_gpu 0
+      PARAMETER f16_kv true
+      PARAMETER use_mmap true
+      PARAMETER use_mlock true
+      PARAMETER num_predict 2048
+      PARAMETER temperature 0.6
+      PARAMETER top_p 0.85
+      PARAMETER repeat_penalty 1.05
+      PARAMETER seed 42
+      # Специально для инструкций
+      PARAMETER stop \"<|im_end|>\"
+      PARAMETER stop \"<|endoftext|>\"
+      EOF
+      
+      echo '🏆 Обе модели готовы для бенчмарка!' &&
+      echo '⚡ Предпрогреваем систему...' &&
+      ollama run qwen2.5:7b-turbo 'Система готова для бенчмарка!' &&
+      ollama run qwen2.5:7b-instruct-turbo 'Instruct модель готова!' &&
+      echo '🔥 Apple M4 A/B система активирована!' &&
+      wait"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 45s
+      retries: 5
+      start_period: 600s
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8.0'
+        reservations:
+          memory: 8G
+          cpus: '4.0'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    security_opt:
+      - seccomp:unconfined
+    ipc: host
+    networks:
+      - seo-network
+
+  # ========================================
+  # TRAEFIK - Обратный прокси для маршрутизации
+  # ========================================
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - seo-network
+    depends_on:
+      - frontend-classic
+      - frontend-vite
+      - backend
+
+# ========================================
+# NETWORKS
+# ========================================
+networks:
+  seo-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ========================================
+# VOLUMES
+# ========================================
+volumes:
+  postgres_data:
+    driver: local
+  ollama_models:
+    driver: local

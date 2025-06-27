@@ -12,12 +12,13 @@ import Charts from './components/Charts'
 import Export from './components/Export'
 import { AnalysisHistory } from './components/AnalysisHistory'
 import { Benchmarks } from './components/Benchmarks'
+import { BenchmarkDetails } from './components/BenchmarkDetails'
 import { Settings } from './components/Settings'
 import Insights from './components/Insights'
 import Analytics from './components/Analytics'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useNotifications } from './hooks/useNotifications'
-import { Domain, Recommendation, AnalysisStats, AIThought, OllamaStatus as OllamaStatusType, WebSocketMessage } from './types'
+import { Domain, Recommendation, AnalysisStats, AIThought, OllamaStatus as OllamaStatusType, WebSocketMessage, BenchmarkHistory } from './types'
 
 function App() {
   // Основные состояния
@@ -36,6 +37,7 @@ function App() {
   // Состояния интерфейса
   const [activeTab, setActiveTab] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [selectedBenchmark, setSelectedBenchmark] = useState<BenchmarkHistory | null>(null)
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatusType>({
     ready_for_work: false,
     server_available: false,
@@ -115,7 +117,7 @@ function App() {
           semantic_weight: data.semantic_weight || 0,
           related_concepts: data.related_concepts || [],
           reasoning_chain: data.reasoning_chain || [],
-          timestamp: data.timestamp
+          timestamp: data.timestamp || new Date().toISOString()
         }])
         break
 
@@ -129,7 +131,7 @@ function App() {
           semantic_weight: data.semantic_weight || 0,
           related_concepts: data.related_concepts || [],
           reasoning_chain: data.reasoning_chain || [],
-          timestamp: data.timestamp
+          timestamp: data.timestamp || new Date().toISOString()
         }])
         break
 
@@ -413,7 +415,9 @@ function App() {
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold">Бенчмарки моделей</h2>
-            <Benchmarks />
+            <Benchmarks 
+              onViewBenchmark={setSelectedBenchmark}
+            />
           </div>
         )
 
@@ -422,7 +426,12 @@ function App() {
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold">Экспорт данных</h2>
             <Export 
-              recommendations={recommendations}
+              recommendations={recommendations.map(rec => ({
+                from: rec.source_post?.title || 'Неизвестно',
+                to: rec.target_post?.title || 'Неизвестно',
+                anchor: rec.anchor_text,
+                comment: rec.reasoning
+              }))}
               domain={domain}
               onExport={handleExport}
             />
@@ -572,6 +581,12 @@ function App() {
         aiThoughts={aiThoughts}
         analysisProgress={analysisProgress}
         analysisStep={analysisStep}
+      />
+
+      {/* Benchmark Details Modal */}
+      <BenchmarkDetails
+        benchmark={selectedBenchmark}
+        onClose={() => setSelectedBenchmark(null)}
       />
     </div>
   )

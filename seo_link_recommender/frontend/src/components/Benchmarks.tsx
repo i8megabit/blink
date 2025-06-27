@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BenchmarkHistory } from '../types';
+import { BenchmarkHistory, BenchmarkRequest } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -11,23 +11,24 @@ import {
   AlertCircle,
   Clock,
   Target,
-  Eye
+  Eye,
+  Plus,
+  Loader2
 } from 'lucide-react';
 
 interface BenchmarksProps {
   className?: string;
   onViewBenchmark?: (benchmark: BenchmarkHistory) => void;
-  onRunBenchmark?: () => void;
 }
 
 export function Benchmarks({ 
   className,
-  onViewBenchmark,
-  onRunBenchmark
+  onViewBenchmark
 }: BenchmarksProps) {
   const [benchmarks, setBenchmarks] = useState<BenchmarkHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [runningBenchmark, setRunningBenchmark] = useState(false);
 
   useEffect(() => {
     loadBenchmarks();
@@ -48,6 +49,49 @@ export function Benchmarks({
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runBenchmark = async (benchmarkType: string) => {
+    try {
+      setRunningBenchmark(true);
+      const request: BenchmarkRequest = {
+        name: `${benchmarkType} Benchmark`,
+        description: `Автоматический запуск ${benchmarkType} бенчмарка`,
+        benchmark_type: benchmarkType,
+        models: ['qwen2.5:7b-turbo', 'qwen2.5:7b-instruct-turbo'],
+        iterations: 3,
+        client_id: `benchmark_${Date.now()}`
+      };
+
+      const response = await fetch('/api/v1/benchmarks/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Бенчмарк запущен:', result);
+        // Перезагружаем список бенчмарков
+        setTimeout(loadBenchmarks, 2000);
+      } else {
+        throw new Error('Не удалось запустить бенчмарк');
+      }
+    } catch (err) {
+      console.error('Ошибка запуска бенчмарка:', err);
+      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+    } finally {
+      setRunningBenchmark(false);
+    }
+  };
+
+  const runAllBenchmarks = async () => {
+    const benchmarkTypes = ['seo_basic', 'seo_advanced', 'performance'];
+    for (const type of benchmarkTypes) {
+      await runBenchmark(type);
     }
   };
 
@@ -120,6 +164,33 @@ export function Benchmarks({
     return 'Требует улучшения';
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  const getBenchmarkTypeName = (type: string) => {
+    switch (type) {
+      case 'seo_basic':
+        return 'Базовый SEO бенчмарк';
+      case 'seo_advanced':
+        return 'Продвинутый SEO бенчмарк';
+      case 'performance':
+        return 'Бенчмарк производительности';
+      default:
+        return type;
+    }
+  };
+
   if (loading) {
     return (
       <div className={cn("space-y-4", className)}>
@@ -177,12 +248,47 @@ export function Benchmarks({
               <BarChart3 className="w-5 h-5" />
               Бенчмарки моделей ({benchmarks.length})
             </CardTitle>
-            {onRunBenchmark && (
-              <Button onClick={onRunBenchmark} className="flex items-center gap-2">
-                <Play className="w-4 h-4" />
-                Запустить бенчмарк
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={runAllBenchmarks} 
+                disabled={runningBenchmark}
+                className="flex items-center gap-2"
+              >
+                {runningBenchmark ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+                {runningBenchmark ? 'Запуск...' : 'Запустить все'}
               </Button>
-            )}
+              <Button 
+                onClick={() => runBenchmark('seo_basic')} 
+                disabled={runningBenchmark}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="w-4 h-4" />
+                SEO Basic
+              </Button>
+              <Button 
+                onClick={() => runBenchmark('seo_advanced')} 
+                disabled={runningBenchmark}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="w-4 h-4" />
+                SEO Advanced
+              </Button>
+              <Button 
+                onClick={() => runBenchmark('performance')} 
+                disabled={runningBenchmark}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="w-4 h-4" />
+                Performance
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -190,9 +296,19 @@ export function Benchmarks({
             <div className="text-center py-8">
               <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500 mb-2">Бенчмарки не найдены</p>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-400 mb-4">
                 Запустите первый бенчмарк для оценки производительности моделей
               </p>
+              <div className="flex items-center justify-center gap-2">
+                <Button onClick={() => runBenchmark('seo_basic')} size="sm">
+                  <Play className="w-4 h-4 mr-2" />
+                  Запустить SEO Basic
+                </Button>
+                <Button onClick={() => runBenchmark('seo_advanced')} size="sm" variant="outline">
+                  <Play className="w-4 h-4 mr-2" />
+                  Запустить SEO Advanced
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -207,7 +323,7 @@ export function Benchmarks({
                         {getStatusIcon(benchmark.status)}
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
-                            {benchmark.name}
+                            {getBenchmarkTypeName(benchmark.benchmark_type)}
                           </span>
                           {getStatusBadge(benchmark.status)}
                         </div>
@@ -253,16 +369,8 @@ export function Benchmarks({
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           <span>
-                            {new Date(benchmark.created_at).toLocaleDateString('ru-RU', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
+                            {formatDate(benchmark.created_at)}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Target className="w-4 h-4" />
-                          <span>{benchmark.benchmark_type}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Target className="w-4 h-4" />

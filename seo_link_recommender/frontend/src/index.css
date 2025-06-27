@@ -4,7 +4,7 @@
 
 /* AIUI Design System - SEO Link Recommender */
 :root {
-  /* Основные цвета */
+  /* Основные цвета - СВЕТЛАЯ ТЕМА */
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -101,6 +101,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
 }
 
 h1 { font-size: 2.25rem; }
@@ -206,22 +207,26 @@ h6 { font-size: 1rem; }
 }
 
 .card-header {
-  padding: 1.5rem 1.5rem 0;
+  padding: 1rem;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .card-title {
   font-size: 1.125rem;
   font-weight: 600;
-  line-height: 1.25;
   color: hsl(var(--card-foreground));
+  margin: 0;
 }
 
 .card-content {
-  padding: 1.5rem;
+  padding: 1rem;
+  color: hsl(var(--card-foreground));
 }
 
 .card-footer {
-  padding: 0 1.5rem 1.5rem;
+  padding: 1rem;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
 }
 
 /* 📝 ФОРМЫ */
@@ -231,27 +236,27 @@ h6 { font-size: 1rem; }
 
 .form-label {
   display: block;
-  font-size: 0.875rem;
   font-weight: 500;
   color: hsl(var(--foreground));
   margin-bottom: 0.5rem;
+  font-size: 0.875rem;
 }
 
 .form-input {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-size: 0.875rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.2s;
 }
 
 .form-input:focus {
   outline: none;
   border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.1);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
 }
 
 .form-input::placeholder {
@@ -288,9 +293,9 @@ h6 { font-size: 1rem; }
 }
 
 .status-loading {
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
+  background: hsl(var(--info) / 0.1);
+  color: hsl(var(--info));
+  border: 1px solid hsl(var(--info) / 0.2);
 }
 
 /* 📈 ПРОГРЕСС */
@@ -299,10 +304,11 @@ h6 { font-size: 1rem; }
   background: hsl(var(--muted));
   border-radius: 9999px;
   overflow: hidden;
+  height: 0.5rem;
 }
 
 .progress-bar {
-  height: 0.5rem;
+  height: 100%;
   background: var(--gradient-primary);
   transition: width 0.3s ease;
 }
@@ -325,6 +331,9 @@ h6 { font-size: 1rem; }
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
   animation: slideIn 0.3s ease-out;
 }
 
@@ -332,12 +341,13 @@ h6 { font-size: 1rem; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  width: 100%;
 }
 
 .notification-title {
   font-weight: 600;
-  font-size: 0.875rem;
+  color: hsl(var(--card-foreground));
+  margin: 0;
 }
 
 .notification-close {
@@ -351,17 +361,18 @@ h6 { font-size: 1rem; }
 }
 
 .notification-close:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .notification-message {
-  font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
-  line-height: 1.5;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin-top: 0.25rem;
 }
 
-/* 🪟 МОДАЛЬНЫЕ ОКНА */
+/* 🎭 МОДАЛЬНЫЕ ОКНА */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -370,11 +381,10 @@ h6 { font-size: 1rem; }
   bottom: 0;
   background: hsl(var(--background) / 0.8);
   backdrop-filter: blur(4px);
-  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  z-index: 1000;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -383,23 +393,25 @@ h6 { font-size: 1rem; }
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   box-shadow: var(--shadow-xl);
-  max-width: 32rem;
-  width: 100%;
+  max-width: 90vw;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
   animation: modalSlideIn 0.3s ease-out;
 }
 
 .modal-header {
+  padding: 1rem;
+  border-bottom: 1px solid hsl(var(--border));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.5rem 1.5rem 0;
 }
 
 .modal-title {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
+  color: hsl(var(--card-foreground));
+  margin: 0;
 }
 
 .modal-close {
@@ -413,26 +425,27 @@ h6 { font-size: 1rem; }
 }
 
 .modal-close:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 1rem;
+  color: hsl(var(--card-foreground));
 }
 
 .modal-footer {
+  padding: 1rem;
+  border-top: 1px solid hsl(var(--border));
   display: flex;
-  align-items: center;
+  gap: 0.5rem;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0 1.5rem 1.5rem;
 }
 
 /* 🏗️ МАКЕТ */
 .app-container {
-  display: flex;
   min-height: 100vh;
+  display: flex;
   background: hsl(var(--background));
 }
 
@@ -442,11 +455,11 @@ h6 { font-size: 1rem; }
   border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease;
 }
 
 .sidebar-header {
-  padding: 1.5rem;
+  padding: 1rem;
   border-bottom: 1px solid hsl(var(--border));
 }
 
@@ -460,22 +473,23 @@ h6 { font-size: 1rem; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  overflow: hidden;
 }
 
 .content-header {
-  padding: 1.5rem 2rem 0;
+  padding: 1rem;
   border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  background: hsl(var(--card));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .content-body {
   flex: 1;
-  padding: 2rem;
+  padding: 1rem;
   overflow-y: auto;
+  background: hsl(var(--background));
 }
 
 /* 🎨 ДОПОЛНИТЕЛЬНЫЕ СТИЛИ */
@@ -490,12 +504,13 @@ h6 { font-size: 1rem; }
 .badge {
   display: inline-flex;
   align-items: center;
+  padding: 0.25rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid transparent;
-  transition: all 0.2s;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
 }
 
 .badge-primary {
@@ -507,23 +522,23 @@ h6 { font-size: 1rem; }
 /* 🎬 АНИМАЦИИ */
 @keyframes slideIn {
   from {
-    opacity: 0;
     transform: translateX(100%);
+    opacity: 0;
   }
   to {
-    opacity: 1;
     transform: translateX(0);
+    opacity: 1;
   }
 }
 
 @keyframes modalSlideIn {
   from {
-    opacity: 0;
     transform: scale(0.95) translateY(-10px);
+    opacity: 0;
   }
   to {
-    opacity: 1;
     transform: scale(1) translateY(0);
+    opacity: 1;
   }
 }
 
@@ -540,30 +555,30 @@ h6 { font-size: 1rem; }
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
-    left: -100%;
     top: 0;
-    height: 100vh;
-    z-index: 50;
-  }
-
-  .sidebar.open {
     left: 0;
+    height: 100vh;
+    z-index: 100;
+    transform: translateX(-100%);
   }
-
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
   .main-content {
     margin-left: 0;
   }
-
+  
   .modal {
     margin: 1rem;
-    max-width: none;
+    max-width: calc(100vw - 2rem);
   }
 }
 
 /* 🌙 АВТОМАТИЧЕСКАЯ ТЕМА */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Автоматическое переключение на темную тему */
   }
 } 

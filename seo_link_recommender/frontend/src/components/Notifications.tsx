@@ -32,22 +32,21 @@ export function Notifications({ notifications, onRemove, onClear }: Notification
   }
 
   const handleNotificationClick = (notification: Notification) => {
-    if (notification.details) {
-      setExpandedNotification(
-        expandedNotification === notification.id ? null : notification.id
-      );
-    }
+    setExpandedNotification(
+      expandedNotification === notification.id ? null : notification.id
+    );
   };
 
-  const formatTime = (timestamp: Date) => {
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
     const now = new Date();
-    const diff = now.getTime() - timestamp.getTime();
+    const diff = now.getTime() - date.getTime();
     const seconds = Math.floor(diff / 1000);
     
     if (seconds < 60) return 'только что';
     if (seconds < 3600) return `${Math.floor(seconds / 60)}м назад`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}ч назад`;
-    return timestamp.toLocaleDateString('ru-RU');
+    return date.toLocaleDateString('ru-RU');
   };
 
   return (
@@ -98,14 +97,6 @@ export function Notifications({ notifications, onRemove, onClear }: Notification
                 <p className="text-sm mt-1 leading-relaxed">
                   {notification.message}
                 </p>
-                
-                {notification.details && expandedNotification === notification.id && (
-                  <div className="mt-3 p-3 bg-white/50 dark:bg-black/20 rounded-md border">
-                    <p className="text-sm whitespace-pre-wrap">
-                      {notification.details}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
             
@@ -121,12 +112,6 @@ export function Notifications({ notifications, onRemove, onClear }: Notification
               ✕
             </Button>
           </div>
-          
-          {notification.details && (
-            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              {expandedNotification === notification.id ? 'Скрыть детали' : 'Показать детали'}
-            </div>
-          )}
         </Card>
       ))}
     </div>

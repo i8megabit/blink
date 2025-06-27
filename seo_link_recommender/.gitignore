@@ -115,7 +115,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-#package-lock.json
 yarn.lock
 
 # 🐍 Frontend Build
@@ -164,7 +163,6 @@ frontend/build/
 frontend/dist/
 
 # 🐍 Frontend Package Manager
-#frontend/package-lock.json
 frontend/yarn.lock
 frontend/pnpm-lock.yaml
 
@@ -211,7 +209,7 @@ docs/build/
 *.pt
 *.pth
 
-# 🐍 Data Files
+# 🐍 Data Files (но разрешаем конфигурационные)
 *.csv
 *.json
 *.xml
@@ -221,6 +219,13 @@ docs/build/
 !config/*.yml
 !*.example.yaml
 !*.example.yml
+!package.json
+!package-lock.json
+!tsconfig.json
+!tailwind.config.js
+!vite.config.ts
+!vite.config.js
+!postcss.config.js
 
 # 🐍 Secrets
 secrets/
@@ -280,3 +285,44 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# 🐍 Исключения - важные файлы, которые НЕ должны игнорироваться
+!package.json
+!package-lock.json
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json
+!frontend/tailwind.config.js
+!frontend/vite.config.ts
+!frontend/vite.config.js
+!frontend/postcss.config.js
+!frontend/nginx.conf
+!frontend/index.html
+!frontend/index-vite.html
+!frontend/index-no-babel.html
+!frontend/README.md
+!frontend/VITE_MIGRATION.md
+!backend/requirements.txt
+!backend/Dockerfile
+!backend/app/main.py
+!backend/app/__init__.py
+!backend/__init__.py
+!backend/tests/
+!backend/tests/*.py
+!scripts/
+!scripts/*.py
+!scripts/*.sh
+!scripts/README.md
+!Makefile
+!Makefile.vite
+!docker-compose.yml
+!docker-compose.vite.yml
+!docker-compose.parallel.yml
+!docker-compose.native-gpu.yml
+!docker-buildkit.env
+!.dockerignore
+!README.md
+!UNIFIED_DOCUMENTATION.md
+!DOCUMENTATION_MIGRATION.md
+!VERSION
+!.gitignore
