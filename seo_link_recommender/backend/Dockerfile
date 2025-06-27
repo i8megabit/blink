@@ -12,9 +12,9 @@ LABEL maintainer="seo-team" \
       description="SEO Link Recommender Backend" \
       version="1.0"
 
-# Создаем пользователя для безопасности (не root)
+# Создаем пользователя для безопасности (не root) с домашней директорией
 RUN groupadd -r appuser && \
-    useradd -r -g appuser appuser
+    useradd -r -g appuser -m -d /home/appuser appuser
 
 # Устанавливаем системные зависимости в одном слое
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -46,16 +46,22 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
+# Скачиваем NLTK данные на стадии сборки для избежания проблем с правами
+RUN python -c "import nltk; nltk.download('punkt', download_dir='/opt/venv/share/nltk_data'); nltk.download('stopwords', download_dir='/opt/venv/share/nltk_data')"
+
 # Продакшн стадия - минимальный образ
 FROM base as production
 
 # Копируем виртуальное окружение из builder стадии
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+ENV NLTK_DATA="/opt/venv/share/nltk_data"
 
 # Создаем рабочую директорию с правильными правами
 WORKDIR /app
-RUN chown -R appuser:appuser /app
+RUN chown -R appuser:appuser /app && \
+    mkdir -p /home/appuser && \
+    chown -R appuser:appuser /home/appuser
 
 # Копируем код приложения
 COPY --chown=appuser:appuser backend/app ./app

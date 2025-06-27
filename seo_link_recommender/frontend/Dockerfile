@@ -29,9 +29,9 @@ LABEL maintainer="seo-team" \
       description="SEO Link Recommender Frontend" \
       version="1.0"
 
-# Создаем непривилегированного пользователя
-RUN addgroup -g 101 -S nginx-app && \
-    adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin \
+# Создаем непривилегированного пользователя с уникальным GID/UID
+RUN addgroup -g 1001 -S nginx-app && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin \
     -G nginx-app -g nginx-app nginx-app
 
 # Копируем оптимизированные статические файлы
