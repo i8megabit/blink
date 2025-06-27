@@ -32,27 +32,33 @@ export interface WordPressPost {
 }
 
 export interface Recommendation {
-  from: string
-  to: string
-  anchor: string
-  comment: string
-  quality_score?: number
+  id: number
+  source_post_id: number
+  target_post_id: number
+  anchor_text: string
+  reasoning: string
+  quality_score: number
+  generation_count: number
+  improvement_iterations: number
+  status: 'active' | 'deprecated' | 'improved'
+  semantic_connection_id?: number
+  previous_version_id?: number
+  improvement_reason?: string
+  created_at: string
+  updated_at: string
+  source_post?: WordPressPost
+  target_post?: WordPressPost
 }
 
 export interface AnalysisStats {
-  current?: number
-  total?: number
-  details?: string
-  postsAnalyzed?: number
-  connectionsFound?: number
-  recommendationsGenerated?: number
-  processingTime?: number
+  current: number
+  total: number
+  details: string
 }
 
 export interface AIThought {
-  id?: string
-  thought_id?: string
-  type?: 'ai_thinking' | 'enhanced_ai_thinking' | 'progress' | 'ollama' | 'error'
+  id: string
+  type: 'ai_thinking' | 'enhanced_ai_thinking'
   thought?: string
   thinking_stage?: string
   emoji?: string
@@ -66,7 +72,7 @@ export interface AIThought {
 }
 
 export interface OllamaStatus {
-  status: 'ready' | 'connecting' | 'error'
+  status: string
   connection: string
   models_count: number
   available_models: string[]
@@ -84,10 +90,21 @@ export interface AnalysisHistory {
   posts_analyzed: number
   connections_found: number
   recommendations_generated: number
+  recommendations: Array<{
+    anchor_text: string
+    source_title: string
+    target_title: string
+    reasoning: string
+    quality_score: number
+  }>
+  thematic_analysis: Record<string, any>
+  semantic_metrics: Record<string, any>
+  quality_assessment: Record<string, any>
   llm_model_used: string
-  processing_time_seconds: number | null
+  llm_context_size?: number
+  processing_time_seconds?: number
   created_at: string
-  completed_at: string | null
+  completed_at?: string
 }
 
 export interface BenchmarkHistory {
@@ -132,26 +149,25 @@ export interface WPResponse {
 export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export interface WebSocketMessage {
-  type: 'progress' | 'error' | 'ollama' | 'ai_thinking' | 'enhanced_ai_thinking' | 'ping'
+  type: 'progress' | 'ai_thinking' | 'enhanced_ai_thinking' | 'ollama' | 'error' | 'ping'
   step?: string
+  percentage?: number
   current?: number
   total?: number
-  percentage?: number
   details?: string
-  message?: string
-  error?: string
-  info?: any
   thought?: string
   thinking_stage?: string
   emoji?: string
-  thought_id?: string
   stage?: string
   content?: string
   confidence?: number
   semantic_weight?: number
   related_concepts?: string[]
   reasoning_chain?: string[]
-  timestamp: string
+  timestamp?: string
+  thought_id?: string
+  info?: any
+  message?: string
 }
 
 // ===== UI ТИПЫ =====
@@ -159,7 +175,22 @@ export interface WebSocketMessage {
 export type TabType = 'dashboard' | 'analysis' | 'history' | 'benchmarks' | 'settings'
 
 export interface Theme {
-  mode: 'light' | 'dark' | 'system'
+  name: string
+  colors: {
+    primary: string
+    secondary: string
+    accent: string
+    background: string
+    foreground: string
+    border: string
+    muted: string
+  }
+  fonts: {
+    sans: string[]
+    mono: string[]
+  }
+  spacing: Record<string, string>
+  borderRadius: Record<string, string>
 }
 
 export interface UserPreferences {
@@ -174,9 +205,8 @@ export interface Notification {
   type: 'success' | 'error' | 'warning' | 'info'
   title: string
   message: string
-  details?: string
-  timestamp: Date
   duration?: number
+  timestamp: string
 }
 
 export interface Modal {
@@ -203,11 +233,20 @@ export interface AppState {
 
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error'
 
-export interface ApiResponse<T = any> {
-  status: 'success' | 'error'
+export interface ApiResponse<T> {
+  success: boolean
   data?: T
   error?: string
   message?: string
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
 }
 
 export type SortDirection = 'asc' | 'desc'
@@ -245,14 +284,23 @@ export interface BenchmarkRequest {
 export interface BenchmarkRun {
   id: number
   name: string
+  description?: string
   benchmark_type: string
-  status: string
+  model_config_id: number
+  test_cases_config: Record<string, any>
+  iterations: number
+  results: Record<string, any>
+  metrics: Record<string, any>
+  started_at: string
+  completed_at?: string
+  duration_seconds?: number
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  error_message?: string
   overall_score?: number
   quality_score?: number
   performance_score?: number
-  duration_seconds?: number
+  efficiency_score?: number
   created_at: string
-  completed_at?: string
 }
 
 export interface ModelConfiguration {
@@ -357,4 +405,59 @@ export interface ExtendedUserPreferences {
   results_per_page: number
   favorite_domains: string[]
   custom_filters: SearchFilters[]
+}
+
+// AIUI Design System - TypeScript Types
+
+// Core UI Types
+export interface BaseComponentProps {
+  className?: string
+  children?: React.ReactNode
+}
+
+// Form Types
+export interface FormField {
+  name: string
+  label: string
+  type: 'text' | 'email' | 'password' | 'number' | 'select' | 'textarea' | 'checkbox' | 'radio'
+  required?: boolean
+  placeholder?: string
+  options?: Array<{ value: string; label: string }>
+  validation?: {
+    pattern?: string
+    min?: number
+    max?: number
+    message?: string
+  }
+}
+
+// Chart Types
+export interface ChartData {
+  labels: string[]
+  datasets: Array<{
+    label: string
+    data: number[]
+    backgroundColor?: string[]
+    borderColor?: string[]
+    borderWidth?: number
+  }>
+}
+
+export interface ChartOptions {
+  responsive: boolean
+  maintainAspectRatio: boolean
+  plugins?: {
+    legend?: {
+      display: boolean
+      position: 'top' | 'bottom' | 'left' | 'right'
+    }
+    tooltip?: {
+      enabled: boolean
+    }
+  }
+  scales?: {
+    y?: {
+      beginAtZero: boolean
+    }
+  }
 } 

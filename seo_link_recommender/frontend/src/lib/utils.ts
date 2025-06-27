@@ -1,15 +1,17 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+// AIUI Design System - Utility Functions
+
 /**
- * Утилита для объединения Tailwind классов с правильным приоритетом
+ * Объединяет классы Tailwind с правильным порядком
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 /**
- * Форматирование даты в читаемый вид
+ * Форматирует дату в читаемый вид
  */
 export function formatDate(date: string | Date): string {
   const d = new Date(date)
@@ -23,7 +25,7 @@ export function formatDate(date: string | Date): string {
 }
 
 /**
- * Форматирование времени выполнения
+ * Форматирует время выполнения
  */
 export function formatDuration(seconds: number): string {
   if (seconds < 60) {
@@ -35,18 +37,22 @@ export function formatDuration(seconds: number): string {
 }
 
 /**
- * Форматирование размера файла
+ * Форматирует число с разделителями
  */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Б'
-  const k = 1024
-  const sizes = ['Б', 'КБ', 'МБ', 'ГБ']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+export function formatNumber(num: number): string {
+  return new Intl.NumberFormat('ru-RU').format(num)
 }
 
 /**
- * Обрезка текста с многоточием
+ * Форматирует процент
+ */
+export function formatPercentage(value: number, total: number): string {
+  const percentage = (value / total) * 100
+  return `${percentage.toFixed(1)}%`
+}
+
+/**
+ * Обрезает текст до указанной длины
  */
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text
@@ -54,46 +60,21 @@ export function truncateText(text: string, maxLength: number): string {
 }
 
 /**
- * Генерация уникального ID
+ * Генерирует уникальный ID
  */
 export function generateId(): string {
   return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
 /**
- * Проверка валидности URL
+ * Проверяет, является ли значение пустым
  */
-export function isValidUrl(url: string): boolean {
-  try {
-    new URL(url)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Очистка домена от протокола и www
- */
-export function cleanDomain(domain: string): string {
-  return domain
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .replace(/\/$/, '')
-}
-
-/**
- * Форматирование процентов
- */
-export function formatPercentage(value: number, decimals: number = 1): string {
-  return `${(value * 100).toFixed(decimals)}%`
-}
-
-/**
- * Задержка выполнения
- */
-export function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+export function isEmpty(value: any): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim().length === 0
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === 'object') return Object.keys(value).length === 0
+  return false
 }
 
 /**
@@ -111,7 +92,7 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 /**
- * Throttle функция
+ * Троттлинг функция
  */
 export function throttle<T extends (...args: any[]) => any>(
   func: T,
@@ -128,26 +109,20 @@ export function throttle<T extends (...args: any[]) => any>(
 }
 
 /**
- * Копирование в буфер обмена
+ * Копирует текст в буфер обмена
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
     return true
-  } catch {
-    // Fallback для старых браузеров
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    document.body.appendChild(textArea)
-    textArea.select()
-    const success = document.execCommand('copy')
-    document.body.removeChild(textArea)
-    return success
+  } catch (error) {
+    console.error('Ошибка копирования в буфер обмена:', error)
+    return false
   }
 }
 
 /**
- * Скачивание файла
+ * Скачивает файл
  */
 export function downloadFile(content: string, filename: string, type: string = 'text/plain'): void {
   const blob = new Blob([content], { type })
@@ -162,44 +137,112 @@ export function downloadFile(content: string, filename: string, type: string = '
 }
 
 /**
- * Проверка поддержки WebP
+ * Валидация email
  */
-export function supportsWebP(): Promise<boolean> {
-  return new Promise(resolve => {
-    const webP = new Image()
-    webP.onload = webP.onerror = () => {
-      resolve(webP.height === 2)
-    }
-    webP.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA'
-  })
+export function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
 }
 
 /**
- * Получение размера экрана
+ * Валидация URL
  */
-export function getScreenSize(): { width: number; height: number } {
-  return {
-    width: window.innerWidth,
-    height: window.innerHeight
+export function isValidUrl(url: string): boolean {
+  try {
+    new URL(url)
+    return true
+  } catch {
+    return false
   }
 }
 
 /**
- * Проверка мобильного устройства
+ * Получает цвет для статуса
+ */
+export function getStatusColor(status: string): string {
+  const colors = {
+    success: 'text-green-600 bg-green-50 border-green-200',
+    error: 'text-red-600 bg-red-50 border-red-200',
+    warning: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+    info: 'text-blue-600 bg-blue-50 border-blue-200',
+    pending: 'text-gray-600 bg-gray-50 border-gray-200',
+    running: 'text-blue-600 bg-blue-50 border-blue-200',
+    completed: 'text-green-600 bg-green-50 border-green-200',
+    failed: 'text-red-600 bg-red-50 border-red-200'
+  }
+  return colors[status as keyof typeof colors] || colors.info
+}
+
+/**
+ * Получает иконку для статуса
+ */
+export function getStatusIcon(status: string): string {
+  const icons = {
+    success: '✓',
+    error: '✗',
+    warning: '⚠',
+    info: 'ℹ',
+    pending: '⏳',
+    running: '🔄',
+    completed: '✅',
+    failed: '❌'
+  }
+  return icons[status as keyof typeof icons] || icons.info
+}
+
+/**
+ * Форматирует размер файла
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Б'
+  const k = 1024
+  const sizes = ['Б', 'КБ', 'МБ', 'ГБ']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+/**
+ * Создает градиент для прогресс-бара
+ */
+export function createProgressGradient(percentage: number): string {
+  if (percentage < 30) return 'from-red-500 to-orange-500'
+  if (percentage < 70) return 'from-yellow-500 to-orange-500'
+  return 'from-green-500 to-emerald-500'
+}
+
+/**
+ * Очищает домен от протокола и слешей
+ */
+export function cleanDomain(domain: string): string {
+  return domain
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/$/, '')
+}
+
+/**
+ * Задержка выполнения
+ */
+export function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Проверяет, является ли устройство мобильным
  */
 export function isMobile(): boolean {
   return window.innerWidth < 768
 }
 
 /**
- * Проверка планшета
+ * Проверяет, является ли устройство планшетом
  */
 export function isTablet(): boolean {
   return window.innerWidth >= 768 && window.innerWidth < 1024
 }
 
 /**
- * Проверка десктопа
+ * Проверяет, является ли устройство десктопом
  */
 export function isDesktop(): boolean {
   return window.innerWidth >= 1024
