@@ -28,7 +28,7 @@ share/python-wheels/
 MANIFEST
 
 # 🐍 Virtual Environments
-.env
+#.env
 .venv
 env/
 venv/
@@ -151,10 +151,10 @@ docs/build/
 
 # 🐍 Data Files
 *.csv
-*.json
-*.xml
-*.yaml
-*.yml
+#*.json
+#*.xml
+#*.yaml
+#*.yml
 !config/*.yaml
 !config/*.yml
 !*.example.yaml

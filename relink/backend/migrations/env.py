@@ -36,6 +36,7 @@ target_metadata = Base.metadata
 def get_url():
     """Получение sync URL базы данных из настроек для Alembic."""
     settings = get_settings()
+    print("DB URL:", settings.database.sync_url)
     return settings.database.sync_url
 
 

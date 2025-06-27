@@ -1,0 +1,16 @@
+frontend-vite:
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile.vite
+    args:
+      BUILDKIT_INLINE_CACHE: 1
+  ports:
+    - "3001:80"
+  depends_on:
+    - backend
+  networks:
+    - seo-network
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.frontend-vite.rule=Host(`localhost`) && PathPrefix(`/vite`)"
+    - "traefik.http.services.frontend-vite.loadbalancer.server.port=80"
