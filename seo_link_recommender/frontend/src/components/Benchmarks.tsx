@@ -258,23 +258,21 @@ export function Benchmarks({
 
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
+                          <Clock className="w-4 h-4" />
                           <span>
                             {new Date(benchmark.created_at).toLocaleDateString('ru-RU', {
                               year: 'numeric',
                               month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
+                              day: 'numeric'
                             })}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Zap className="w-4 h-4" />
+                          <Target className="w-4 h-4" />
                           <span>{benchmark.benchmark_type}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Award className="w-4 h-4" />
+                          <Target className="w-4 h-4" />
                           <span>{getScoreBadge(benchmark.overall_score)}</span>
                         </div>
                       </div>

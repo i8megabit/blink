@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Domain } from '../types';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
+import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { cn } from '../lib/utils';
 import { 
-  Globe, 
-  FileText, 
-  Clock, 
-  RefreshCw, 
-  Trash2,
+  Globe,
+  FileText,
+  Link,
+  Timer,
+  CheckCircle,
+  Play,
   Eye,
-  BarChart3,
-  Calendar,
-  TrendingUp,
-  AlertCircle
+  Trash2,
+  RefreshCw,
+  Download
 } from 'lucide-react';
 
 interface DomainsListProps {
@@ -127,22 +127,19 @@ export function DomainsList({
                       {getStatusBadge(domain)}
                     </div>
                     
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
-                        <FileText className="w-3 h-3" />
+                        <FileText className="w-4 h-4" />
                         <span>{domain.total_posts} статей</span>
                       </div>
-                      
-                      {domain.total_analyses > 0 && (
-                        <div className="flex items-center gap-1">
-                          <BarChart3 className="w-3 h-3" />
-                          <span>{domain.total_analyses} анализов</span>
-                        </div>
-                      )}
-                      
                       <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatDate(domain.last_analysis_at)}</span>
+                        <Timer className="w-4 h-4" />
+                        <span>
+                          {domain.last_analysis_at 
+                            ? new Date(domain.last_analysis_at).toLocaleDateString('ru-RU')
+                            : 'Не анализировался'
+                          }
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -226,25 +223,13 @@ export function DomainsList({
                   
                   <div className="flex gap-2">
                     <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => onAnalyze(domain.name, true)}
-                      disabled={isLoading}
-                      className="flex-1"
-                    >
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      Полный анализ
-                    </Button>
-                    
-                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onAnalyze(domain.name, false)}
-                      disabled={isLoading}
-                      className="flex-1"
+                      onClick={() => onAnalyze(domain.name, true)}
+                      className="flex items-center"
                     >
-                      <BarChart3 className="w-4 h-4 mr-2" />
-                      Быстрый анализ
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Анализировать
                     </Button>
                   </div>
                 </div>

@@ -104,7 +104,7 @@ interface BarChartProps {
   height?: number
 }
 
-const BarChart: React.FC<BarChartProps> = ({ title, data, height = 200 }) => {
+const BarChart: React.FC<BarChartProps> = ({ title, data }) => {
   if (!data || data.length === 0) {
     return (
       <Card>
@@ -120,8 +120,8 @@ const BarChart: React.FC<BarChartProps> = ({ title, data, height = 200 }) => {
     )
   }
 
-  const maxValue = Math.max(...data.map(d => d.value))
-  const barWidth = Math.max(20, 300 / data.length)
+  const maxValue = Math.max(...data.map(item => item.value))
+  const minBarHeight = 20
 
   return (
     <Card>

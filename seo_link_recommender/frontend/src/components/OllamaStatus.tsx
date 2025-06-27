@@ -1,16 +1,21 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { OllamaStatus as OllamaStatusType } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
+import { Progress } from './ui/Progress';
 import { 
   Server, 
   CheckCircle, 
   AlertCircle, 
   Clock, 
   RefreshCw,
-  Cpu,
+  Play,
+  Pause,
+  Settings,
+  Zap,
+  Brain,
   Activity
 } from 'lucide-react';
 
@@ -105,7 +110,7 @@ export function OllamaStatus({ status, onRefresh, className }: OllamaStatusProps
 
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 mb-1">
-              <Cpu className="w-4 h-4 text-green-500" />
+              <Activity className="w-4 h-4" />
               <span className="text-sm font-medium">Модель</span>
             </div>
             <Badge 
