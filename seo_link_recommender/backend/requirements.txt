@@ -3,19 +3,28 @@ uvicorn[standard]==0.24.0
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
 httpx>=0.27.0
+pydantic==2.5.0
 python-multipart==0.0.6
-
-# HTML parsing
-beautifulsoup4==4.12.2
-lxml==4.9.3
-
-# Text processing and ML
+aiosqlite==0.19.0
+jinja2==3.1.2
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 nltk==3.8.1
 scikit-learn==1.3.2
-numpy==1.24.4
+beautifulsoup4==4.12.2
+websockets==12.0
+numpy==1.24.3
+pandas==2.1.4
+
+# RAG система зависимости  
+chromadb==0.4.22
+ollama==0.1.8
+
+# Тестовые зависимости
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+respx==0.20.2
 
 # Simplified RAG без тяжелых зависимостей
-chromadb==0.4.15
-
-# Ollama API
-ollama==0.1.8
+# Убираем chromadb и ollama для избежания конфликтов

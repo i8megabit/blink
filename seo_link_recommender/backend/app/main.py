@@ -3615,9 +3615,16 @@ async def ensure_ollama_model_context(model_name: str, context_size: int = OPTIM
 
 
 @app.post("/api/v1/benchmark_model")
-async def benchmark_model_endpoint(model_name: str) -> dict[str, str]:
+async def benchmark_model_endpoint(request: dict) -> dict[str, str]:
     """Переключает активную модель для бенчмарка."""
     global OLLAMA_MODEL
+    
+    model_name = request.get("model_name")
+    if not model_name:
+        return {
+            "status": "error",
+            "message": "model_name обязательный параметр"
+        }
     
     try:
         # Проверяем доступность модели
