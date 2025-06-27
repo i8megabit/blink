@@ -1,0 +1,303 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: docker.io
+  BACKEND_IMAGE: eberil/relink-backend
+  FRONTEND_IMAGE: eberil/relink-frontend
+
+jobs:
+  # ========================================
+  # ТЕСТИРОВАНИЕ
+  # ========================================
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+        python-version: [3.11]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install frontend dependencies
+      working-directory: frontend
+      run: npm ci
+
+    - name: Install backend dependencies
+      working-directory: backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run frontend tests
+      working-directory: frontend
+      run: |
+        npm run test:coverage
+        npm run lint
+        npm run type-check
+
+    - name: Run backend tests
+      working-directory: backend
+      run: |
+        python -m pytest tests/ -v --cov=app --cov-report=xml
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        files: |
+          frontend/coverage/lcov.info
+          backend/coverage.xml
+        flags: frontend,backend
+        name: codecov-umbrella
+
+  # ========================================
+  # СБОРКА И ПУБЛИКАЦИЯ ОБРАЗОВ
+  # ========================================
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version from README
+      id: version
+      run: |
+        VERSION=$(grep -oP 'Версия:\s*\K[0-9]+\.[0-9]+\.[0-9]+' README.md)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push backend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: backend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: frontend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # Дополнительные теги для dev ветки
+    - name: Add dev tags for dev branch
+      if: github.ref == 'refs/heads/dev'
+      run: |
+        docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}
+        docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+        
+        # Создаем dev теги
+        docker tag ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:dev
+        docker tag ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:dev
+        
+        # Создаем dev-xxx теги (последние 3 цифры патча)
+        PATCH_VERSION=$(echo ${{ steps.version.outputs.version }} | cut -d. -f3)
+        docker tag ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:dev-$PATCH_VERSION
+        docker tag ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:dev-$PATCH_VERSION
+        
+        # Публикуем dev теги
+        docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:dev
+        docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:dev
+        docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:dev-$PATCH_VERSION
+        docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:dev-$PATCH_VERSION
+
+    # Дополнительные теги для main ветки
+    - name: Add prod tags for main branch
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}
+        docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+        
+        # Создаем prod теги
+        docker tag ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:prod
+        docker tag ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }} ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:prod
+        
+        # Публикуем prod теги
+        docker push ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:prod
+        docker push ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:prod
+
+  # ========================================
+  # СОЗДАНИЕ РЕЛИЗА (только для main)
+  # ========================================
+  create-release:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract version from README
+      id: version
+      run: |
+        VERSION=$(grep -oP 'Версия:\s*\K[0-9]+\.[0-9]+\.[0-9]+' README.md)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Получаем коммиты с последнего релиза
+        git log --oneline --no-merges $(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD > changelog.txt
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat changelog.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Release v${{ steps.version.outputs.version }}
+        body: |
+          ## 🚀 Release v${{ steps.version.outputs.version }}
+          
+          ### 📋 Changes
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ### 🐳 Docker Images
+          - Backend: `eberil/relink-backend:${{ steps.version.outputs.version }}`
+          - Frontend: `eberil/relink-frontend:${{ steps.version.outputs.version }}`
+          
+          ### 🏷️ Tags
+          - `${{ steps.version.outputs.version }}` - Specific version
+          - `prod` - Production ready
+          - `latest` - Latest stable
+        draft: false
+        prerelease: false
+
+  # ========================================
+  # АВТОМАТИЧЕСКИЙ MERGE В DEV (только для main)
+  # ========================================
+  auto-merge-to-dev:
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract version and bump minor
+      id: version
+      run: |
+        CURRENT_VERSION=$(grep -oP 'Версия:\s*\K[0-9]+\.[0-9]+\.[0-9]+' README.md)
+        MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+        MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+        PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
+        
+        # Инкрементируем минорную версию
+        NEW_MINOR=$((MINOR + 1))
+        NEW_VERSION="$MAJOR.$NEW_MINOR.0"
+        
+        echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
+
+    - name: Create dev branch
+      run: |
+        git checkout -b dev
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+
+    - name: Update version in README
+      run: |
+        sed -i "s/Версия:\s*${{ steps.version.outputs.current_version }}/Версия: ${{ steps.version.outputs.new_version }}/" README.md
+        sed -i "s/# 🚀 SEO Link Recommender v${{ steps.version.outputs.current_version }}/# 🚀 SEO Link Recommender v${{ steps.version.outputs.new_version }}/" README.md
+
+    - name: Update frontend version
+      run: |
+        sed -i 's/"version": "${{ steps.version.outputs.current_version }}"/"version": "${{ steps.version.outputs.new_version }}"/' frontend/package.json
+
+    - name: Commit and push changes
+      run: |
+        git add README.md frontend/package.json
+        git commit -m "version bump to ${{ steps.version.outputs.new_version }}"
+        git push origin dev
+
+    - name: Create Pull Request to dev
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        base: dev
+        branch: version-bump-${{ steps.version.outputs.new_version }}
+        title: "version bump to ${{ steps.version.outputs.new_version }}"
+        body: |
+          ## 🔄 Version Bump
+          
+          Automated version bump from ${{ steps.version.outputs.current_version }} to ${{ steps.version.outputs.new_version }}
+          
+          ### Changes:
+          - Updated README.md version
+          - Updated frontend/package.json version
+          
+          This PR will be automatically merged to dev branch.
+        delete-branch: true
+
+    - name: Auto-merge PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: pulls } = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            head: 'version-bump-${{ steps.version.outputs.new_version }}'
+          });
+          
+          if (pulls.length > 0) {
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pulls[0].number,
+              merge_method: 'squash'
+            });
+          } 
