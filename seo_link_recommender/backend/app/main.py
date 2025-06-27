@@ -3612,3 +3612,62 @@ async def ensure_ollama_model_context(model_name: str, context_size: int = OPTIM
     except Exception as e:
         print(f"❌ Ошибка настройки контекста модели: {e}")
         return False
+
+
+@app.post("/api/v1/benchmark_model")
+async def benchmark_model_endpoint(model_name: str) -> dict[str, str]:
+    """Переключает активную модель для бенчмарка."""
+    global OLLAMA_MODEL
+    
+    try:
+        # Проверяем доступность модели
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{OLLAMA_URL.replace('/api/generate', '/api/tags')}")
+            
+            if response.status_code == 200:
+                models_data = response.json()
+                available_models = [model["name"] for model in models_data.get("models", [])]
+                
+                if model_name in available_models:
+                    OLLAMA_MODEL = model_name
+                    
+                    # Тестируем новую модель
+                    test_response = await client.post(
+                        OLLAMA_URL,
+                        json={
+                            "model": model_name,
+                            "prompt": "Тест переключения модели",
+                            "stream": False,
+                            "options": {"num_predict": 5}
+                        },
+                        timeout=30
+                    )
+                    
+                    if test_response.status_code == 200:
+                        return {
+                            "status": "success",
+                            "message": f"Модель переключена на {model_name}",
+                            "current_model": OLLAMA_MODEL,
+                            "available_models": str(available_models)
+                        }
+                    else:
+                        return {
+                            "status": "error",
+                            "message": f"Модель {model_name} недоступна для использования"
+                        }
+                else:
+                    return {
+                        "status": "error", 
+                        "message": f"Модель {model_name} не найдена. Доступные: {available_models}"
+                    }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Ollama сервер недоступен"
+                }
+                
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Ошибка переключения модели: {str(e)}"
+        }

@@ -94,9 +94,11 @@ services:
     command: |
       "ollama serve & 
       sleep 45 && 
-      echo '🚀 Загружаем ТУРБО модель для Apple M4...' && 
+      echo '🚀 Загружаем модели для A/B тестирования...' && 
       ollama pull qwen2.5:7b && 
-      echo '⚡ Создаем ТУРБО оптимизированную модель...' && 
+      ollama pull qwen2.5:7b-instruct && 
+      
+      echo '⚡ Создаем ТУРБО модель (базовая)...' && 
       ollama create qwen2.5:7b-turbo -f /dev/stdin <<EOF
       FROM qwen2.5:7b
       # 🔥 ТУРБО параметры для Apple M4
@@ -109,15 +111,31 @@ services:
       PARAMETER top_p 0.9
       PARAMETER repeat_penalty 1.1
       PARAMETER seed 42
-      PARAMETER mirostat 2
-      PARAMETER mirostat_tau 5.0
-      PARAMETER mirostat_eta 0.1
-      # Убираем стопы для лучшей скорости
       EOF
-      echo '🎯 ТУРБО модель готова!' &&
-      echo '⚡ Предпрогреваем GPU...' &&
-      ollama run qwen2.5:7b-turbo 'Система инициализирована в режиме максимальной производительности!' &&
-      echo '🔥 Apple M4 GPU активирован!' &&
+      
+      echo '🎯 Создаем INSTRUCT ТУРБО модель...' && 
+      ollama create qwen2.5:7b-instruct-turbo -f /dev/stdin <<EOF
+      FROM qwen2.5:7b-instruct
+      # 🎯 INSTRUCT ТУРБО для SEO задач
+      PARAMETER num_ctx 4096
+      PARAMETER num_batch 512
+      PARAMETER num_thread 8
+      PARAMETER num_gpu -1
+      PARAMETER num_predict 2048
+      PARAMETER temperature 0.6
+      PARAMETER top_p 0.85
+      PARAMETER repeat_penalty 1.05
+      PARAMETER seed 42
+      # Специально для инструкций
+      PARAMETER stop \"<|im_end|>\"
+      PARAMETER stop \"<|endoftext|>\"
+      EOF
+      
+      echo '🏆 Обе модели готовы для бенчмарка!' &&
+      echo '⚡ Предпрогреваем систему...' &&
+      ollama run qwen2.5:7b-turbo 'Система готова для бенчмарка!' &&
+      ollama run qwen2.5:7b-instruct-turbo 'Instruct модель готова!' &&
+      echo '🔥 Apple M4 A/B система активирована!' &&
       wait"
     healthcheck:
       test: ["CMD", "curl", "-f", "-m", "30", "http://localhost:11434/api/tags"]
