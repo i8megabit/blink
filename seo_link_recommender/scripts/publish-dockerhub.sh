@@ -40,14 +40,17 @@ log_error() {
 check_docker_auth() {
     log_info "Проверка авторизации в Docker Hub..."
     
-    if ! docker info | grep -q "Username"; then
-        log_warning "Не авторизован в Docker Hub"
-        log_info "Выполните: docker login"
-        return 1
+    # Проверяем разные способы авторизации
+    if docker info 2>/dev/null | grep -q "Username" || \
+       docker system info 2>/dev/null | grep -q "Username" || \
+       [ -f ~/.docker/config.json ] && grep -q "auths" ~/.docker/config.json; then
+        log_success "Авторизация в Docker Hub подтверждена"
+        return 0
     fi
     
-    log_success "Авторизация в Docker Hub подтверждена"
-    return 0
+    log_warning "Не авторизован в Docker Hub"
+    log_info "Выполните: docker login"
+    return 1
 }
 
 # Тегирование образа
@@ -89,16 +92,14 @@ publish_images() {
     fi
     
     # Список образов для публикации
-    declare -A images=(
-        ["backend"]="seo_link_recommender-backend:latest"
-        ["frontend-classic"]="seo_link_recommender-frontend-classic:latest"
-        ["frontend-vite"]="seo_link_recommender-frontend-vite:latest"
-    )
+    images_names=(backend frontend-classic frontend-vite)
+    images_tags=(seo_link_recommender-backend:latest seo_link_recommender-frontend-classic:latest seo_link_recommender-frontend-vite:latest)
     
     # Тегируем и публикуем каждый образ
-    for name in "${!images[@]}"; do
-        local image_name="${images[$name]}"
-        local dockerhub_tag="$REGISTRY/$DOCKER_USERNAME/$PROJECT_NAME-$name:$VERSION"
+    for i in 0 1 2; do
+        name="${images_names[$i]}"
+        image_name="${images_tags[$i]}"
+        dockerhub_tag="$REGISTRY/$DOCKER_USERNAME/$PROJECT_NAME-$name:$VERSION"
         
         log_info "Обработка образа: $name"
         
