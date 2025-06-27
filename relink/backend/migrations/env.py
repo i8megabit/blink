@@ -34,9 +34,9 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    """Получение URL базы данных из настроек."""
+    """Получение sync URL базы данных из настроек для Alembic."""
     settings = get_settings()
-    return settings.database.url
+    return settings.database.sync_url
 
 
 def run_migrations_offline() -> None:

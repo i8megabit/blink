@@ -68,7 +68,7 @@ class OllamaSettings(BaseSettings):
 
 class SecuritySettings(BaseSettings):
     """Настройки безопасности"""
-    secret_key: str = Field(env="SECRET_KEY")
+    secret_key: str = Field(default="your-secret-key-change-in-production", env="SECRET_KEY")
     algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, env="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=7, env="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
