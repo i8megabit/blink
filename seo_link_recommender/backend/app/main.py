@@ -1549,17 +1549,7 @@ class CumulativeIntelligenceManager:
         return min(score, 1.0)
 
 
-# Инициализация глобальных менеджеров
-def initialize_global_managers() -> None:
-    """Инициализирует глобальные менеджеры после определения всех классов."""
-    global websocket_manager, thought_generator, rag_manager, cumulative_manager
-    
-    websocket_manager = WebSocketManager()
-    thought_generator = IntelligentThoughtGenerator()
-    rag_manager = AdvancedRAGManager()
-    cumulative_manager = CumulativeIntelligenceManager()
-    
-    print("✅ Глобальные менеджеры инициализированы")
+# Инициализация глобальных менеджеров будет ниже
 
 
 async def generate_links(text: str) -> list[str]:
@@ -2406,10 +2396,14 @@ async def on_startup() -> None:
 
 def initialize_global_managers():
     """Инициализирует глобальные менеджеры."""
-    global cumulative_manager, rag_manager, thought_generator
+    global cumulative_manager, rag_manager, thought_generator, websocket_manager
+    
+    websocket_manager = WebSocketManager()
     cumulative_manager = CumulativeIntelligenceManager()
     rag_manager = AdvancedRAGManager()
     thought_generator = IntelligentThoughtGenerator()
+    
+    print("✅ Все глобальные менеджеры инициализированы")
 
 
 @app.get("/api/v1/ai_insights/semantic_network", response_model=List[dict])
@@ -2434,4 +2428,312 @@ async def get_enhanced_analytics_insights(domain: str, client_id: Optional[str] 
 
     print(f"📊 Получено {len(insights)} расширенных аналитических инсайтов")
     return insights
+
+
+@app.get("/api/v1/models/available")
+async def get_available_models():
+    """Получает список доступных моделей Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Проверяем доступность Ollama
+            try:
+                response = await client.get("http://ollama:11434/api/tags")
+                if response.status_code == 200:
+                    data = response.json()
+                    models = []
+                    for model in data.get("models", []):
+                        models.append({
+                            "name": model["name"],
+                            "size": model.get("size", 0),
+                            "digest": model.get("digest", ""),
+                            "modified_at": model.get("modified_at", "")
+                        })
+                    
+                    return {
+                        "status": "success", 
+                        "models": models,
+                        "ollama_status": "connected",
+                        "total_models": len(models)
+                    }
+                else:
+                    return {
+                        "status": "error", 
+                        "models": [],
+                        "ollama_status": "unavailable",
+                        "error": f"Ollama returned status {response.status_code}"
+                    }
+            except httpx.ConnectError:
+                # Если Ollama недоступен, возвращаем предполагаемые модели
+                return {
+                    "status": "partial", 
+                    "models": [
+                        {"name": "qwen2.5:7b-turbo", "size": 4300000000, "status": "expected"},
+                        {"name": "qwen2.5:7b-instruct-turbo", "size": 4300000000, "status": "expected"},
+                        {"name": "qwen2.5:7b", "size": 4300000000, "status": "expected"},
+                        {"name": "qwen2.5:7b-instruct", "size": 4300000000, "status": "expected"}
+                    ],
+                    "ollama_status": "connecting",
+                    "message": "Ollama подключается..."
+                }
+    except Exception as e:
+        print(f"❌ Ошибка получения моделей: {e}")
+        return {
+            "status": "error", 
+            "models": [],
+            "ollama_status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/health")
+async def health_check():
+    """Проверка здоровья API."""
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/v1/domains")
+async def get_domains():
+    """Получает список доменов."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Domain).order_by(Domain.name))
+        domains = result.scalars().all()
+        
+        domain_data = []
+        for domain in domains:
+            domain_data.append({
+                "id": domain.id,
+                "name": domain.name,
+                "display_name": domain.display_name,
+                "total_posts": domain.total_posts,
+                "total_analyses": domain.total_analyses,
+                "last_analysis_at": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None,
+                "is_indexed": domain.total_posts > 0,
+                "created_at": domain.created_at.isoformat(),
+                "language": domain.language
+            })
+        
+        return {"domains": domain_data}
+
+
+@app.get("/api/v1/analysis_history")
+async def get_analysis_history(domain: Optional[str] = None, limit: int = 50):
+    """Получает историю анализов."""
+    async with AsyncSessionLocal() as session:
+        query = select(AnalysisHistory).order_by(AnalysisHistory.created_at.desc()).limit(limit)
+        
+        if domain:
+            domain_result = await session.execute(select(Domain).where(Domain.name == domain))
+            domain_obj = domain_result.scalar_one_or_none()
+            if domain_obj:
+                query = query.where(AnalysisHistory.domain_id == domain_obj.id)
+        
+        result = await session.execute(query)
+        analyses = result.scalars().all()
+        
+        history_data = []
+        for analysis in analyses:
+            history_data.append({
+                "id": analysis.id,
+                "domain_id": analysis.domain_id,
+                "posts_analyzed": analysis.posts_analyzed,
+                "connections_found": analysis.connections_found,
+                "recommendations_generated": analysis.recommendations_generated,
+                "llm_model_used": analysis.llm_model_used,
+                "processing_time_seconds": analysis.processing_time_seconds,
+                "created_at": analysis.created_at.isoformat(),
+                "completed_at": analysis.completed_at.isoformat() if analysis.completed_at else None
+            })
+        
+        return {"history": history_data}
+
+
+@app.get("/api/v1/benchmark_history")
+async def get_benchmark_history(limit: int = 20):
+    """Получает историю бенчмарков."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(BenchmarkRun)
+            .order_by(BenchmarkRun.created_at.desc())
+            .limit(limit)
+        )
+        benchmarks = result.scalars().all()
+        
+        benchmark_data = []
+        for benchmark in benchmarks:
+            benchmark_data.append({
+                "id": benchmark.id,
+                "name": benchmark.name,
+                "benchmark_type": benchmark.benchmark_type,
+                "status": benchmark.status,
+                "overall_score": benchmark.overall_score,
+                "quality_score": benchmark.quality_score,
+                "performance_score": benchmark.performance_score,
+                "duration_seconds": benchmark.duration_seconds,
+                "created_at": benchmark.created_at.isoformat(),
+                "completed_at": benchmark.completed_at.isoformat() if benchmark.completed_at else None
+            })
+        
+        return {"benchmarks": benchmark_data}
+
+
+async def warmup_ollama():
+    """Прогревает модель Ollama в фоне."""
+    try:
+        async with OLLAMA_SEMAPHORE:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                # Простой запрос для прогрева
+                response = await client.post(
+                    OLLAMA_URL,
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": "Система готова?",
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_ctx": 1024,
+                            "num_predict": 50
+                        }
+                    },
+                    timeout=60
+                )
+                if response.status_code == 200:
+                    print(f"🔥 Ollama модель {OLLAMA_MODEL} успешно прогрета")
+                    return True
+                else:
+                    print(f"⚠️ Ошибка прогрева: статус {response.status_code}")
+                    return False
+    except Exception as e:
+        print(f"⚠️ Ошибка прогрева Ollama: {e}")
+        return False
+
+
+# Эндпоинты для WordPress анализа
+@app.post("/api/v1/wp_index")
+async def wp_index_endpoint(request: WPRequest) -> dict:
+    """Индексация и генерация рекомендаций для WordPress сайта."""
+    try:
+        # Fetch and store WordPress posts
+        posts, delta_stats = await fetch_and_store_wp_posts(request.domain, request.client_id)
+        
+        # Генерируем рекомендации
+        if request.comprehensive:
+            recommendations, analysis_time = await generate_comprehensive_domain_recommendations(
+                request.domain, request.client_id
+            )
+        else:
+            # Простая генерация рекомендаций
+            recommendations = []
+            analysis_time = 0.0
+
+        return {
+            "status": "success",
+            "domain": request.domain,
+            "posts_found": len(posts),
+            "recommendations": recommendations,
+            "delta_stats": delta_stats,
+            "analysis_time": analysis_time
+        }
+
+    except Exception as e:
+        error_msg = f"❌ Ошибка индексации {request.domain}: {e}"
+        print(error_msg)
+        return {
+            "status": "error",
+            "error": str(e),
+            "domain": request.domain
+        }
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    """WebSocket для отслеживания прогресса анализа."""
+    await websocket_manager.connect(websocket, client_id)
+    try:
+        while True:
+            # Ждем сообщения от клиента или поддерживаем соединение
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # Отправляем ping для поддержания соединения
+                await websocket.send_json({"type": "ping", "timestamp": datetime.now().isoformat()})
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(client_id)
+    except Exception as e:
+        print(f"❌ WebSocket ошибка {client_id}: {e}")
+        websocket_manager.disconnect(client_id)
+
+
+# Эндпоинты данных
+@app.get("/api/v1/domains/{domain}/posts")
+async def get_domain_posts(domain: str, limit: int = 50):
+    """Получает посты для домена."""
+    async with AsyncSessionLocal() as session:
+        domain_result = await session.execute(select(Domain).where(Domain.name == domain))
+        domain_obj = domain_result.scalar_one_or_none()
+        
+        if not domain_obj:
+            raise HTTPException(status_code=404, detail="Domain not found")
+        
+        result = await session.execute(
+            select(WordPressPost)
+            .where(WordPressPost.domain_id == domain_obj.id)
+            .order_by(WordPressPost.created_at.desc())
+            .limit(limit)
+        )
+        posts = result.scalars().all()
+        
+        posts_data = []
+        for post in posts:
+            posts_data.append({
+                "id": post.id,
+                "title": post.title,
+                "link": post.link,
+                "content_type": post.content_type,
+                "difficulty_level": post.difficulty_level,
+                "linkability_score": post.linkability_score,
+                "semantic_richness": post.semantic_richness,
+                "created_at": post.created_at.isoformat(),
+                "key_concepts": post.key_concepts[:5] if post.key_concepts else []
+            })
+        
+        return {"posts": posts_data, "total": len(posts_data)}
+
+
+@app.get("/api/v1/ollama_status")
+async def get_ollama_status():
+    """Проверяет статус подключения к Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get("http://ollama:11434/api/tags")
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get("models", [])
+                return {
+                    "status": "ready",
+                    "connection": "connected",
+                    "models_count": len(models),
+                    "available_models": [model["name"] for model in models[:5]],  # Первые 5 моделей
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "status": "error",
+                    "connection": "failed",
+                    "error": f"HTTP {response.status_code}",
+                    "timestamp": datetime.now().isoformat()
+                }
+    except httpx.ConnectError:
+        return {
+            "status": "connecting",
+            "connection": "connecting",
+            "message": "Ollama подключается...",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "connection": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 

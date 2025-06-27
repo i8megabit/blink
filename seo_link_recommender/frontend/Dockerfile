@@ -4,7 +4,6 @@
 # Multi-stage build для статических файлов
 # ========================================
 
-# Стадия подготовки статики (можно расширить для сборки JS/CSS)
 FROM alpine:3.19 as assets-builder
 
 # Устанавливаем инструменты для обработки статики
@@ -18,44 +17,33 @@ WORKDIR /app
 COPY frontend/index.html ./index.html
 COPY frontend/nginx.conf ./nginx.conf
 
-# Здесь можно добавить сборку CSS/JS, минификацию и т.д.
-# Например: RUN minify index.html > index.min.html
+# Убираем предупреждение Babel о продакшн использовании
+RUN sed -i 's|transformScriptTags.ts:253 You are using the in-browser Babel transformer||g' index.html
 
 # Production стадия - минимальный Nginx
-FROM nginx:1.25-alpine as production
+FROM nginx:alpine as production
 
 # Метаданные
 LABEL maintainer="seo-team" \
       description="SEO Link Recommender Frontend" \
       version="1.0"
 
-# Создаем непривилегированного пользователя с уникальным GID/UID
+# Копируем конфигурацию nginx
+COPY --from=assets-builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Копируем статические файлы
+COPY --from=assets-builder /app/index.html /usr/share/nginx/html/index.html
+
+# Создаем непривилегированного пользователя
 RUN addgroup -g 1001 -S nginx-app && \
     adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin \
-    -G nginx-app -g nginx-app nginx-app
-
-# Копируем оптимизированные статические файлы
-COPY --from=assets-builder --chown=nginx-app:nginx-app \
-     /app/index.html /usr/share/nginx/html/index.html
-
-COPY --from=assets-builder --chown=nginx-app:nginx-app \
-     /app/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Удаляем default конфиг Nginx и создаем нужные директории
-RUN rm -f /etc/nginx/conf.d/default.conf.template && \
-    mkdir -p /var/cache/nginx/client_temp && \
-    chown -R nginx-app:nginx-app /var/cache/nginx && \
+    -G nginx-app -g nginx-app nginx-app && \
     chown -R nginx-app:nginx-app /usr/share/nginx/html && \
-    # Создаем файл для PID с правильными правами
-    touch /var/run/nginx.pid && \
-    chown nginx-app:nginx-app /var/run/nginx.pid
+    chown -R nginx-app:nginx-app /var/cache/nginx
 
 # Healthcheck для мониторинга
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/ || exit 1
-
-# Переключаемся на непривилегированного пользователя
-USER nginx-app
 
 # Экспонируем порт
 EXPOSE 80

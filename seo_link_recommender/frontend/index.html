@@ -11,7 +11,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.css" rel="stylesheet">
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
   <!-- Удаленное логирование для отладки -->
   <script src="https://jsconsole.com/remote.js?F9FF6B9B-D226-4911-A20A-F49F54A4BA32"></script>
@@ -2332,7 +2332,7 @@
                       <div style={{padding: '24px', textAlign: 'center'}}>
                         <i data-feather="trending-up" style={{width: '48px', height: '48px', marginBottom: '16px'}}></i>
                         <h3 style={{fontSize: '2rem', fontWeight: '700', marginBottom: '8px'}}>
-                          {benchmarkResults ? benchmarkResults.best_model?.overall_score?.toFixed(1) : '--'}
+                          {benchmarkResults && benchmarkResults.best_model && benchmarkResults.best_model.overall_score ? benchmarkResults.best_model.overall_score.toFixed(1) : '--'}
                         </h3>
                         <p style={{margin: '0', opacity: '0.9'}}>Лучший результат</p>
                       </div>
@@ -2369,19 +2369,19 @@
                               <div style={{display: 'flex', justifyContent: 'space-between'}}>
                                 <span style={{color: '#666'}}>Общий балл:</span>
                                 <span style={{fontWeight: '600', color: '#000000'}}>
-                                  {metrics.overall_score?.toFixed(1) || '--'}
+                                  {metrics.overall_score ? metrics.overall_score.toFixed(1) : '--'}
                                 </span>
                               </div>
                               <div style={{display: 'flex', justifyContent: 'space-between'}}>
                                 <span style={{color: '#666'}}>Скорость:</span>
                                 <span style={{fontWeight: '600', color: '#000000'}}>
-                                  {metrics.tokens_per_second?.toFixed(1) || '--'} т/с
+                                  {metrics.tokens_per_second ? metrics.tokens_per_second.toFixed(1) : '--'} т/с
                                 </span>
                               </div>
                               <div style={{display: 'flex', justifyContent: 'space-between'}}>
                                 <span style={{color: '#666'}}>Качество:</span>
                                 <span style={{fontWeight: '600', color: '#000000'}}>
-                                  {metrics.language_quality_score?.toFixed(1) || '--'}
+                                  {metrics.language_quality_score ? metrics.language_quality_score.toFixed(1) : '--'}
                                 </span>
                               </div>
                             </div>
@@ -2571,19 +2571,19 @@
                                 <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '12px'}}>
                                   <div style={{textAlign: 'center'}}>
                                     <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-blue)'}}>
-                                      {run.overall_score?.toFixed(1) || '--'}
+                                      {run.overall_score ? run.overall_score.toFixed(1) : '--'}
                                     </div>
                                     <div style={{fontSize: '0.8rem', color: '#666'}}>Общий балл</div>
                                   </div>
                                   <div style={{textAlign: 'center'}}>
                                     <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-green)'}}>
-                                      {run.performance_score?.toFixed(1) || '--'}
+                                      {run.performance_score ? run.performance_score.toFixed(1) : '--'}
                                     </div>
                                     <div style={{fontSize: '0.8rem', color: '#666'}}>Скорость</div>
                                   </div>
                                   <div style={{textAlign: 'center'}}>
                                     <div style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--apple-orange)'}}>
-                                      {run.quality_score?.toFixed(1) || '--'}
+                                      {run.quality_score ? run.quality_score.toFixed(1) : '--'}
                                     </div>
                                     <div style={{fontSize: '0.8rem', color: '#666'}}>Качество</div>
                                   </div>
