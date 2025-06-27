@@ -27,12 +27,18 @@ class DatabaseSettings(BaseSettings):
     @property
     def url(self) -> str:
         """URL подключения к базе данных"""
-        return f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        if self.password:
+            return f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        else:
+            return f"postgresql+asyncpg://{self.username}@{self.host}:{self.port}/{self.database}"
     
     @property
     def sync_url(self) -> str:
         """Синхронный URL подключения к базе данных"""
-        return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        if self.password:
+            return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        else:
+            return f"postgresql://{self.username}@{self.host}:{self.port}/{self.database}"
 
 
 class RedisSettings(BaseSettings):

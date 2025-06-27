@@ -6,7 +6,7 @@ echo ""
 
 # Функция для проверки статуса
 check_status() {
-    local container_name="seo_link_recommender-ollama-1"
+    local container_name="relink-ollama-1"
     
     echo "📊 Статус контейнера:"
     docker ps --filter "name=$container_name" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

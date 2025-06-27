@@ -93,7 +93,7 @@ publish_images() {
     
     # Список образов для публикации
     images_names=(backend frontend-classic frontend-vite)
-    images_tags=(seo_link_recommender-backend:latest seo_link_recommender-frontend-classic:latest seo_link_recommender-frontend-vite:latest)
+    images_tags=(relink-backend:latest relink-frontend-classic:latest relink-frontend-vite:latest)
     
     # Тегируем и публикуем каждый образ
     for i in 0 1 2; do
