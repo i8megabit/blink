@@ -47,6 +47,16 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class UserRegistrationRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
 class UserResponse(BaseModel):
     id: int
     username: str

@@ -63,7 +63,8 @@ from .validation import (
 )
 from .auth import (
     get_current_user, create_access_token, get_password_hash, verify_password,
-    User, UserCreate, UserResponse, Token, TokenData
+    User, UserCreate, UserResponse, Token, TokenData,
+    UserRegistrationRequest, UserLoginRequest
 )
 from .database import get_db, engine
 
