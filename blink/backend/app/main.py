@@ -791,3 +791,176 @@ class AdvancedRAGManager:
         global thought_generator
         return await thought_generator.create_semantic_knowledge_base(domain, posts, client_id)
 
+
+# ============================================================================
+# API ROUTES
+# ============================================================================
+
+@app.get("/")
+async def root():
+    """Корневой endpoint."""
+    return {"message": "Blink API v4.0.0", "status": "running"}
+
+
+@app.get("/health")
+async def health_check():
+    """Проверка здоровья сервиса."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/v1/health")
+async def api_health():
+    """API health check."""
+    return {"status": "healthy", "version": "4.0.0", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/v1/version")
+async def get_version():
+    """Получение версии приложения."""
+    try:
+        version_file = Path("VERSION")
+        if version_file.exists():
+            with open(version_file, 'r', encoding='utf-8') as f:
+                version = f.read().strip()
+        else:
+            version = "4.0.0"  # Версия по умолчанию
+        
+        return {
+            "version": version,
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "commitHash": os.getenv("GIT_COMMIT_HASH", ""),
+            "environment": os.getenv("ENVIRONMENT", "development")
+        }
+    except Exception as e:
+        return {
+            "version": "4.0.0",
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/settings")
+async def get_settings():
+    """Заглушка настроек для фронтенда."""
+    return {
+        "theme": "light",
+        "language": "ru",
+        "features": {
+            "ai_recommendations": True,
+            "advanced_benchmark": True,
+            "notifications": True,
+            "export": True
+        }
+    }
+
+
+@app.get("/api/v1/ollama_status")
+async def get_ollama_status():
+    """Проверка статуса Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://ollama:11434/api/tags")
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                return {
+                    "status": "available",
+                    "models": [model.get("name", "") for model in models],
+                    "last_check": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Ollama responded with status {response.status_code}",
+                    "last_check": datetime.now().isoformat()
+                }
+    except Exception as e:
+        return {
+            "status": "unavailable",
+            "message": str(e),
+            "last_check": datetime.now().isoformat()
+        }
+
+
+@app.get("/api/v1/domains")
+async def get_domains():
+    """Получение списка доменов."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Domain))
+            domains = result.scalars().all()
+            return [
+                {
+                    "id": domain.id,
+                    "name": domain.name,
+                    "display_name": domain.display_name,
+                    "description": domain.description,
+                    "total_posts": domain.total_posts,
+                    "total_analyses": domain.total_analyses,
+                    "last_analysis_at": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None
+                }
+                for domain in domains
+            ]
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/v1/analysis_history")
+async def get_analysis_history():
+    """Получение истории анализов."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(AnalysisHistory).order_by(AnalysisHistory.created_at.desc()))
+            histories = result.scalars().all()
+            return [
+                {
+                    "id": history.id,
+                    "domain_id": history.domain_id,
+                    "posts_analyzed": history.posts_analyzed,
+                    "connections_found": history.connections_found,
+                    "recommendations_generated": history.recommendations_generated,
+                    "created_at": history.created_at.isoformat(),
+                    "completed_at": history.completed_at.isoformat() if history.completed_at else None
+                }
+                for history in histories
+            ]
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/v1/benchmarks")
+async def get_benchmarks():
+    """Получение списка бенчмарков."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(BenchmarkRun).order_by(BenchmarkRun.created_at.desc()))
+            benchmarks = result.scalars().all()
+            return [
+                {
+                    "id": benchmark.id,
+                    "name": benchmark.name,
+                    "description": benchmark.description,
+                    "benchmark_type": benchmark.benchmark_type,
+                    "status": benchmark.status,
+                    "overall_score": benchmark.overall_score,
+                    "created_at": benchmark.created_at.isoformat()
+                }
+                for benchmark in benchmarks
+            ]
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# Инициализация при запуске
+@app.on_event("startup")
+async def startup_event():
+    """Инициализация при запуске приложения."""
+    global websocket_manager
+    websocket_manager = WebSocketManager()
+    initialize_rag_system()
+    print("🚀 Blink API v4.0.0 запущен!")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

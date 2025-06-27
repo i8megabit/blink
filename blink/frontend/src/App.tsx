@@ -494,7 +494,7 @@ function App() {
       insights: 'AI Инсайты',
       analytics: 'Аналитика'
     }
-    return titles[activeTab] || 'SEO Link Recommender'
+    return titles[activeTab] || 'Blink'
   }
 
   return (
@@ -509,7 +509,7 @@ function App() {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-semibold">
               🔗
             </div>
-            <h1 className="text-lg font-semibold">SEO Link Recommender</h1>
+            <h1 className="text-lg font-semibold">Blink</h1>
           </div>
         </div>
         

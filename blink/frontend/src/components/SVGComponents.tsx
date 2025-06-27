@@ -1,6 +1,6 @@
 import React from 'react'
 
-// 🎨 ЛОГОТИП SEO Link Recommender
+// 🎨 ЛОГОТИП Blink
 export const Logo: React.FC<{ className?: string; size?: number }> = ({ 
   className = "", 
   size = 32 

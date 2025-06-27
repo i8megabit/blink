@@ -1,5 +1,5 @@
 // Основной файл для Vite
-console.log('🚀 SEO Link Recommender (Vite) - Основной модуль загружен!');
+console.log('🚀 Blink (Vite) - Основной модуль загружен!');
 
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', function() {
@@ -204,4 +204,4 @@ async function loadBenchmarkHistory() {
 window.checkOllamaStatus = checkOllamaStatus;
 window.loadDomains = loadDomains;
 window.loadAnalysisHistory = loadAnalysisHistory;
-window.loadBenchmarkHistory = loadBenchmarkHistory; 
+window.loadBenchmarkHistory = loadBenchmarkHistory;
