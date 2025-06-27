@@ -1,181 +1,213 @@
-// import React from 'react'; // не нужен, если не используется напрямую
-import { WebSocketMessage } from '../types';
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
+import { Progress } from './ui/Progress';
+import { Badge } from './ui/Badge';
 import { cn } from '../lib/utils';
-import { Card } from './ui/Card';
+import { 
+  Brain, 
+  Activity, 
+  CheckCircle, 
+  Clock, 
+  AlertCircle,
+  Lightbulb,
+  TrendingUp,
+  Zap
+} from 'lucide-react';
 
-interface AnalysisProgressProps {
-  messages: WebSocketMessage[];
-  isActive: boolean;
-  onClose?: () => void;
+interface AIThought {
+  thought_id: string;
+  stage: string;
+  content: string;
+  confidence: number;
+  semantic_weight: number;
+  related_concepts: string[];
+  reasoning_chain: string[];
+  timestamp: string;
 }
 
-export function AnalysisProgress({ messages, isActive, onClose }: AnalysisProgressProps) {
-  if (!isActive || messages.length === 0) {
+interface AnalysisProgressProps {
+  isActive: boolean;
+  currentStep: string;
+  progress: number;
+  totalSteps: number;
+  aiThoughts: AIThought[];
+  analysisStats?: {
+    postsAnalyzed?: number;
+    connectionsFound?: number;
+    recommendationsGenerated?: number;
+    processingTime?: number;
+  };
+  error?: string;
+  className?: string;
+}
+
+export function AnalysisProgress({
+  isActive,
+  currentStep,
+  progress,
+  totalSteps,
+  aiThoughts,
+  analysisStats,
+  error,
+  className
+}: AnalysisProgressProps) {
+  if (!isActive && !error && !analysisStats) {
     return null;
   }
 
-  const latestMessage = messages[messages.length - 1];
-  if (!latestMessage) {
-    return null;
-  }
+  const getStageIcon = (stage: string) => {
+    switch (stage) {
+      case 'analyzing': return <Brain className="w-4 h-4" />;
+      case 'connecting': return <Activity className="w-4 h-4" />;
+      case 'evaluating': return <TrendingUp className="w-4 h-4" />;
+      case 'optimizing': return <Zap className="w-4 h-4" />;
+      case 'vectorizing': return <Lightbulb className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
+    }
+  };
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('ru-RU', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
-    });
+  const getStageColor = (stage: string) => {
+    switch (stage) {
+      case 'analyzing': return 'bg-blue-500';
+      case 'connecting': return 'bg-green-500';
+      case 'evaluating': return 'bg-yellow-500';
+      case 'optimizing': return 'bg-purple-500';
+      case 'vectorizing': return 'bg-indigo-500';
+      default: return 'bg-gray-500';
+    }
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 max-w-lg w-full">
-      <Card className="p-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border shadow-xl">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-            Анализ в процессе
-          </h3>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* Основной прогресс */}
-        {latestMessage.type === 'progress' && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {latestMessage.step}
-              </span>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {latestMessage.current}/{latestMessage.total}
-              </span>
-            </div>
-            
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
-                style={{ 
-                  width: `${latestMessage.percentage || 0}%` 
-                }}
-              />
-            </div>
-            
-            {latestMessage.details && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                {latestMessage.details}
-              </p>
+    <div className={cn("space-y-4", className)}>
+      {/* Основной прогресс */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {error ? (
+              <AlertCircle className="w-5 h-5 text-red-500" />
+            ) : isActive ? (
+              <Activity className="w-5 h-5 text-blue-500 animate-pulse" />
+            ) : (
+              <CheckCircle className="w-5 h-5 text-green-500" />
             )}
-          </div>
-        )}
-
-        {/* Последние мысли ИИ */}
-        {latestMessage.type === 'ai_thinking' || latestMessage.type === 'enhanced_ai_thinking' && (
-          <div className="mb-3">
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Мысли ИИ
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {messages.filter(msg => 
-                  msg.type === 'ai_thinking' || msg.type === 'enhanced_ai_thinking'
-                ).length}
-              </span>
+            {error ? 'Ошибка анализа' : isActive ? 'Анализ в процессе' : 'Анализ завершен'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error ? (
+            <div className="text-red-600 bg-red-50 p-3 rounded-lg">
+              <p className="font-medium">Произошла ошибка:</p>
+              <p className="text-sm">{error}</p>
             </div>
-            
-            <div className="space-y-2 max-h-32 overflow-y-auto">
-              {messages.filter(msg => 
-                msg.type === 'ai_thinking' || msg.type === 'enhanced_ai_thinking'
-              ).slice(-3).map((msg, index) => (
-                <div
-                  key={`${msg.timestamp}-${index}`}
-                  className={cn(
-                    'text-xs p-2 rounded-md border-l-2',
-                    msg.type === 'enhanced_ai_thinking' 
-                      ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-600'
-                      : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-600'
+          ) : (
+            <>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Прогресс</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <Progress value={progress} max={100} className="h-2" />
+              </div>
+
+              {currentStep && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="w-4 h-4" />
+                  <span>{currentStep}</span>
+                </div>
+              )}
+
+              {/* Статистика анализа */}
+              {analysisStats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
+                  {analysisStats.postsAnalyzed !== undefined && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {analysisStats.postsAnalyzed}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Статей проанализировано</div>
+                    </div>
                   )}
+                  {analysisStats.connectionsFound !== undefined && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {analysisStats.connectionsFound}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Связей найдено</div>
+                    </div>
+                  )}
+                  {analysisStats.recommendationsGenerated !== undefined && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {analysisStats.recommendationsGenerated}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Рекомендаций</div>
+                    </div>
+                  )}
+                  {analysisStats.processingTime !== undefined && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {analysisStats.processingTime.toFixed(1)}с
+                      </div>
+                      <div className="text-xs text-muted-foreground">Время обработки</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Мысли */}
+      {aiThoughts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-500" />
+              Мысли ИИ
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {aiThoughts.slice(-5).reverse().map((thought) => (
+                <div
+                  key={thought.thought_id}
+                  className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-100"
                 >
-                  <div className="flex items-start space-x-2">
-                    <span className="flex-shrink-0">
-                      {msg.emoji || '🧠'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        {msg.thought || msg.content}
-                      </p>
-                      {msg.stage && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Этап: {msg.stage}
-                        </p>
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "p-2 rounded-full text-white",
+                      getStageColor(thought.stage)
+                    )}>
+                      {getStageIcon(thought.stage)}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {thought.stage}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          Уверенность: {Math.round(thought.confidence * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-sm">{thought.content}</p>
+                      {thought.related_concepts.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {thought.related_concepts.slice(0, 3).map((concept, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              {concept}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Статус Ollama */}
-        {latestMessage.type === 'ollama' && latestMessage.info && (
-          <div className="mb-3">
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Статус Ollama
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatTime(latestMessage.timestamp)}
-              </span>
-            </div>
-            
-            <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-              {latestMessage.info.status && (
-                <p>Статус: {latestMessage.info.status}</p>
-              )}
-              {latestMessage.info.processing_time && (
-                <p>Время обработки: {latestMessage.info.processing_time}</p>
-              )}
-              {latestMessage.info.batch && (
-                <p>Батч: {latestMessage.info.batch}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Ошибки */}
-        {latestMessage.type === 'error' && (
-          <div className="mb-3">
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm font-medium text-red-700 dark:text-red-400">
-                Ошибка
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatTime(latestMessage.timestamp)}
-              </span>
-            </div>
-            
-            <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded-md">
-              {latestMessage.message || latestMessage.error}
-            </div>
-          </div>
-        )}
-
-        {/* Общая статистика */}
-        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <span>
-            Сообщений: {messages.length}
-          </span>
-          <span>
-            Последнее: {formatTime(latestMessage.timestamp)}
-          </span>
-        </div>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 } 

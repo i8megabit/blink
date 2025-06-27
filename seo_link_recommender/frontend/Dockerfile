@@ -36,6 +36,9 @@ COPY --from=assets-builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Копируем все статические файлы из dist
 COPY --from=assets-builder /app/dist/ /usr/share/nginx/html/
+# Копируем основной index-vite.html и fallback index.html
+COPY index-vite.html /usr/share/nginx/html/index-vite.html
+COPY index.html /usr/share/nginx/html/index.html
 
 # Устанавливаем правильные права доступа
 RUN chown -R nginx-app:nginx-app /var/cache/nginx && \
