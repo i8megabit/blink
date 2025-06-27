@@ -671,11 +671,23 @@
       // Real-time analysis states
       const [analysisLogs, setAnalysisLogs] = React.useState([]);
       const [analysisStats, setAnalysisStats] = React.useState(null);
+      
+      // Используем useDeferredValue для плавного прогресса без скачков скролла
+      const deferredAnalysisStats = React.useDeferredValue(analysisStats);
+      const isProgressStale = analysisStats !== deferredAnalysisStats;
+      
       const [websocket, setWebsocket] = React.useState(null);
       const [clientId, setClientId] = React.useState(null);
       const [connectionStatus, setConnectionStatus] = React.useState('disconnected');
       
-      // Refs для оптимизации прогресс-бара без перерендеринга
+      // Оптимистичные ответы Ollama для мгновенного UI
+      const [ollamaResponses, setOllamaResponses] = React.useState([]);
+      const [optimisticOllamaResponses, addOptimisticOllamaResponse] = React.useOptimistic(
+        ollamaResponses,
+        (state, newResponse) => [...state, { ...newResponse, pending: true }]
+      );
+      
+      // Refs только для критических DOM операций
       const progressBarRef = React.useRef(null);
       const progressTextRef = React.useRef(null);
       const progressDetailsRef = React.useRef(null);
@@ -799,28 +811,24 @@
         
         switch (data.type) {
           case 'progress':
-            addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
-            
-            // Прямое обновление DOM без перерендеринга React
-            if (progressBarRef.current) {
-              progressBarRef.current.style.width = `${data.percentage}%`;
-            }
-            if (progressTextRef.current) {
-              progressTextRef.current.textContent = `${data.step} (${data.current}/${data.total}) - ${data.percentage}%`;
-            }
-            if (progressDetailsRef.current) {
-              progressDetailsRef.current.textContent = data.details;
+            // Минимизируем логи для производительности 
+            if (process?.env?.NODE_ENV !== 'production') {
+              addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
             }
             
-            // Обновляем состояние только для логики, но не для рендеринга
-            setAnalysisStats(prev => ({
+            // Используем только setState - deferredValue предотвратит скачки скролла
+            setAnalysisStats({
               step: data.step,
               current: data.current,
               total: data.total,
               percentage: data.percentage,
-              details: data.details,
-              shouldAnimate: false // Отключаем анимации React
-            }));
+              details: data.details
+            });
+            
+            // Прямое обновление только для критически важных элементов
+            if (progressDetailsRef.current) {
+              progressDetailsRef.current.textContent = data.details;
+            }
             break;
             
           case 'ollama':
@@ -828,6 +836,28 @@
               addLog('info', '🤖 Запуск Ollama анализа', 
                 `Модель: ${data.info.model}, Статей: ${data.info.articles_count}`);
               addNotification('info', 'Ollama запущена', `Анализ ${data.info.articles_count} статей`, 3000);
+            } else if (data.info.status === 'response_preview') {
+              // Оптимистично добавляем ответ в UI
+              addOptimisticOllamaResponse({
+                id: Date.now(),
+                model: data.info.model,
+                preview: data.info.preview,
+                totalLength: data.info.total_length,
+                timestamp: new Date(),
+                type: 'preview'
+              });
+              
+              // Минимизируем console.log для производительности
+              if (process?.env?.NODE_ENV !== 'production') {
+                addLog('info', '🧠 Ollama отвечает на русском', 
+                  `Модель ${data.info.model} сгенерировала ${data.info.total_length} символов`);
+              }
+              
+              // Обновляем детали прогресса без перерендера React
+              if (progressDetailsRef.current) {
+                progressDetailsRef.current.textContent = 
+                  `🧠 Ollama думает на русском: ${data.info.total_length} символов сгенерировано...`;
+              }
             } else if (data.info.status === 'completed') {
               addLog('success', '🤖 Ollama завершила анализ', 
                 `Время: ${data.info.request_time}, Ответ: ${data.info.response_length} символов`);
@@ -1141,38 +1171,66 @@
                 }}>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                      <div ref={progressTextRef} className="font-weight-bold" style={{fontSize: '1.25rem'}}>
-                        {analysisError ? 'Ошибка анализа' : (analysisStats ? analysisStats.step : 'Подготовка...')}
+                      <div className="font-weight-bold" style={{fontSize: '1.25rem'}}>
+                        {analysisError ? 'Ошибка анализа' : (deferredAnalysisStats ? deferredAnalysisStats.step : 'Подготовка...')}
                       </div>
-                      <div style={{opacity: 0.8}}>
+                      <div style={{opacity: isProgressStale ? 0.7 : 0.8, transition: 'opacity 0.2s ease'}}>
                         {analysisError ? 
                           'Процесс прерван' :
-                          (analysisStats ? `${analysisStats.current}/${analysisStats.total} (${analysisStats.percentage}%)` : '0/0 (0%)')
+                          (deferredAnalysisStats ? `${deferredAnalysisStats.current}/${deferredAnalysisStats.total} (${deferredAnalysisStats.percentage}%)` : '0/0 (0%)')
                         }
                       </div>
                     </div>
                     <div style={{fontSize: '2rem'}}>
                       {analysisError ? '❌' : 
-                       analysisStats.percentage === 100 ? '✅' : '⚙️'}
+                       (deferredAnalysisStats?.percentage === 100) ? '✅' : '⚙️'}
                     </div>
                   </div>
                   
                   <div className="progress-apple">
                     <div 
-                      ref={progressBarRef}
                       className="progress-bar" 
                       style={{
-                        width: analysisError ? '100%' : (analysisStats ? `${analysisStats.percentage}%` : '0%'),
+                        width: analysisError ? '100%' : (deferredAnalysisStats ? `${deferredAnalysisStats.percentage}%` : '0%'),
                         background: analysisError ? 
                           'linear-gradient(90deg, var(--apple-red), #ff6b6b)' :
-                          'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))'
+                          'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))',
+                        opacity: isProgressStale ? 0.8 : 1,
+                        transition: 'width 0.3s ease-out, opacity 0.2s ease'
                       }}
                     ></div>
                   </div>
                   
                   <div ref={progressDetailsRef} className="mt-2" style={{color: '#FFFFFF', fontSize: '0.95rem', fontWeight: '500'}}>
-                    {analysisError ? analysisError.details : (analysisStats ? analysisStats.details : 'Ожидание...')}
+                    {analysisError ? analysisError.details : (deferredAnalysisStats ? deferredAnalysisStats.details : 'Ожидание...')}
                   </div>
+                  
+                  {/* Секция ответов Ollama */}
+                  {optimisticOllamaResponses.length > 0 && (
+                    <div className="mt-4" style={{background: 'rgba(255, 255, 255, 0.1)', borderRadius: '8px', padding: '16px'}}>
+                      <h6 style={{color: '#FFFFFF', marginBottom: '12px', fontSize: '1rem'}}>
+                        🧠 Ответы Ollama на русском языке
+                      </h6>
+                      {optimisticOllamaResponses.slice(-3).map((response, index) => (
+                        <div key={response.id} style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          borderRadius: '6px',
+                          padding: '12px',
+                          marginBottom: '8px',
+                          border: response.pending ? '1px dashed rgba(255, 255, 255, 0.3)' : 'none',
+                          opacity: response.pending ? 0.8 : 1
+                        }}>
+                          <div style={{fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px'}}>
+                            {response.timestamp.toLocaleTimeString()} • {response.model} • {response.totalLength} символов
+                            {response.pending && ' • Обрабатывается...'}
+                          </div>
+                          <div style={{color: '#FFFFFF', fontSize: '0.9rem', lineHeight: '1.4'}}>
+                            {response.preview}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               

@@ -502,6 +502,15 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 # Оптимальная модель для SEO задач: qwen2.5:7b - отличный баланс качества/стабильности/ресурсов
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
+# 🎯 ОПТИМИЗИРОВАННЫЕ НАСТРОЙКИ ТОКЕНОВ для модели qwen2.5:7b
+# Модель имеет лимит контекста 8192 токена, оставляем запас для промпта и ответа
+OPTIMAL_CONTEXT_SIZE = 6144      # Безопасный размер контекста (75% от лимита)
+OPTIMAL_PREDICTION_SIZE = 800    # Оптимальный размер ответа
+OPTIMAL_TEMPERATURE = 0.3        # Баланс точности и креативности
+OPTIMAL_TOP_P = 0.85            # Оптимизируем для качества
+OPTIMAL_TOP_K = 50              # Расширяем выбор токенов
+OPTIMAL_REPEAT_PENALTY = 1.08   # Снижаем повторения
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://seo_user:seo_pass@localhost/seo_db",
@@ -2096,6 +2105,17 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         print(content)
         print("="*50)
         
+        # Отправляем ответ Ollama через WebSocket для отображения в UI
+        if client_id:
+            # Берем первые 500 символов ответа для preview
+            preview_text = content[:500] + "..." if len(content) > 500 else content
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "response_preview",
+                "preview": preview_text,
+                "total_length": len(content),
+                "model": OLLAMA_MODEL
+            })
+        
         # Шаг 6: Обработка результатов
         if client_id:
             await websocket_manager.send_step(client_id, "Обработка ответа", 6, 7, "Парсинг рекомендаций от ИИ...")
@@ -2324,10 +2344,7 @@ async def on_startup() -> None:
     asyncio.create_task(delayed_warmup())
 
 
-@app.post("/api/v1/test")
-async def test(req: RecommendRequest) -> dict[str, str]:
-    """Тестовый endpoint."""
-    return {"message": f"Получен текст: {req.text[:50]}..."}
+# Тестовый эндпоинт удален для продакшена
 
 
 @app.post("/api/v1/recommend")
@@ -2403,277 +2420,13 @@ async def wp_index_domain(req: WPRequest) -> dict[str, object]:
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@app.post("/api/v1/wp_generate_recommendations")  
-async def wp_generate_recommendations(req: WPRequest) -> dict[str, list[dict[str, str]]]:
-    """Генерация рекомендаций для уже проиндексированного домена."""
-    try:
-        if req.client_id:
-            await websocket_manager.send_step(
-                req.client_id, 
-                "Стабильная генерация", 
-                0, 
-                7, 
-                f"Анализ домена {req.domain} с генерацией по одной рекомендации"
-            )
-        
-        # Используем стабильную генерацию вместо полной индексации
-        recs = await generate_stable_recommendations(req.domain, req.client_id)
-        total_analysis_time = 0.0  # Время считаем внутри функции
-        
-        # Сохраняем историю рекомендаций
-        async with AsyncSessionLocal() as session:
-            domain_result = await session.execute(
-                select(Domain).where(Domain.name == req.domain)
-            )
-            domain_obj = domain_result.scalar_one_or_none()
-            
-            if domain_obj:
-                domain_obj.total_analyses += 1
-                domain_obj.last_analysis_at = datetime.utcnow()
-                
-                analysis = AnalysisHistory(
-                    domain_id=domain_obj.id,
-                    posts_analyzed=domain_obj.total_posts,
-                    connections_found=len(recs),
-                    recommendations_generated=len(recs),
-                    recommendations=recs,
-                    thematic_analysis={
-                        "analysis_type": "recommendations_generation",
-                        "domain_indexed": True,
-                        "smart_delta_indexing": True
-                    },
-                    semantic_metrics={
-                        "recommendations_generated": len(recs),
-                        "processing_time": total_analysis_time
-                    },
-                    quality_assessment={
-                        "methodology": "comprehensive_analysis",
-                        "completeness": "exhaustive"
-                    },
-                    llm_model_used=OLLAMA_MODEL,
-                    processing_time_seconds=total_analysis_time,
-                    completed_at=datetime.utcnow()
-                )
-                session.add(analysis)
-                await session.commit()
-        
-        if req.client_id:
-            await websocket_manager.send_progress(req.client_id, {
-                "type": "complete",
-                "message": "Рекомендации сгенерированы!",
-                "recommendations_count": len(recs),
-                "timestamp": datetime.now().isoformat()
-            })
-        
-        return {"recommendations": recs}
-        
-    except Exception as e:
-        error_msg = f"Ошибка генерации рекомендаций: {str(e)}"
-        print(f"❌ {error_msg}")
-        
-        if req.client_id:
-            await websocket_manager.send_error(req.client_id, "Критическая ошибка генерации", error_msg)
-        
-        raise HTTPException(status_code=500, detail=error_msg)
+# Устаревший эндпоинт wp_generate_recommendations удален
 
 
-@app.post("/api/v1/wp_stable")
-async def wp_stable_recommendations(req: WPRequest) -> dict[str, list[dict[str, str]]]:
-    """Стабильная генерация рекомендаций по одной за раз (новый подход)."""
-    try:
-        if req.client_id:
-            await websocket_manager.send_step(
-                req.client_id, 
-                "Инициализация стабильной генерации", 
-                0, 
-                7, 
-                f"Подготовка к стабильному анализу домена {req.domain}"
-            )
-        
-        # Используем стабильную генерацию
-        recs = await generate_stable_recommendations(req.domain, req.client_id)
-        
-        # Сохраняем результаты в БД
-        async with AsyncSessionLocal() as session:
-            domain_result = await session.execute(
-                select(Domain).where(Domain.name == req.domain)
-            )
-            domain_obj = domain_result.scalar_one_or_none()
-            
-            if domain_obj:
-                domain_obj.total_analyses += 1
-                domain_obj.last_analysis_at = datetime.utcnow()
-                
-                analysis = AnalysisHistory(
-                    domain_id=domain_obj.id,
-                    posts_analyzed=min(10, domain_obj.total_posts),  # Анализируем максимум 10 статей
-                    connections_found=len(recs),
-                    recommendations_generated=len(recs),
-                    recommendations=recs,
-                    thematic_analysis={
-                        "analysis_type": "stable_generation",
-                        "method": "single_recommendation_per_request",
-                        "max_requests": 5,
-                        "timeout_per_request": "60s"
-                    },
-                    semantic_metrics={
-                        "stability_focused": True,
-                        "recommendations_generated": len(recs),
-                        "deduplication": "applied"
-                    },
-                    quality_assessment={
-                        "methodology": "stable_single_requests",
-                        "reliability": "high",
-                        "timeout_resistance": "improved"
-                    },
-                    llm_model_used=f"{OLLAMA_MODEL} (stable_mode)",
-                    processing_time_seconds=None,  # Время считается внутри функции
-                    completed_at=datetime.utcnow()
-                )
-                session.add(analysis)
-                await session.commit()
-        
-        if req.client_id:
-            await websocket_manager.send_progress(req.client_id, {
-                "type": "complete",
-                "message": "Стабильная генерация завершена!",
-                "recommendations_count": len(recs),
-                "method": "stable_single_requests",
-                "timestamp": datetime.now().isoformat()
-            })
-        
-        return {"recommendations": recs}
-        
-    except Exception as e:
-        error_msg = f"Ошибка стабильной генерации: {str(e)}"
-        print(f"❌ {error_msg}")
-        
-        if req.client_id:
-            await websocket_manager.send_error(req.client_id, "Критическая ошибка стабильной генерации", error_msg)
-        
-        raise HTTPException(status_code=500, detail=error_msg)
+# Устаревший эндпоинт wp_stable удален
 
 
-@app.post("/api/v1/wp_comprehensive")
-async def wp_comprehensive_analysis(req: WPRequest) -> dict[str, list[dict[str, str]]]:
-    """Полная индексация домена с исчерпывающим анализом всех статей."""
-    try:
-        if req.client_id:
-            await websocket_manager.send_step(
-                req.client_id, 
-                "Инициализация полной индексации", 
-                0, 
-                10, 
-                f"Подготовка к исчерпывающему анализу домена {req.domain}"
-            )
-        
-        # Этап 1: Проверяем и загружаем посты
-        if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Проверка данных", 1, 10, "Проверка статей в БД...")
-        
-        # Проверяем, есть ли уже статьи в БД
-        async with AsyncSessionLocal() as session:
-            domain_result = await session.execute(
-                select(Domain).where(Domain.name == req.domain)
-            )
-            domain_obj = domain_result.scalar_one_or_none()
-            
-            posts_count = 0
-            if domain_obj:
-                posts_result = await session.execute(
-                    select(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
-                )
-                posts_count = len(posts_result.scalars().all())
-        
-        if posts_count == 0:
-            # Загружаем посты если их нет
-            if req.client_id:
-                await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 2, 10, "Получение статей с сайта...")
-            
-            posts_data = await fetch_and_store_wp_posts(req.domain, req.client_id)
-            if isinstance(posts_data, tuple):
-                posts, delta_stats = posts_data
-            else:
-                posts = posts_data
-            posts_count = len(posts)
-        else:
-            if req.client_id:
-                await websocket_manager.send_step(req.client_id, "Использование кеша", 2, 10, f"Найдено {posts_count} статей в БД")
-        
-        print(f"🏗️ Начинаю полную индексацию {posts_count} статей домена {req.domain}")
-        
-        # Этапы 3-10: Полная индексация
-        rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
-        
-        if isinstance(rag_result, tuple) and len(rag_result) == 2:
-            recs, total_analysis_time = rag_result
-        else:
-            recs = rag_result if isinstance(rag_result, list) else []
-            total_analysis_time = 0.0
-        
-        # Сохраняем расширенную историю анализа
-        async with AsyncSessionLocal() as session:
-            domain_result = await session.execute(
-                select(Domain).where(Domain.name == req.domain)
-            )
-            domain_obj = domain_result.scalar_one_or_none()
-            
-            if domain_obj:
-                domain_obj.total_analyses += 1
-                domain_obj.last_analysis_at = datetime.utcnow()
-                
-                analysis = AnalysisHistory(
-                    domain_id=domain_obj.id,
-                    posts_analyzed=posts_count,
-                    connections_found=len(recs),
-                    recommendations_generated=len(recs),
-                    recommendations=recs,
-                    thematic_analysis={
-                        "analysis_type": "comprehensive_domain_indexing",
-                        "total_posts_indexed": posts_count,
-                        "batch_processing": True,
-                        "comprehensive_analysis": True,
-                        "coverage": "exhaustive"
-                    },
-                    semantic_metrics={
-                        "indexing_depth": "maximum",
-                        "context_utilization": "full_database",
-                        "batch_analysis": True,
-                        "semantic_links_found": len(recs)
-                    },
-                    quality_assessment={
-                        "methodology": "comprehensive_domain_indexing",
-                        "completeness": "exhaustive",
-                        "quality_ranking": "applied",
-                        "deduplication": "performed"
-                    },
-                    llm_model_used=f"{OLLAMA_MODEL} (batch_processing)",
-                    processing_time_seconds=total_analysis_time,
-                    completed_at=datetime.utcnow()
-                )
-                session.add(analysis)
-                await session.commit()
-        
-        if req.client_id:
-            await websocket_manager.send_progress(req.client_id, {
-                "type": "complete",
-                "message": "Полная индексация завершена успешно!",
-                "recommendations_count": len(recs),
-                "posts_count": posts_count,
-                "analysis_type": "comprehensive",
-                "timestamp": datetime.now().isoformat()
-            })
-        
-        return {"recommendations": recs}
-        
-    except Exception as e:
-        error_msg = f"Ошибка полной индексации: {str(e)}"
-        print(f"❌ {error_msg}")
-        
-        if req.client_id:
-            await websocket_manager.send_error(req.client_id, "Критическая ошибка полной индексации", error_msg)
-        
-        raise HTTPException(status_code=500, detail=error_msg)
+# Устаревший эндпоинт wp_comprehensive удален
 
 
 @app.get("/api/v1/health")
@@ -3417,7 +3170,7 @@ async def generate_intelligent_semantic_recommendations(domain: str, client_id: 
                     .where(WordPressPost.domain_id == domain_record.id)
                     .where(WordPressPost.content.isnot(None))
                     .order_by(WordPressPost.linkability_score.desc())
-                    .limit(20)  # Берем топ-20 постов с лучшим потенциалом линковки
+                    .limit(50)  # Увеличиваем до 50 статей для лучшего покрытия
                 )
                 
                 all_posts = result.scalars().all()
@@ -3428,9 +3181,16 @@ async def generate_intelligent_semantic_recommendations(domain: str, client_id: 
                         await websocket_manager.send_error(client_id, error_msg)
                     return []
                 
+                # Диагностическое логирование
+                print(f"🔍 ДИАГНОСТИКА СТАТЕЙ:")
+                print(f"   📊 Всего статей в БД для домена: {len(all_posts)}")
+                print(f"   📈 Статьи с linkability_score > 0: {len([p for p in all_posts if p.linkability_score and p.linkability_score > 0])}")
+                print(f"   📝 Статьи с семантическим резюме: {len([p for p in all_posts if p.semantic_summary])}")
+                print(f"   🔑 Статьи с ключевыми концепциями: {len([p for p in all_posts if p.key_concepts])}")
+
                 if client_id:
                     await websocket_manager.send_step(client_id, "Анализ семантики", 2, 8, f"Обработка {len(all_posts)} статей...")
-                
+
                 print(f"📊 Загружено {len(all_posts)} семантически обогащенных статей")
                 
                 # Шаг 2: Создаем улучшенный контекст для LLM
@@ -3469,56 +3229,38 @@ async def generate_intelligent_semantic_recommendations(domain: str, client_id: 
                     await websocket_manager.send_step(client_id, "Создание промпта", 3, 8, "Подготовка контекста для ИИ...")
                 
                 # Шаг 3: Создаем интеллектуальный промпт
-                intelligent_prompt = f"""🎯 ЭКСПЕРТНАЯ ЗАДАЧА: Создание высококачественной внутренней перелинковки для сайта {domain}
+                intelligent_prompt = f"""🎯 ЗАДАЧА: Создание внутренних ссылок для сайта {domain}
 
-🧠 ЭКСПЕРТНЫЙ КОНТЕКСТ:
-Вы - эксперт по SEO и семантическому анализу. Анализируете {len(all_posts)} статей сайта {domain}, каждая из которых имеет детальные семантические метрики и характеристики.
+Анализируешь {len(all_posts)} статей сайта {domain}:
 
-📚 СЕМАНТИЧЕСКИ ОБОГАЩЕННЫЕ СТАТЬИ:
 {articles_context}
 
-🎯 ЭКСПЕРТНАЯ ЦЕЛЬ: 
-Создать максимальное количество ЕСТЕСТВЕННЫХ и ЦЕННЫХ внутренних ссылок, основываясь на:
-✅ Глубоком семантическом анализе ключевых концепций
-✅ Логической последовательности для читателей
-✅ Дополнении информации между статьями
-✅ SEO-оптимизации для поисковых систем
+ЦЕЛЬ: Создать качественные внутренние ссылки между статьями.
 
-🏆 ПРИНЦИПЫ ЭКСПЕРТНЫХ РЕКОМЕНДАЦИЙ:
+ПРИНЦИПЫ:
+1. Семантическая связь между статьями
+2. Логичные переходы для читателя  
+3. Анкоры описывают содержание целевой страницы
+4. Избегай общих фраз: "читать далее", "подробнее"
 
-1️⃣ СЕМАНТИЧЕСКАЯ РЕЛЕВАНТНОСТЬ: Связывай статьи с пересекающимися концепциями
-2️⃣ ПОЛЬЗОВАТЕЛЬСКИЙ JOURNEY: Создавай логичные переходы для читателя
-3️⃣ КОНТЕКСТУАЛЬНАЯ ИНТЕГРАЦИЯ: Анкор должен органично вписываться в текст
-4️⃣ ИНФОРМАЦИОННАЯ ЦЕННОСТЬ: Каждая ссылка должна обогащать понимание темы
+ПРИМЕРЫ ХОРОШИХ АНКОРОВ:
+❌ "подробное руководство по Волгограду"
+✅ "климат, цены на жилье и работу в Волгограде"
 
-📝 ПРАВИЛА ДЛЯ ЭКСПЕРТНЫХ АНКОРОВ:
-❌ ИЗБЕГАЙ: "читать далее", "подробнее", "перейти", "официальный сайт"
-✅ ИСПОЛЬЗУЙ: Специфичные описания содержания целевой страницы
+❌ "информация о достопримечательностях"
+✅ "музеи и памятники Казани с режимом работы"
 
-🎯 ПРИМЕРЫ ЭКСПЕРТНОГО УРОВНЯ:
+ИНСТРУКЦИЯ:
+1. Найди семантические связи между статьями
+2. Создай 10-15 рекомендаций
+3. Для каждой дай обоснование
 
-Вместо: "подробное руководство по Волгограду"
-Используй: "особенности климата, цены на жилье и работу в Волгограде"
+ФОРМАТ:
+[№] ИСТОЧНИК: [URL] → ЦЕЛЬ: [URL]
+АНКОР: "[описательный анкор]"
+ОБОСНОВАНИЕ: [почему связь логична]
 
-Вместо: "информация о достопримечательностях"  
-Используй: "музеи, памятники и культурные объекты Казани с режимом работы"
-
-Вместо: "статья о переезде"
-Используй: "практический опыт переезда с анализом плюсов и минусов жизни в городе"
-
-🔬 АНАЛИТИЧЕСКАЯ ИНСТРУКЦИЯ:
-1. Проанализируй КАЖДУЮ статью на предмет семантических связей с остальными
-2. Найди концептуальные пересечения между статьями
-3. Создай минимум 12-18 рекомендаций высокого качества
-4. Для каждой рекомендации дай подробное семантическое обоснование
-
-📋 СТРОГИЙ ФОРМАТ ОТВЕТА:
-[№] ИСТОЧНИК: [точный URL] → ЦЕЛЬ: [точный URL]
-АНКОР: "[конкретный анкор, описывающий содержание целевой страницы]"
-СЕМАНТИЧЕСКОЕ ОБОСНОВАНИЕ: [детальное объяснение концептуальной связи]
-ЦЕННОСТЬ ДЛЯ ЧИТАТЕЛЯ: [почему переход полезен]
-
-🚀 НАЧНИ ЭКСПЕРТНЫЙ АНАЛИЗ:"""
+НАЧНИ:"""
 
                 if client_id:
                     await websocket_manager.send_step(client_id, "Запрос к ИИ", 4, 8, "Отправка семантического контекста...")
@@ -3546,13 +3288,13 @@ async def generate_intelligent_semantic_recommendations(domain: str, client_id: 
                             "prompt": intelligent_prompt,
                             "stream": False,
                             "options": {
-                                "temperature": 0.3,         # Точность и консистентность
-                                "num_ctx": 10240,          # Максимальный контекст
-                                "num_predict": 1500,       # Больше токенов для детальных ответов
-                                "top_p": 0.9,             # Высокое качество генерации
-                                "top_k": 40,              # Оптимальный выбор
-                                "repeat_penalty": 1.1,     # Избегаем повторений
-                                "seed": 123,              # Фиксированное зерно для воспроизводимости
+                                "temperature": OPTIMAL_TEMPERATURE,
+                                "num_ctx": OPTIMAL_CONTEXT_SIZE,
+                                "num_predict": OPTIMAL_PREDICTION_SIZE,
+                                "top_p": OPTIMAL_TOP_P,
+                                "top_k": OPTIMAL_TOP_K,
+                                "repeat_penalty": OPTIMAL_REPEAT_PENALTY,
+                                "seed": 123,
                                 "stop": ["🚀 НАЧНИ", "КОНЕЦ АНАЛИЗА", "```"],
                                 "num_thread": 6
                             }
@@ -3760,3 +3502,273 @@ async def wp_intelligent_recommendations(req: WPRequest) -> dict[str, list[dict[
             await websocket_manager.send_error(req.client_id, "Ошибка интеллектуального анализа", str(e))
         
         raise HTTPException(status_code=500, detail=error_msg)
+
+
+async def ensure_ollama_model_context(model_name: str, context_size: int = OPTIMAL_CONTEXT_SIZE) -> bool:
+    """Обеспечивает правильную настройку контекста модели Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Проверяем текущие настройки модели
+            response = await client.post(
+                f"{OLLAMA_URL.replace('/api/generate', '/api/show')}",
+                json={"name": model_name}
+            )
+            
+            if response.status_code == 200:
+                model_info = response.json()
+                current_ctx = model_info.get("model_info", {}).get("num_ctx", 2048)
+                
+                print(f"🔧 Текущий контекст модели {model_name}: {current_ctx}")
+                
+                if current_ctx < context_size:
+                    print(f"⚙️  Настраиваю контекст модели на {context_size}...")
+                    
+                    # Выполняем пустой запрос с нужными настройками для "прогрева"
+                    warmup_response = await client.post(
+                        OLLAMA_URL,
+                        json={
+                            "model": model_name,
+                            "prompt": "Тест настройки контекста",
+                            "stream": False,
+                            "options": {
+                                "num_ctx": context_size,
+                                "num_predict": 1,
+                                "temperature": 0.1
+                            }
+                        },
+                        timeout=60
+                    )
+                    
+                    if warmup_response.status_code == 200:
+                        print(f"✅ Контекст модели настроен на {context_size}")
+                        return True
+                    else:
+                        print(f"❌ Ошибка настройки контекста: {warmup_response.status_code}")
+                        return False
+                else:
+                    print(f"✅ Контекст модели уже настроен правильно: {current_ctx}")
+                    return True
+            else:
+                print(f"❌ Не удалось получить информацию о модели: {response.status_code}")
+                return False
+                
+    except Exception as e:
+        print(f"❌ Ошибка настройки контекста модели: {e}")
+        return False
+
+
+async def generate_intelligent_semantic_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
+    """Улучшенная генерация рекомендаций с использованием глубокого семантического анализа."""
+    
+    analysis_start_time = datetime.now()
+    
+    try:
+        if client_id:
+            await websocket_manager.send_step(client_id, "Начало умного анализа", 1, 8, "Инициализация семантического движка...")
+        
+        print(f"🧠 Запуск интеллектуального анализа для {domain}...")
+        
+        # Шаг 1: Получаем семантически обогащенные данные из БД
+        async with get_async_session() as session:
+            try:
+                domain_obj = await session.execute(
+                    select(Domain).where(Domain.name == domain)
+                )
+                domain_record = domain_obj.scalar_one_or_none()
+                
+                if not domain_record:
+                    error_msg = f"❌ Домен {domain} не найден в БД"
+                    if client_id:
+                        await websocket_manager.send_error(client_id, error_msg)
+                    return []
+                
+                # Получаем все посты с полными семантическими данными
+                result = await session.execute(
+                    select(WordPressPost)
+                    .where(WordPressPost.domain_id == domain_record.id)
+                    .where(WordPressPost.content.isnot(None))
+                    .order_by(WordPressPost.linkability_score.desc())
+                    .limit(50)  # Увеличиваем до 50 статей для лучшего покрытия
+                )
+                
+                all_posts = result.scalars().all()
+                
+                if not all_posts:
+                    error_msg = f"❌ Не найдено статей для домена {domain}"
+                    if client_id:
+                        await websocket_manager.send_error(client_id, error_msg)
+                    return []
+                
+                # Диагностическое логирование
+                print(f"🔍 ДИАГНОСТИКА СТАТЕЙ:")
+                print(f"   📊 Всего статей в БД для домена: {len(all_posts)}")
+                print(f"   📈 Статьи с linkability_score > 0: {len([p for p in all_posts if p.linkability_score and p.linkability_score > 0])}")
+                print(f"   📝 Статьи с семантическим резюме: {len([p for p in all_posts if p.semantic_summary])}")
+                print(f"   🔑 Статьи с ключевыми концепциями: {len([p for p in all_posts if p.key_concepts])}")
+
+                if client_id:
+                    await websocket_manager.send_step(client_id, "Анализ семантики", 2, 8, f"Обработка {len(all_posts)} статей...")
+
+                print(f"📊 Загружено {len(all_posts)} семантически обогащенных статей")
+                
+                # Шаг 2: Создаем улучшенный контекст для LLM
+                articles_context = ""
+                posts_data = []
+                
+                for i, post in enumerate(all_posts, 1):
+                    post_data = {
+                        'title': post.title,
+                        'link': post.link,
+                        'content': post.content[:400],  # Больше контента
+                        'key_concepts': post.key_concepts or [],
+                        'semantic_summary': post.semantic_summary or '',
+                        'content_type': post.content_type or 'статья',
+                        'difficulty_level': post.difficulty_level or 'средний',
+                        'target_audience': post.target_audience or 'общая аудитория',
+                        'linkability_score': post.linkability_score or 0.5,
+                        'semantic_richness': post.semantic_richness or 0.5
+                    }
+                    posts_data.append(post_data)
+                    
+                    # Создаем богатый контекст для каждой статьи
+                    concepts_str = ', '.join(post_data['key_concepts'][:10]) if post_data['key_concepts'] else 'не определены'
+                    
+                    articles_context += f"""📄 СТАТЬЯ {i}: «{post_data['title']}»
+🔗 URL: {post_data['link']}
+📊 АНАЛИТИКА: Тип: {post_data['content_type']} | Сложность: {post_data['difficulty_level']} | Потенциал связей: {post_data['linkability_score']:.2f} | Семантическая насыщенность: {post_data['semantic_richness']:.2f}
+👥 ЦЕЛЕВАЯ АУДИТОРИЯ: {post_data['target_audience']}
+🧠 КЛЮЧЕВЫЕ КОНЦЕПЦИИ: {concepts_str}
+📝 СЕМАНТИЧЕСКОЕ РЕЗЮМЕ: {post_data['semantic_summary'] or 'Автоматически извлечено из контента'}
+💡 ФРАГМЕНТ КОНТЕНТА: {post_data['content']}...
+
+"""
+
+                if client_id:
+                    await websocket_manager.send_step(client_id, "Создание промпта", 3, 8, "Подготовка контекста для ИИ...")
+                
+                # Шаг 3: Создаем интеллектуальный промпт
+                intelligent_prompt = f"""🎯 ЗАДАЧА: Создание внутренних ссылок для сайта {domain}
+
+Анализируешь {len(all_posts)} статей сайта {domain}:
+
+{articles_context}
+
+ЦЕЛЬ: Создать качественные внутренние ссылки между статьями.
+
+ПРИНЦИПЫ:
+1. Семантическая связь между статьями
+2. Логичные переходы для читателя  
+3. Анкоры описывают содержание целевой страницы
+4. Избегай общих фраз: "читать далее", "подробнее"
+
+ПРИМЕРЫ ХОРОШИХ АНКОРОВ:
+❌ "подробное руководство по Волгограду"
+✅ "климат, цены на жилье и работу в Волгограде"
+
+❌ "информация о достопримечательностях"
+✅ "музеи и памятники Казани с режимом работы"
+
+ИНСТРУКЦИЯ:
+1. Найди семантические связи между статьями
+2. Создай 10-15 рекомендаций
+3. Для каждой дай обоснование
+
+ФОРМАТ:
+[№] ИСТОЧНИК: [URL] → ЦЕЛЬ: [URL]
+АНКОР: "[описательный анкор]"
+ОБОСНОВАНИЕ: [почему связь логична]
+
+НАЧНИ:"""
+
+                if client_id:
+                    await websocket_manager.send_step(client_id, "Запрос к ИИ", 4, 8, "Отправка семантического контекста...")
+                    await websocket_manager.send_ollama_info(client_id, {
+                        "status": "starting",
+                        "model": OLLAMA_MODEL,
+                        "model_info": "qwen2.5:7b - экспертный семантический анализ",
+                        "articles_count": len(all_posts),
+                        "prompt_length": len(intelligent_prompt),
+                        "timeout": 300,
+                        "settings": "temperature=0.3, ctx=10240, predict=1500",
+                        "expected_recommendations": "12-18 экспертных рекомендаций"
+                    })
+                
+                print("🤖 Отправляю экспертный семантический запрос...")
+                print(f"📝 Размер промпта: {len(intelligent_prompt)} символов")
+                
+                # Шаг 4: Запрос к Ollama с оптимальными настройками
+                start_time = datetime.now()
+                async with httpx.AsyncClient(timeout=600.0) as client:
+                    response = await client.post(
+                        OLLAMA_URL,
+                        json={
+                            "model": OLLAMA_MODEL,
+                            "prompt": intelligent_prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": OPTIMAL_TEMPERATURE,
+                                "num_ctx": OPTIMAL_CONTEXT_SIZE,
+                                "num_predict": OPTIMAL_PREDICTION_SIZE,
+                                "top_p": OPTIMAL_TOP_P,
+                                "top_k": OPTIMAL_TOP_K,
+                                "repeat_penalty": OPTIMAL_REPEAT_PENALTY,
+                                "seed": 123,
+                                "stop": ["🚀 НАЧНИ", "КОНЕЦ АНАЛИЗА", "```"],
+                                "num_thread": 6
+                            }
+                        },
+                        timeout=600
+                    )
+                
+                request_time = (datetime.now() - start_time).total_seconds()
+                
+                if client_id:
+                    await websocket_manager.send_ollama_info(client_id, {
+                        "status": "completed",
+                        "response_code": response.status_code,
+                        "request_time": f"{request_time:.1f}s",
+                        "response_length": len(response.text) if response.status_code == 200 else 0
+                    })
+                
+                if response.status_code != 200:
+                    error_msg = f"❌ Ollama error: {response.status_code}"
+                    if client_id:
+                        await websocket_manager.send_error(client_id, error_msg)
+                    return []
+                
+                data = response.json()
+                content = data.get("response", "")
+                
+                if client_id:
+                    await websocket_manager.send_step(client_id, "Обработка результата", 5, 8, "Парсинг семантических рекомендаций...")
+                
+                print(f"📝 Получен ответ от Ollama: {len(content)} символов за {request_time:.1f}с")
+                print("🔍 ЭКСПЕРТНЫЙ ОТВЕТ:")
+                print("="*70)
+                print(content[:1500] + "..." if len(content) > 1500 else content)
+                print("="*70)
+                
+                # Шаг 5: Улучшенный парсинг рекомендаций
+                recommendations = parse_intelligent_recommendations(content, domain, posts_data)
+                
+                if client_id:
+                    await websocket_manager.send_step(client_id, "Финализация", 6, 8, f"Обработано {len(recommendations)} рекомендаций")
+                
+                total_time = (datetime.now() - analysis_start_time).total_seconds()
+                print(f"✅ Интеллектуальный анализ завершен: {len(recommendations)} рекомендаций за {total_time:.1f}с")
+                
+                return recommendations[:25]  # Возвращаем топ-25
+                
+            except Exception as db_error:
+                error_msg = f"❌ Ошибка БД: {db_error}"
+                print(error_msg)
+                if client_id:
+                    await websocket_manager.send_error(client_id, "Ошибка базы данных", str(db_error))
+                return []
+                
+    except Exception as e:
+        error_msg = f"❌ Критическая ошибка интеллектуального анализа: {e}"
+        print(error_msg)
+        if client_id:
+            await websocket_manager.send_error(client_id, "Критическая ошибка", str(e))
+        return []
