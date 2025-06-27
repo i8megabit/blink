@@ -118,8 +118,8 @@ Object.defineProperty(global, 'crypto', {
 global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 0)) as any;
 global.cancelAnimationFrame = vi.fn();
 
-// Мокаем scrollTo
-global.scrollTo = vi.fn();
+// Мокаем scrollTo для тестов
+window.scrollTo = vi.fn((..._args: any[]) => {});
 
 // Мокаем getBoundingClientRect
 Element.prototype.getBoundingClientRect = vi.fn(() => ({

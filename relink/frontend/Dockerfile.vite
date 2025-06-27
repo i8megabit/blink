@@ -4,14 +4,16 @@ FROM node:20-alpine AS builder
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package файлы
+# Копируем только package.json, yarn.lock и .yarnrc.yml для установки зависимостей
 COPY package*.json ./
+COPY yarn.lock ./
+COPY .yarnrc.yml ./
 
 # Устанавливаем yarn через corepack
 RUN corepack enable && corepack prepare yarn@stable --activate
 
 # Очищаем node_modules и lock-файлы, затем ставим зависимости через yarn
-RUN rm -rf node_modules package-lock.json yarn.lock && yarn install --ignore-engines
+RUN rm -rf node_modules && yarn install
 
 # Копируем исходный код
 COPY . .
