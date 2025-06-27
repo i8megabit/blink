@@ -107,21 +107,13 @@ interface BarChartProps {
 const BarChart: React.FC<BarChartProps> = ({ title, data }) => {
   if (!data || data.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-32 text-muted-foreground">
-            Нет данных для отображения
-          </div>
-        </CardContent>
-      </Card>
-    )
+      <div className="text-center py-8 text-gray-500">
+        Нет данных для отображения
+      </div>
+    );
   }
 
   const maxValue = Math.max(...data.map(item => item.value))
-  const minBarHeight = 20
 
   return (
     <Card>

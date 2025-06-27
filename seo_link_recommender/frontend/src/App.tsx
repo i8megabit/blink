@@ -331,23 +331,14 @@ function App() {
                   <div className="card-title">Прогресс анализа</div>
                 </div>
                 <div className="card-content">
-                  <AnalysisProgress 
-                    isActive={isAnalyzing}
+                  <AnalysisProgress
+                    isVisible={isAnalyzing}
+                    onClose={() => setIsAnalyzing(false)}
                     currentStep={analysisStep}
                     progress={analysisProgress}
-                    totalSteps={10}
-                    aiThoughts={aiThoughts}
-                    analysisStats={analysisStats ? {
-                      postsAnalyzed: analysisStats.current || 0,
-                      connectionsFound: analysisStats.total || 0,
-                      recommendationsGenerated: recommendations.length,
-                      processingTime: 0
-                    } : {
-                      postsAnalyzed: 0,
-                      connectionsFound: 0,
-                      recommendationsGenerated: 0,
-                      processingTime: 0
-                    }}
+                    current={analysisStats?.current || 0}
+                    total={analysisStats?.total || 0}
+                    details={analysisStats?.details || ''}
                   />
                 </div>
               </div>
@@ -563,11 +554,11 @@ function App() {
 
       {/* AI Analysis Flow */}
       <AIAnalysisFlow
-        isVisible={showAIAnalysis}
-        aiThoughts={aiThoughts}
-        currentStage={analysisStep}
-        progress={analysisProgress}
+        isOpen={showAIAnalysis}
         onClose={handleCloseAIAnalysis}
+        aiThoughts={aiThoughts}
+        analysisProgress={analysisProgress}
+        analysisStep={analysisStep}
       />
     </div>
   )

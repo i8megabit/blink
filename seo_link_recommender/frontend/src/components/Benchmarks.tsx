@@ -4,21 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
-import { Progress } from './ui/Progress';
 import { 
   BarChart3,
   Play,
-  Pause,
-  RotateCcw,
-  Download,
-  Eye,
-  Trash2,
   CheckCircle,
   AlertCircle,
   Clock,
-  Zap,
   Target,
-  TrendingUp
+  Eye
 } from 'lucide-react';
 
 interface BenchmarksProps {

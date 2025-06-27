@@ -7,14 +7,11 @@ import { cn } from '../lib/utils';
 import { 
   Globe,
   FileText,
-  Link,
   Timer,
   CheckCircle,
-  Play,
   Eye,
   Trash2,
-  RefreshCw,
-  Download
+  RefreshCw
 } from 'lucide-react';
 
 interface DomainsListProps {

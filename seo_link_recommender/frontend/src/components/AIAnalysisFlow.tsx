@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Progress } from './ui/Progress';
@@ -7,16 +6,11 @@ import {
   Brain, 
   Zap, 
   Target, 
-  BarChart3,
   Lightbulb,
   TrendingUp,
   Activity,
   CheckCircle,
-  Clock,
   AlertCircle,
-  Play,
-  Pause,
-  RotateCcw,
   X
 } from 'lucide-react';
 import { AIThought } from '../types';

@@ -1,21 +1,9 @@
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { Badge } from './ui/Badge';
 import { Progress } from './ui/Progress';
 import { 
-  Activity,
-  CheckCircle,
-  Clock,
   AlertCircle,
-  Play,
-  Pause,
-  RotateCcw,
-  X,
-  Brain,
-  Zap,
-  Target,
-  TrendingUp
+  Clock
 } from 'lucide-react';
 
 interface AnalysisProgressProps {
