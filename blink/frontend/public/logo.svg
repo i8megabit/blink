@@ -34,10 +34,10 @@
     <path d="M12 6l-2 2 2 2" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
   </g>
   
-  <!-- Текст "Relink" -->
+  <!-- Текст "ReLink" -->
   <text x="45" y="26" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" 
         font-size="18" font-weight="600" fill="#1f2937" letter-spacing="-0.02em">
-    Relink
+    ReLink
   </text>
   
   <!-- Декоративная точка после текста -->

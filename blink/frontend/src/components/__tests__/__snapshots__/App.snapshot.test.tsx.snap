@@ -84,7 +84,7 @@ exports[`App Snapshot > рендерится без изменений 1`] = `
       class="main-content"
     >
       <header
-        class="content-header"
+        class="bg-white border-b border-gray-200 px-6 py-4 shadow-sm"
       >
         <div
           class="flex items-center justify-between"
@@ -94,7 +94,7 @@ exports[`App Snapshot > рендерится без изменений 1`] = `
           >
             <button
               aria-label="Открыть меню"
-              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors lg:hidden"
+              class="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
             >
               <svg
                 class="w-6 h-6"
@@ -111,9 +111,90 @@ exports[`App Snapshot > рендерится без изменений 1`] = `
                 />
               </svg>
             </button>
+            <div
+              class="flex items-center gap-2 w-24 h-10 "
+            >
+              <div
+                class="relative"
+              >
+                <svg
+                  class="flex-shrink-0"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <defs>
+                    <lineargradient
+                      id="logoGradient"
+                      x1="0%"
+                      x2="100%"
+                      y1="0%"
+                      y2="100%"
+                    >
+                      <stop
+                        offset="0%"
+                        style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+                      />
+                      <stop
+                        offset="100%"
+                        style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+                      />
+                    </lineargradient>
+                    <filter
+                      height="140%"
+                      id="logoShadow"
+                      width="140%"
+                      x="-20%"
+                      y="-20%"
+                    >
+                      <fedropshadow
+                        dx="0"
+                        dy="1"
+                        flood-color="#000000"
+                        flood-opacity="0.1"
+                        stdDeviation="2"
+                      />
+                    </filter>
+                  </defs>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    fill="url(#logoGradient)"
+                    filter="url(#logoShadow)"
+                    r="10"
+                  />
+                  <g
+                    transform="translate(4, 4)"
+                  >
+                    <path
+                      d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M12 6l-2 2 2 2"
+                      fill="none"
+                      stroke="white"
+                      stroke-linecap="round"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                </svg>
+              </div>
+              <span
+                class="font-semibold text-base text-gray-900 tracking-tight"
+              >
+                Relink
+              </span>
+            </div>
             <div>
               <h1
-                class="text-2xl font-bold text-foreground"
+                class="text-2xl font-bold text-gray-900"
               >
                 Дашборд
               </h1>
@@ -1209,7 +1290,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
       class="main-content"
     >
       <header
-        class="content-header"
+        class="bg-white border-b border-gray-200 px-6 py-4 shadow-sm"
       >
         <div
           class="flex items-center justify-between"
@@ -1219,7 +1300,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           >
             <button
               aria-label="Открыть меню"
-              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors lg:hidden"
+              class="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
             >
               <svg
                 class="w-6 h-6"
@@ -1236,9 +1317,90 @@ exports[`App Snapshot > рендерится с активной вкладко�
                 />
               </svg>
             </button>
+            <div
+              class="flex items-center gap-2 w-24 h-10 "
+            >
+              <div
+                class="relative"
+              >
+                <svg
+                  class="flex-shrink-0"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <defs>
+                    <lineargradient
+                      id="logoGradient"
+                      x1="0%"
+                      x2="100%"
+                      y1="0%"
+                      y2="100%"
+                    >
+                      <stop
+                        offset="0%"
+                        style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+                      />
+                      <stop
+                        offset="100%"
+                        style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+                      />
+                    </lineargradient>
+                    <filter
+                      height="140%"
+                      id="logoShadow"
+                      width="140%"
+                      x="-20%"
+                      y="-20%"
+                    >
+                      <fedropshadow
+                        dx="0"
+                        dy="1"
+                        flood-color="#000000"
+                        flood-opacity="0.1"
+                        stdDeviation="2"
+                      />
+                    </filter>
+                  </defs>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    fill="url(#logoGradient)"
+                    filter="url(#logoShadow)"
+                    r="10"
+                  />
+                  <g
+                    transform="translate(4, 4)"
+                  >
+                    <path
+                      d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M12 6l-2 2 2 2"
+                      fill="none"
+                      stroke="white"
+                      stroke-linecap="round"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                </svg>
+              </div>
+              <span
+                class="font-semibold text-base text-gray-900 tracking-tight"
+              >
+                Relink
+              </span>
+            </div>
             <div>
               <h1
-                class="text-2xl font-bold text-foreground"
+                class="text-2xl font-bold text-gray-900"
               >
                 Дашборд
               </h1>
@@ -2334,7 +2496,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
       class="main-content"
     >
       <header
-        class="content-header"
+        class="bg-white border-b border-gray-200 px-6 py-4 shadow-sm"
       >
         <div
           class="flex items-center justify-between"
@@ -2344,7 +2506,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           >
             <button
               aria-label="Открыть меню"
-              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors lg:hidden"
+              class="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
             >
               <svg
                 class="w-6 h-6"
@@ -2361,9 +2523,90 @@ exports[`App Snapshot > рендерится с активной вкладко�
                 />
               </svg>
             </button>
+            <div
+              class="flex items-center gap-2 w-24 h-10 "
+            >
+              <div
+                class="relative"
+              >
+                <svg
+                  class="flex-shrink-0"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <defs>
+                    <lineargradient
+                      id="logoGradient"
+                      x1="0%"
+                      x2="100%"
+                      y1="0%"
+                      y2="100%"
+                    >
+                      <stop
+                        offset="0%"
+                        style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+                      />
+                      <stop
+                        offset="100%"
+                        style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+                      />
+                    </lineargradient>
+                    <filter
+                      height="140%"
+                      id="logoShadow"
+                      width="140%"
+                      x="-20%"
+                      y="-20%"
+                    >
+                      <fedropshadow
+                        dx="0"
+                        dy="1"
+                        flood-color="#000000"
+                        flood-opacity="0.1"
+                        stdDeviation="2"
+                      />
+                    </filter>
+                  </defs>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    fill="url(#logoGradient)"
+                    filter="url(#logoShadow)"
+                    r="10"
+                  />
+                  <g
+                    transform="translate(4, 4)"
+                  >
+                    <path
+                      d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M12 6l-2 2 2 2"
+                      fill="none"
+                      stroke="white"
+                      stroke-linecap="round"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                </svg>
+              </div>
+              <span
+                class="font-semibold text-base text-gray-900 tracking-tight"
+              >
+                Relink
+              </span>
+            </div>
             <div>
               <h1
-                class="text-2xl font-bold text-foreground"
+                class="text-2xl font-bold text-gray-900"
               >
                 Дашборд
               </h1>
@@ -3459,7 +3702,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
       class="main-content"
     >
       <header
-        class="content-header"
+        class="bg-white border-b border-gray-200 px-6 py-4 shadow-sm"
       >
         <div
           class="flex items-center justify-between"
@@ -3469,7 +3712,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           >
             <button
               aria-label="Открыть меню"
-              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors lg:hidden"
+              class="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
             >
               <svg
                 class="w-6 h-6"
@@ -3486,9 +3729,90 @@ exports[`App Snapshot > рендерится с активной вкладко�
                 />
               </svg>
             </button>
+            <div
+              class="flex items-center gap-2 w-24 h-10 "
+            >
+              <div
+                class="relative"
+              >
+                <svg
+                  class="flex-shrink-0"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <defs>
+                    <lineargradient
+                      id="logoGradient"
+                      x1="0%"
+                      x2="100%"
+                      y1="0%"
+                      y2="100%"
+                    >
+                      <stop
+                        offset="0%"
+                        style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+                      />
+                      <stop
+                        offset="100%"
+                        style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+                      />
+                    </lineargradient>
+                    <filter
+                      height="140%"
+                      id="logoShadow"
+                      width="140%"
+                      x="-20%"
+                      y="-20%"
+                    >
+                      <fedropshadow
+                        dx="0"
+                        dy="1"
+                        flood-color="#000000"
+                        flood-opacity="0.1"
+                        stdDeviation="2"
+                      />
+                    </filter>
+                  </defs>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    fill="url(#logoGradient)"
+                    filter="url(#logoShadow)"
+                    r="10"
+                  />
+                  <g
+                    transform="translate(4, 4)"
+                  >
+                    <path
+                      d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M12 6l-2 2 2 2"
+                      fill="none"
+                      stroke="white"
+                      stroke-linecap="round"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                </svg>
+              </div>
+              <span
+                class="font-semibold text-base text-gray-900 tracking-tight"
+              >
+                Relink
+              </span>
+            </div>
             <div>
               <h1
-                class="text-2xl font-bold text-foreground"
+                class="text-2xl font-bold text-gray-900"
               >
                 Дашборд
               </h1>
@@ -4584,7 +4908,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
       class="main-content"
     >
       <header
-        class="content-header"
+        class="bg-white border-b border-gray-200 px-6 py-4 shadow-sm"
       >
         <div
           class="flex items-center justify-between"
@@ -4594,7 +4918,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           >
             <button
               aria-label="Открыть меню"
-              class="p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors lg:hidden"
+              class="p-2 rounded-md hover:bg-gray-100 transition-colors lg:hidden"
             >
               <svg
                 class="w-6 h-6"
@@ -4611,9 +4935,90 @@ exports[`App Snapshot > рендерится с активной вкладко�
                 />
               </svg>
             </button>
+            <div
+              class="flex items-center gap-2 w-24 h-10 "
+            >
+              <div
+                class="relative"
+              >
+                <svg
+                  class="flex-shrink-0"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  width="20"
+                >
+                  <defs>
+                    <lineargradient
+                      id="logoGradient"
+                      x1="0%"
+                      x2="100%"
+                      y1="0%"
+                      y2="100%"
+                    >
+                      <stop
+                        offset="0%"
+                        style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+                      />
+                      <stop
+                        offset="100%"
+                        style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+                      />
+                    </lineargradient>
+                    <filter
+                      height="140%"
+                      id="logoShadow"
+                      width="140%"
+                      x="-20%"
+                      y="-20%"
+                    >
+                      <fedropshadow
+                        dx="0"
+                        dy="1"
+                        flood-color="#000000"
+                        flood-opacity="0.1"
+                        stdDeviation="2"
+                      />
+                    </filter>
+                  </defs>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    fill="url(#logoGradient)"
+                    filter="url(#logoShadow)"
+                    r="10"
+                  />
+                  <g
+                    transform="translate(4, 4)"
+                  >
+                    <path
+                      d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                      fill="white"
+                      opacity="0.9"
+                    />
+                    <path
+                      d="M12 6l-2 2 2 2"
+                      fill="none"
+                      stroke="white"
+                      stroke-linecap="round"
+                      stroke-width="1.5"
+                    />
+                  </g>
+                </svg>
+              </div>
+              <span
+                class="font-semibold text-base text-gray-900 tracking-tight"
+              >
+                Relink
+              </span>
+            </div>
             <div>
               <h1
-                class="text-2xl font-bold text-foreground"
+                class="text-2xl font-bold text-gray-900"
               >
                 Дашборд
               </h1>

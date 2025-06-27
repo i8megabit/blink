@@ -1,0 +1,668 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Logo Snapshot Tests > renders dark variant correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-24 h-10 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-base text-gray-100 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders default logo correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-24 h-10 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-base text-gray-900 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders extra large logo correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-40 h-16 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="32"
+      viewBox="0 0 24 24"
+      width="32"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-xl text-gray-900 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders large logo correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-32 h-12 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="24"
+      viewBox="0 0 24 24"
+      width="24"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-lg text-gray-900 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders logo without text correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-24 h-10 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders small logo correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-16 h-8 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="16"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-sm text-gray-900 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders white variant correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-24 h-10 "
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-base text-white tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;
+
+exports[`Logo Snapshot Tests > renders with custom className correctly 1`] = `
+<div
+  class="flex items-center gap-2 w-24 h-10 custom-class"
+>
+  <div
+    class="relative"
+  >
+    <svg
+      class="flex-shrink-0"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+    >
+      <defs>
+        <lineargradient
+          id="logoGradient"
+          x1="0%"
+          x2="100%"
+          y1="0%"
+          y2="100%"
+        >
+          <stop
+            offset="0%"
+            style="stop-color: rgb(14, 165, 233); stop-opacity: 1;"
+          />
+          <stop
+            offset="100%"
+            style="stop-color: rgb(2, 132, 199); stop-opacity: 1;"
+          />
+        </lineargradient>
+        <filter
+          height="140%"
+          id="logoShadow"
+          width="140%"
+          x="-20%"
+          y="-20%"
+        >
+          <fedropshadow
+            dx="0"
+            dy="1"
+            flood-color="#000000"
+            flood-opacity="0.1"
+            stdDeviation="2"
+          />
+        </filter>
+      </defs>
+      <circle
+        cx="12"
+        cy="12"
+        fill="url(#logoGradient)"
+        filter="url(#logoShadow)"
+        r="10"
+      />
+      <g
+        transform="translate(4, 4)"
+      >
+        <path
+          d="M8 4C5.79 4 4 5.79 4 8s1.79 4 4 4h2v-2H8c-1.1 0-2-.9-2-2s.9-2 2-2h2V4H8z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M16 4h-2v2h2c1.1 0 2 .9 2 2s-.9 2-2 2h-2v2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+          fill="white"
+          opacity="0.9"
+        />
+        <path
+          d="M12 6l-2 2 2 2"
+          fill="none"
+          stroke="white"
+          stroke-linecap="round"
+          stroke-width="1.5"
+        />
+      </g>
+    </svg>
+  </div>
+  <span
+    class="font-semibold text-base text-gray-900 tracking-tight"
+  >
+    Relink
+  </span>
+</div>
+`;

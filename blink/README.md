@@ -1,4 +1,4 @@
-# 🚀 Relink - AI-Powered SEO Platform v4.0.0
+# 🚀 ReLink - AI-Powered SEO Platform v4.0.0
 
 **Версия:** 4.0.0  
 **Дата релиза:** 2024-12-19  

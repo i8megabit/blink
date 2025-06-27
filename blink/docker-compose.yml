@@ -1,6 +1,6 @@
 services:
   backend:
-    image: eberil/relink-backend:4.0.0
+    image: eberil/reLink-backend:4.0.0
     ports:
       - "8000:8000"
     environment:
@@ -19,7 +19,7 @@ services:
       - ollama
 
   frontend:
-    image: eberil/relink-frontend:4.0.0
+    image: eberil/reLink-frontend:4.0.0
     ports:
       - "3000:80"
     depends_on:

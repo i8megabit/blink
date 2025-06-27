@@ -28,9 +28,21 @@ export default {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
         },
+        // 🎨 ReLink Corporate Colors
+        reLink: {
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          200: '#bae6fd',
+          300: '#7dd3fc',
+          400: '#38bdf8',
+          500: '#0ea5e9',  // Основной цвет бренда
+          600: '#0284c7',
+          700: '#0369a1',
+          800: '#075985',
+          900: '#0c4a6e',
+        },
+        // 🚀 Secondary Colors
         secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
           50: '#f8fafc',
           100: '#f1f5f9',
           200: '#e2e8f0',
@@ -62,18 +74,7 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        relink: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
-        },
+        // ⚡ Accent Colors
         success: '#10b981',
         warning: '#f59e0b',
         error: '#ef4444',
@@ -159,13 +160,13 @@ export default {
         xs: '2px',
       },
       boxShadow: {
-        'relink': '0 4px 16px rgba(14, 165, 233, 0.15)',
-        'relink-lg': '0 8px 32px rgba(14, 165, 233, 0.2)',
+        'reLink': '0 4px 16px rgba(14, 165, 233, 0.15)',
+        'reLink-lg': '0 8px 32px rgba(14, 165, 233, 0.2)',
         'glass': '0 8px 32px rgba(0, 0, 0, 0.1)',
       },
       backgroundImage: {
-        'relink-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
-        'relink-gradient-dark': 'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
+        'reLink-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+        'reLink-gradient-dark': 'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
         'glass': 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
       },
     },
