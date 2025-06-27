@@ -1,31 +1,52 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [],
+  root: '.',
+  publicDir: 'public',
   server: {
+    host: '0.0.0.0',
     port: 3000,
-    host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        secure: false,
+        timeout: 120000, // 2 минуты для длительных операций
       },
       '/ws': {
-        target: 'ws://localhost:8000',
-        ws: true
+        target: 'ws://backend:8000',
+        ws: true,
+        changeOrigin: true
       }
+    },
+    hmr: {
+      port: 3001
     }
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: true, // Включаем sourcemap для отладки
+    minify: 'esbuild',
+    target: 'es2015',
     rollupOptions: {
+      input: {
+        main: './index-vite.html'  // Используем Vite версию HTML
+      },
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom']
-        }
+        manualChunks: undefined
       }
-    }
+    },
+    chunkSizeWarningLimit: 1000
+  },
+  optimizeDeps: {
+    include: []
+  },
+  css: {
+    postcss: './postcss.config.js'
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '2.0.0'),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   }
 }) 

@@ -2,10 +2,13 @@
   "name": "seo-link-recommender-frontend",
   "version": "2.0.0",
   "type": "module",
+  "description": "Современный фронтенд для SEO Link Recommender с Vite и Tailwind CSS",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -15,6 +18,26 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.8"
-  }
-} 
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "vite": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "seo",
+    "react",
+    "vite",
+    "tailwind",
+    "wordpress",
+    "ollama",
+    "ai"
+  ]
+}

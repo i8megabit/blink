@@ -1167,11 +1167,13 @@
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           
           const data = await resp.json();
-          setDomains(data);
-          console.log('📥 Домены загружены:', data.length);
+          // Исправляем: API возвращает {domains: [...]}, а нам нужен массив
+          const domainsArray = data.domains || [];
+          setDomains(domainsArray);
+          console.log('📥 Домены загружены:', domainsArray.length);
           
           // Отладочная информация
-          data.forEach(domain => {
+          domainsArray.forEach(domain => {
             console.log(`🔍 ДОМЕН ОТЛАДКА: ${domain.name}`, {
               total_posts: domain.total_posts,
               is_indexed: domain.is_indexed,
@@ -1191,8 +1193,10 @@
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           
           const data = await resp.json();
-          setAnalysisHistory(data);
-          console.log('📥 История анализов загружена:', data.length);
+          // Исправляем: API возвращает {history: [...]}, а нам нужен массив
+          const historyArray = data.history || [];
+          setAnalysisHistory(historyArray);
+          console.log('📥 История анализов загружена:', historyArray.length);
         } catch (err) {
           console.error('❌ Ошибка загрузки истории:', err);
           setError(`Ошибка загрузки истории: ${err.message}`);
@@ -1227,12 +1231,14 @@
       
       async function loadBenchmarkHistory() {
         try {
-          const resp = await fetch('http://localhost:8000/api/v1/benchmark/history');
+          const resp = await fetch('http://localhost:8000/api/v1/benchmark_history');
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           
           const data = await resp.json();
-          setBenchmarkHistory(data);
-          console.log('📊 История бенчмарков загружена:', data.length);
+          // Исправляем: API возвращает {benchmarks: [...]}, а нам нужен массив
+          const benchmarksArray = data.benchmarks || [];
+          setBenchmarkHistory(benchmarksArray);
+          console.log('📊 История бенчмарков загружена:', benchmarksArray.length);
         } catch (err) {
           console.error('❌ Ошибка загрузки истории бенчмарков:', err);
           setError(`Ошибка загрузки истории бенчмарков: ${err.message}`);

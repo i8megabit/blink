@@ -2507,6 +2507,7 @@ async def get_domains():
                 "total_posts": domain.total_posts,
                 "total_analyses": domain.total_analyses,
                 "last_analysis_at": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None,
+                "updated_at": domain.updated_at.isoformat(),  # Добавляем updated_at для отображения
                 "is_indexed": domain.total_posts > 0,
                 "created_at": domain.created_at.isoformat(),
                 "language": domain.language
@@ -2713,27 +2714,50 @@ async def get_ollama_status():
                     "connection": "connected",
                     "models_count": len(models),
                     "available_models": [model["name"] for model in models[:5]],  # Первые 5 моделей
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    # Добавляем поля, которые ожидает frontend
+                    "ready_for_work": True,
+                    "server_available": True,
+                    "model_loaded": len(models) > 0,
+                    "message": f"Ollama готова к работе. Доступно {len(models)} моделей.",
+                    "last_check": datetime.now().isoformat()
                 }
             else:
                 return {
                     "status": "error",
                     "connection": "failed",
                     "error": f"HTTP {response.status_code}",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    # Добавляем поля, которые ожидает frontend
+                    "ready_for_work": False,
+                    "server_available": False,
+                    "model_loaded": False,
+                    "message": f"Ошибка подключения к Ollama: HTTP {response.status_code}",
+                    "last_check": datetime.now().isoformat()
                 }
     except httpx.ConnectError:
         return {
             "status": "connecting",
             "connection": "connecting",
             "message": "Ollama подключается...",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            # Добавляем поля, которые ожидает frontend
+            "ready_for_work": False,
+            "server_available": False,
+            "model_loaded": False,
+            "last_check": datetime.now().isoformat()
         }
     except Exception as e:
         return {
             "status": "error",
             "connection": "error",
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            # Добавляем поля, которые ожидает frontend
+            "ready_for_work": False,
+            "server_available": False,
+            "model_loaded": False,
+            "message": f"Ошибка проверки Ollama: {str(e)}",
+            "last_check": datetime.now().isoformat()
         }
 
