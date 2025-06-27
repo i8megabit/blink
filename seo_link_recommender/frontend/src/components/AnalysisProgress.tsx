@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react'; // не нужен, если не используется напрямую
 import { WebSocketMessage } from '../types';
 import { cn } from '../lib/utils';
 import { Card } from './ui/Card';
@@ -9,24 +9,6 @@ interface AnalysisProgressProps {
   onClose?: () => void;
 }
 
-const progressIcons = {
-  progress: '🔄',
-  error: '❌',
-  ollama: '🤖',
-  ai_thinking: '🧠',
-  enhanced_ai_thinking: '🔬',
-  ping: '📡'
-};
-
-const progressColors = {
-  progress: 'text-blue-600 dark:text-blue-400',
-  error: 'text-red-600 dark:text-red-400',
-  ollama: 'text-purple-600 dark:text-purple-400',
-  ai_thinking: 'text-green-600 dark:text-green-400',
-  enhanced_ai_thinking: 'text-orange-600 dark:text-orange-400',
-  ping: 'text-gray-600 dark:text-gray-400'
-};
-
 export function AnalysisProgress({ messages, isActive, onClose }: AnalysisProgressProps) {
   if (!isActive || messages.length === 0) {
     return null;
@@ -36,11 +18,6 @@ export function AnalysisProgress({ messages, isActive, onClose }: AnalysisProgre
   if (!latestMessage) {
     return null;
   }
-
-  const progressMessages = messages.filter(msg => msg.type === 'progress');
-  const aiMessages = messages.filter(msg => 
-    msg.type === 'ai_thinking' || msg.type === 'enhanced_ai_thinking'
-  );
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -98,19 +75,23 @@ export function AnalysisProgress({ messages, isActive, onClose }: AnalysisProgre
         )}
 
         {/* Последние мысли ИИ */}
-        {aiMessages.length > 0 && (
+        {latestMessage.type === 'ai_thinking' || latestMessage.type === 'enhanced_ai_thinking' && (
           <div className="mb-3">
             <div className="flex items-center space-x-2 mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Мысли ИИ
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {aiMessages.length}
+                {messages.filter(msg => 
+                  msg.type === 'ai_thinking' || msg.type === 'enhanced_ai_thinking'
+                ).length}
               </span>
             </div>
             
             <div className="space-y-2 max-h-32 overflow-y-auto">
-              {aiMessages.slice(-3).map((msg, index) => (
+              {messages.filter(msg => 
+                msg.type === 'ai_thinking' || msg.type === 'enhanced_ai_thinking'
+              ).slice(-3).map((msg, index) => (
                 <div
                   key={`${msg.timestamp}-${index}`}
                   className={cn(

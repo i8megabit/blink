@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Domain, 
   Recommendation, 
   WebSocketMessage, 
-  Notification,
   OllamaStatus 
 } from './types';
-import { useWebSocket } from './hooks/useWebSocket';
 import { useNotifications } from './hooks/useNotifications';
 import { useDomains, useOllamaStatus } from './hooks/useApi';
 import { useAnalysisHistory } from './hooks/useAnalysisHistory';
@@ -25,11 +23,13 @@ import {
   Activity,
   CheckCircle,
   AlertCircle,
-  Settings,
   BarChart3
 } from 'lucide-react';
 
 function App() {
+  // Генерируем уникальный clientId для WebSocket соединений
+  const clientId = useMemo(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, []);
+
   // Состояние приложения
   const [domains, setDomains] = useState<Domain[]>([]);
   const [currentDomain, setCurrentDomain] = useState<Domain | null>(null);
@@ -45,70 +45,11 @@ function App() {
   const { data: ollamaData, loading: ollamaLoading, execute: checkOllamaStatus } = useOllamaStatus();
   const { 
     data: analysisHistory, 
-    loading: historyLoading, 
     execute: loadAnalysisHistory 
   } = useAnalysisHistory({
     limit: 5,
     autoRefresh: false
   });
-
-  // WebSocket для анализа
-  const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const { status: wsStatus } = useWebSocket({
-    url: 'ws://localhost:8000/ws',
-    clientId,
-    onMessage: handleWebSocketMessage,
-    onError: handleWebSocketError
-  });
-
-  // Обработчики WebSocket
-  function handleWebSocketMessage(message: WebSocketMessage) {
-    setAnalysisMessages(prev => [...prev, message]);
-
-    // Обработка различных типов сообщений
-    switch (message.type) {
-      case 'progress':
-        if (message.percentage === 100) {
-          setIsAnalyzing(false);
-          addNotification({
-            type: 'success',
-            title: 'Анализ завершен',
-            message: `Анализ домена ${currentDomain?.name} успешно завершен`,
-            details: `Обработано ${message.current} из ${message.total} шагов`
-          });
-          // Обновляем историю после завершения анализа
-          if (currentDomain?.id) {
-            loadAnalysisHistory(currentDomain.id);
-          }
-        }
-        break;
-
-      case 'error':
-        setIsAnalyzing(false);
-        addNotification({
-          type: 'error',
-          title: 'Ошибка анализа',
-          message: message.message || 'Произошла ошибка во время анализа',
-          details: message.error || 'Детали ошибки недоступны'
-        });
-        break;
-
-      case 'ai_thinking':
-      case 'enhanced_ai_thinking':
-        // Можно добавить логику для отображения мыслей ИИ
-        break;
-    }
-  }
-
-  function handleWebSocketError(error: Event) {
-    console.error('WebSocket ошибка:', error);
-    addNotification({
-      type: 'error',
-      title: 'Ошибка соединения',
-      message: 'Потеряно соединение с сервером анализа',
-      details: 'Попытка переподключения...'
-    });
-  }
 
   // Загрузка данных при монтировании
   useEffect(() => {
@@ -198,15 +139,6 @@ function App() {
       setIsAnalyzing(false);
     }
   }, [ollamaStatus, clientId, addNotification, loadAnalysisHistory]);
-
-  const handleCopyRecommendation = useCallback((recommendation: Recommendation) => {
-    addNotification({
-      type: 'success',
-      title: 'Скопировано',
-      message: 'Рекомендация скопирована в буфер обмена',
-      duration: 3000
-    });
-  }, [addNotification]);
 
   const handleCloseAnalysis = useCallback(() => {
     setIsAnalyzing(false);
@@ -411,7 +343,6 @@ function App() {
                 recommendations={recommendations}
                 domain={currentDomain.name}
                 isLoading={isAnalyzing}
-                onCopy={handleCopyRecommendation}
               />
             )}
           </div>

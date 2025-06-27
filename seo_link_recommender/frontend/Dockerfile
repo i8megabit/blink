@@ -24,12 +24,9 @@ RUN apk add --no-cache curl && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-# Копируем файлы
-COPY frontend/index.html ./index.html
-COPY frontend/nginx.conf ./nginx.conf
-
-# Удаляем предупреждение о Babel из HTML
-RUN sed -i 's|transformScriptTags.ts:253 You are using the in-browser Babel transformer. Be sure to precompile your scripts for production - https://babeljs.io/docs/setup/||g' index.html
+# Копируем собранные файлы из dist
+COPY dist/ ./dist/
+COPY nginx.conf ./nginx.conf
 
 # Продакшн этап
 FROM production
@@ -37,8 +34,8 @@ FROM production
 # Копируем конфигурацию nginx
 COPY --from=assets-builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Копируем статические файлы
-COPY --from=assets-builder /app/index.html /usr/share/nginx/html/index.html
+# Копируем все статические файлы из dist
+COPY --from=assets-builder /app/dist/ /usr/share/nginx/html/
 
 # Устанавливаем правильные права доступа
 RUN chown -R nginx-app:nginx-app /var/cache/nginx && \

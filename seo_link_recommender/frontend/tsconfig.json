@@ -46,7 +46,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "storybook-static"
+    "vite.config.ts"
   ],
   "references": [
     { "path": "./tsconfig.node.json" }

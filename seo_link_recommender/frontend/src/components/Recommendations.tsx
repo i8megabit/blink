@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Recommendation } from '../types';
 import { cn } from '../lib/utils';
 import { Card } from './ui/Card';

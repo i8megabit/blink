@@ -153,7 +153,7 @@ services:
       echo '🔥 Apple M4 A/B система активирована!' &&
       wait"
     healthcheck:
-      test: ["CMD", "curl", "-f", "-m", "30", "http://localhost:11434/api/tags"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:11434/api/tags"]
       interval: 60s
       timeout: 45s
       retries: 5

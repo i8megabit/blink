@@ -1,4 +1,3 @@
-import React from 'react'
 import { Domain, AnalysisHistory } from '../types'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Badge } from './ui/Badge'

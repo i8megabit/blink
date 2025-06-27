@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Notification } from '../types';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
