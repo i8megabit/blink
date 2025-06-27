@@ -2,30 +2,63 @@
   "name": "seo-link-recommender-frontend",
   "version": "2.0.0",
   "type": "module",
-  "description": "Современный фронтенд для SEO Link Recommender с Vite и Tailwind CSS",
+  "description": "Мировая платформа для SEO-инженеров - современный фронтенд с TypeScript и AI",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "clean": "rm -rf dist node_modules"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "clean": "rm -rf dist node_modules .turbo",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "prepare": "husky install"
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "lucide-react": "^0.294.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^1.0.4",
+    "@playwright/test": "^1.40.1",
+    "@storybook/addon-essentials": "^7.6.7",
+    "@storybook/addon-interactions": "^7.6.7",
+    "@storybook/addon-links": "^7.6.7",
+    "@storybook/blocks": "^7.6.7",
+    "@storybook/react": "^7.6.7",
+    "@storybook/react-vite": "^7.6.7",
+    "@storybook/testing-library": "^0.2.2",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
     "postcss": "^8.4.35",
+    "prettier": "^3.1.1",
     "tailwindcss": "^3.4.1",
-    "vite": "^7.0.0"
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vitest": "^1.0.4",
+    "vitest-dom": "^1.0.0"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -34,10 +67,22 @@
   "keywords": [
     "seo",
     "react",
+    "typescript",
     "vite",
     "tailwind",
     "wordpress",
     "ollama",
-    "ai"
-  ]
+    "ai",
+    "seo-tools",
+    "professional"
+  ],
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,jsx,json,css,md}": [
+      "prettier --write"
+    ]
+  }
 }
