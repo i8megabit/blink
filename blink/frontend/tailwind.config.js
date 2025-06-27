@@ -28,8 +28,8 @@ export default {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
         },
-        // 🎨 ReLink Corporate Colors
-        reLink: {
+        // 🎨 reLink Corporate Colors
+        relink: {
           50: '#f0f9ff',
           100: '#e0f2fe',
           200: '#bae6fd',
@@ -160,13 +160,13 @@ export default {
         xs: '2px',
       },
       boxShadow: {
-        'reLink': '0 4px 16px rgba(14, 165, 233, 0.15)',
-        'reLink-lg': '0 8px 32px rgba(14, 165, 233, 0.2)',
+        'relink': '0 4px 16px rgba(14, 165, 233, 0.15)',
+        'relink-lg': '0 8px 32px rgba(14, 165, 233, 0.2)',
         'glass': '0 8px 32px rgba(0, 0, 0, 0.1)',
       },
       backgroundImage: {
-        'reLink-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
-        'reLink-gradient-dark': 'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
+        'relink-gradient': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+        'relink-gradient-dark': 'linear-gradient(135deg, #0c4a6e 0%, #075985 100%)',
         'glass': 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
       },
     },

@@ -1,9 +1,9 @@
 {
-  "name": "reLink-frontend",
+  "name": "relink-frontend",
   "private": true,
   "version": "4.0.0",
   "type": "module",
-  "description": "ReLink - Мировая платформа для SEO-инженеров с AI и современными технологиями",
+  "description": "reLink - Мировая платформа для SEO-инженеров с AI и современными технологиями",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -67,7 +67,7 @@
     "npm": ">=8.0.0"
   },
   "keywords": [
-    "reLink",
+    "relink",
     "seo",
     "react",
     "typescript",

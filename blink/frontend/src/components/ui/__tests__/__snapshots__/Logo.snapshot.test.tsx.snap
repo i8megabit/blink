@@ -79,7 +79,7 @@ exports[`Logo Snapshot Tests > renders dark variant correctly 1`] = `
   <span
     class="font-semibold text-base text-gray-100 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -163,7 +163,7 @@ exports[`Logo Snapshot Tests > renders default logo correctly 1`] = `
   <span
     class="font-semibold text-base text-gray-900 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -247,7 +247,7 @@ exports[`Logo Snapshot Tests > renders extra large logo correctly 1`] = `
   <span
     class="font-semibold text-xl text-gray-900 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -331,7 +331,7 @@ exports[`Logo Snapshot Tests > renders large logo correctly 1`] = `
   <span
     class="font-semibold text-lg text-gray-900 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -494,7 +494,7 @@ exports[`Logo Snapshot Tests > renders small logo correctly 1`] = `
   <span
     class="font-semibold text-sm text-gray-900 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -578,7 +578,7 @@ exports[`Logo Snapshot Tests > renders white variant correctly 1`] = `
   <span
     class="font-semibold text-base text-white tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;
@@ -662,7 +662,7 @@ exports[`Logo Snapshot Tests > renders with custom className correctly 1`] = `
   <span
     class="font-semibold text-base text-gray-900 tracking-tight"
   >
-    Relink
+    reLink
   </span>
 </div>
 `;

@@ -95,7 +95,7 @@ const Logo: React.FC<LogoProps> = ({
       {/* Текст */}
       {showText && (
         <span className={`font-semibold ${textSize[size]} ${variantClasses[variant]} tracking-tight`}>
-          Relink
+          reLink
         </span>
       )}
     </div>
