@@ -1,8 +1,8 @@
 {
-  "name": "seo-link-recommender-frontend",
-  "version": "3.0.17",
+  "name": "blink-frontend",
+  "version": "4.0.0",
   "type": "module",
-  "description": "Мировая платформа для SEO-инженеров - современный фронтенд с TypeScript и AI",
+  "description": "Blink - Мировая платформа для SEO-инженеров с AI и современными технологиями",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "tsc && vite build",
@@ -72,6 +72,7 @@
     "npm": ">=8.0.0"
   },
   "keywords": [
+    "blink",
     "seo",
     "react",
     "typescript",
