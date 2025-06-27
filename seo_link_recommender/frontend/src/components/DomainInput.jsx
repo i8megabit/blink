@@ -9,63 +9,39 @@ function DomainInput({ domain, setDomain, onAnalyze, isAnalyzing }) {
   }
 
   return (
-    <div className="glass-card p-6 animate-fade-in">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-        <span className="text-2xl">🌐</span>
-        Анализ WordPress сайта
-      </h2>
+    <div className="step-card">
+      <div className="step-number">1</div>
+      <h3 className="step-title">Анализ домена</h3>
+      <p className="step-description">
+        Введите домен WordPress сайта для анализа внутренних ссылок
+      </p>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="domain" className="block text-sm font-medium text-gray-700 mb-2">
-            Домен сайта
-          </label>
-          <input
-            id="domain"
-            type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="example.com"
-            className="input-field"
-            disabled={isAnalyzing}
-            aria-describedby="domain-help"
-          />
-          <p id="domain-help" className="text-sm text-gray-600 mt-1">
-            Введите домен без протокола (http/https)
-          </p>
-        </div>
+      <form onSubmit={handleSubmit} style={{ marginTop: '16px' }}>
+        <input
+          type="text"
+          className="input-apple"
+          placeholder="example.com"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          disabled={isAnalyzing}
+        />
         
         <button
           type="submit"
+          className="btn-apple btn-primary btn-large"
+          style={{ marginTop: '12px', width: '100%' }}
           disabled={!domain.trim() || isAnalyzing}
-          className={`
-            w-full button-primary disabled:opacity-50 disabled:cursor-not-allowed
-            ${isAnalyzing ? 'animate-pulse' : ''}
-          `}
         >
           {isAnalyzing ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              Анализирую...
-            </span>
+            <>
+              <span className="loading-spinner"></span>
+              Анализируем...
+            </>
           ) : (
-            <span className="flex items-center justify-center gap-2">
-              <span>🔍</span>
-              Начать анализ
-            </span>
+            '🔍 Начать анализ'
           )}
         </button>
       </form>
-      
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="font-semibold text-blue-800 mb-2">📋 Что анализируется:</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Структура сайта и статьи WordPress</li>
-          <li>• Семантические связи между контентом</li>
-          <li>• Возможности для внутренней перелинковки</li>
-          <li>• Рекомендации анкорных текстов</li>
-        </ul>
-      </div>
     </div>
   )
 }

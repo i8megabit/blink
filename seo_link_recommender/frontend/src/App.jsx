@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Header from './components/Header'
 import DomainInput from './components/DomainInput'
 import DomainsList from './components/DomainsList'
@@ -12,9 +12,7 @@ import { useNotifications } from './hooks/useNotifications'
 function App() {
   // Основные состояния
   const [domain, setDomain] = useState('')
-  const [currentView, setCurrentView] = useState('domains')
   const [domains, setDomains] = useState([])
-  const [selectedDomain, setSelectedDomain] = useState(null)
   const [recommendations, setRecommendations] = useState([])
   
   // Состояния анализа
@@ -42,9 +40,9 @@ function App() {
     disconnectWebSocket 
   } = useWebSocket({
     onMessage: handleWebSocketMessage,
-    onConnect: () => addNotification('success', 'Соединение установлено', 'WebSocket готов к работе'),
-    onDisconnect: () => addNotification('warning', 'Соединение потеряно', 'Переподключение...'),
-    onError: () => addNotification('error', 'Ошибка соединения', 'Проблема с WebSocket')
+    onConnect: () => addNotification('success', 'WebSocket соединение установлено'),
+    onDisconnect: () => addNotification('warning', 'WebSocket соединение потеряно'),
+    onError: () => addNotification('error', 'Ошибка WebSocket соединения')
   })
 
   // Инициализация приложения
@@ -75,7 +73,7 @@ function App() {
       setDomains(data.domains || [])
     } catch (error) {
       console.error('Ошибка загрузки доменов:', error)
-      addNotification('error', 'Ошибка загрузки', 'Не удалось загрузить список доменов')
+      addNotification('error', 'Не удалось загрузить список доменов')
     }
   }
 
@@ -165,11 +163,11 @@ function App() {
   }
 
   // Анализ домена
-  async function handleAnalyzeDomain(domainToAnalyze = null) {
-    const targetDomain = domainToAnalyze || domain.trim()
+  async function handleAnalyzeDomain() {
+    const targetDomain = domain.trim()
     
     if (!targetDomain) {
-      addNotification('warning', 'Введите домен', 'Необходимо указать домен для анализа')
+      addNotification('warning', 'Введите домен для анализа')
       return
     }
 
@@ -181,7 +179,7 @@ function App() {
     setCurrentThought(null)
 
     try {
-      addNotification('info', 'Начинаем анализ', `Анализируем домен ${targetDomain}`)
+      addNotification('info', `Начинаем анализ домена ${targetDomain}`)
       
       const response = await fetch('/api/v1/wp_index', {
         method: 'POST',
@@ -201,139 +199,82 @@ function App() {
           `Найдено ${result.recommendations?.length || 0} рекомендаций`)
         
         // Обновляем список доменов
-        await loadDomains()
-        
-        // Переключаемся на вкладку результатов если есть рекомендации
-        if (result.recommendations?.length > 0) {
-          setCurrentView('recommendations')
-        }
+        loadDomains()
       } else {
-        throw new Error(result.error || 'Неизвестная ошибка анализа')
+        throw new Error(result.error || 'Неизвестная ошибка')
       }
-      
     } catch (error) {
-      console.error('Ошибка анализа домена:', error)
+      console.error('Ошибка анализа:', error)
       setAnalysisError(error.message)
       addNotification('error', 'Ошибка анализа', error.message)
     } finally {
       setIsAnalyzing(false)
+      setAnalysisStats(null)
+      setCurrentThought(null)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-700 to-blue-800">
-      {/* Шапка */}
+    <div>
       <Header />
       
-      {/* Навигация */}
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b border-black/5">
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <div className="flex justify-center gap-3">
-            {[
-              { id: 'domains', label: '🌐 Домены', icon: '🌐' },
-              { id: 'analysis', label: '🔍 Анализ', icon: '🔍' },
-              { id: 'recommendations', label: '🔗 Рекомендации', icon: '🔗', badge: recommendations.length },
-              { id: 'status', label: '🤖 Ollama', icon: '🤖' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setCurrentView(tab.id)}
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200
-                  ${currentView === tab.id 
-                    ? 'bg-blue-500 text-white shadow-lg transform scale-105' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-102'
-                  }
-                `}
-              >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-                {tab.badge > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            ))}
+      <nav className="nav-apple">
+        <div className="apple-container">
+          <div className="nav-buttons">
+            <button 
+              className="btn-apple btn-secondary" 
+              onClick={checkOllamaStatus}
+            >
+              🔄 Обновить статус
+            </button>
+            <button 
+              className="btn-apple btn-secondary" 
+              onClick={loadDomains}
+            >
+              📊 Обновить домены
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Уведомления */}
-      <Notifications 
-        notifications={notifications} 
-        onRemove={removeNotification} 
-      />
-
-      {/* Основной контент */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Вкладка Домены */}
-        {currentView === 'domains' && (
-          <div className="space-y-6">
-            <DomainInput 
-              domain={domain}
-              setDomain={setDomain}
-              onAnalyze={handleAnalyzeDomain}
-              isAnalyzing={isAnalyzing}
-            />
-            <DomainsList 
-              domains={domains}
-              onAnalyze={handleAnalyzeDomain}
-              onSelect={setSelectedDomain}
-              selectedDomain={selectedDomain}
-            />
+      <main className="apple-container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
+        <OllamaStatus 
+          ollamaStatus={ollamaStatus} 
+          onRefresh={checkOllamaStatus} 
+        />
+        
+        <DomainInput 
+          domain={domain}
+          setDomain={setDomain}
+          onAnalyze={handleAnalyzeDomain}
+          isAnalyzing={isAnalyzing}
+        />
+        
+        <AnalysisProgress 
+          analysisStats={analysisStats}
+          currentThought={currentThought}
+          aiThoughts={aiThoughts}
+        />
+        
+        <DomainsList domains={domains} />
+        
+        <Recommendations recommendations={recommendations} />
+        
+        {analysisError && (
+          <div className="step-card">
+            <div className="step-number">!</div>
+            <h3 className="step-title">Ошибка анализа</h3>
+            <div className="status-indicator status-error">
+              {analysisError}
+            </div>
           </div>
-        )}
-
-        {/* Вкладка Анализ */}
-        {currentView === 'analysis' && (
-          <div className="space-y-6">
-            {isAnalyzing && (
-              <AnalysisProgress 
-                stats={analysisStats}
-                currentThought={currentThought}
-                aiThoughts={aiThoughts}
-              />
-            )}
-            
-            {analysisError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">❌</span>
-                  <div>
-                    <h3 className="font-semibold text-red-800">Ошибка анализа</h3>
-                    <p className="text-red-600">{analysisError}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {!isAnalyzing && !analysisError && (
-              <div className="text-center py-12">
-                <span className="text-6xl mb-4 block">🔍</span>
-                <h2 className="text-xl font-semibold text-white mb-2">Готов к анализу</h2>
-                <p className="text-white/80">Выберите домен на вкладке "Домены" для начала анализа</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Вкладка Рекомендации */}
-        {currentView === 'recommendations' && (
-          <Recommendations 
-            recommendations={recommendations}
-            domain={selectedDomain?.name}
-          />
-        )}
-
-        {/* Вкладка Статус Ollama */}
-        {currentView === 'status' && (
-          <OllamaStatus 
-            status={ollamaStatus}
-            onRefresh={checkOllamaStatus}
-          />
         )}
       </main>
+      
+      <Notifications 
+        notifications={notifications} 
+        removeNotification={removeNotification} 
+      />
     </div>
   )
 }

@@ -3,32 +3,26 @@ import { useState, useCallback } from 'react'
 export function useNotifications() {
   const [notifications, setNotifications] = useState([])
 
-  const addNotification = useCallback((type, title, message, duration = 5000) => {
+  const addNotification = useCallback((type, message, details = '') => {
     const id = Date.now() + Math.random()
-    
-    const notification = {
+    const newNotification = {
       id,
       type,
-      title,
       message,
-      timestamp: new Date().toISOString(),
-      duration
+      details,
+      timestamp: new Date()
     }
-
-    setNotifications(prev => [...prev, notification])
-
-    // Автоматическое удаление через duration
-    if (duration > 0) {
-      setTimeout(() => {
-        removeNotification(id)
-      }, duration)
-    }
-
-    return id
+    
+    setNotifications(prev => [...prev, newNotification])
+    
+    // Автоматически удаляем через 5 секунд
+    setTimeout(() => {
+      removeNotification(id)
+    }, 5000)
   }, [])
 
   const removeNotification = useCallback((id) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id))
+    setNotifications(prev => prev.filter(n => n.id !== id))
   }, [])
 
   const clearAllNotifications = useCallback(() => {
