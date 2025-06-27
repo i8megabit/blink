@@ -1,404 +1,580 @@
 """
-Тесты для модуля кэширования
+Тесты для модуля кэширования reLink
 """
 
 import pytest
 import asyncio
-import json
+import time
+import pickle
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
 
 from app.cache import (
-    CacheService, CacheConfig, CacheKey, CacheSerializer,
-    cached, cache_invalidate, SEOCache, UserCache
+    CacheSerializer,
+    MemoryCache,
+    RedisCache,
+    CacheManager,
+    cache_result,
+    invalidate_cache,
+    SEOCache,
+    UserCache
 )
 
 
-class TestCacheKey:
-    """Тесты для генератора ключей кэша"""
-    
-    def test_generate_simple_key(self):
-        """Тест генерации простого ключа"""
-        key = CacheKey.generate("test", "value")
-        assert isinstance(key, str)
-        assert len(key) == 64  # SHA256 hash length
-    
-    def test_generate_key_with_kwargs(self):
-        """Тест генерации ключа с именованными аргументами"""
-        key1 = CacheKey.generate("test", param1="value1", param2="value2")
-        key2 = CacheKey.generate("test", param2="value2", param1="value1")
-        
-        # Ключи должны быть одинаковыми независимо от порядка kwargs
-        assert key1 == key2
-    
-    def test_prefix_key(self):
-        """Тест генерации ключа с префиксом"""
-        key = CacheKey.prefix("seo", "example.com", "analysis")
-        assert key.startswith("seo:")
-        assert len(key) > 64  # Префикс + хеш
-
-
 class TestCacheSerializer:
-    """Тесты для сериализатора кэша"""
+    """Тесты для CacheSerializer"""
     
-    def test_serialize_json_data(self):
-        """Тест сериализации JSON данных"""
-        data = {"key": "value", "number": 42, "list": [1, 2, 3]}
-        serialized = CacheSerializer.serialize(data)
+    def test_serialize_deserialize_simple_data(self):
+        """Тест сериализации/десериализации простых данных"""
+        test_data = {"key": "value", "number": 42, "boolean": True}
         
-        # Проверяем, что это валидный JSON
+        serialized = CacheSerializer.serialize(test_data)
         deserialized = CacheSerializer.deserialize(serialized)
-        assert deserialized == data
+        
+        assert deserialized == test_data
+        assert isinstance(serialized, bytes)
     
-    def test_serialize_complex_object(self):
-        """Тест сериализации сложного объекта"""
-        class TestObject:
-            def __init__(self, value):
-                self.value = value
+    def test_serialize_deserialize_complex_data(self):
+        """Тест сериализации/десериализации сложных данных"""
+        test_data = {
+            "list": [1, 2, 3],
+            "dict": {"nested": "value"},
+            "tuple": (1, 2, 3),
+            "set": {1, 2, 3},
+            "datetime": datetime.now()
+        }
         
-        obj = TestObject("test_value")
-        serialized = CacheSerializer.serialize(obj)
+        serialized = CacheSerializer.serialize(test_data)
+        deserialized = CacheSerializer.deserialize(serialized)
         
-        # Проверяем, что объект сериализован как pickle
-        assert len(serialized) > 0
-        deserialized = CacheSerializer.deserialize(serialized, "pickle")
-        assert deserialized.value == "test_value"
+        assert deserialized["list"] == test_data["list"]
+        assert deserialized["dict"] == test_data["dict"]
+        assert deserialized["tuple"] == test_data["tuple"]
+        assert deserialized["set"] == test_data["set"]
+    
+    def test_serialize_error_handling(self):
+        """Тест обработки ошибок сериализации"""
+        # Создаем объект, который нельзя сериализовать
+        class UnserializableObject:
+            def __init__(self):
+                self.self_ref = self
+        
+        obj = UnserializableObject()
+        
+        with pytest.raises(Exception):
+            CacheSerializer.serialize(obj)
+    
+    def test_deserialize_error_handling(self):
+        """Тест обработки ошибок десериализации"""
+        invalid_data = b"invalid pickle data"
+        
+        with pytest.raises(Exception):
+            CacheSerializer.deserialize(invalid_data)
 
 
-class TestCacheService:
-    """Тесты для сервиса кэширования"""
+class TestMemoryCache:
+    """Тесты для MemoryCache"""
     
     @pytest.fixture
-    def cache_config(self):
-        """Фикстура для конфигурации кэша"""
-        return CacheConfig(
-            redis_url="redis://localhost:6379",
-            default_ttl=3600,
-            enable_serialization=True
-        )
-    
-    @pytest.fixture
-    async def cache_service(self, cache_config):
-        """Фикстура для сервиса кэширования"""
-        service = CacheService(cache_config)
-        # Очищаем кэш перед тестом
-        await service.clear_all()
-        return service
+    def cache(self):
+        """Кэш для тестирования"""
+        return MemoryCache(max_size=5)
     
     @pytest.mark.asyncio
-    async def test_set_and_get_value(self, cache_service):
-        """Тест установки и получения значения"""
-        key = "test_key"
-        value = {"data": "test_value"}
+    async def test_set_get_basic(self, cache):
+        """Тест базовой установки и получения"""
+        await cache.set("test_key", "test_value", ttl=3600)
+        result = await cache.get("test_key")
         
-        # Устанавливаем значение
-        success = await cache_service.set(key, value, ttl=60)
-        assert success is True
-        
-        # Получаем значение
-        retrieved = await cache_service.get(key)
-        assert retrieved == value
+        assert result == "test_value"
     
     @pytest.mark.asyncio
-    async def test_get_nonexistent_key(self, cache_service):
-        """Тест получения несуществующего ключа"""
-        result = await cache_service.get("nonexistent_key")
-        assert result is None
-    
-    @pytest.mark.asyncio
-    async def test_get_with_default(self, cache_service):
-        """Тест получения с значением по умолчанию"""
-        default_value = "default"
-        result = await cache_service.get("nonexistent_key", default=default_value)
-        assert result == default_value
-    
-    @pytest.mark.asyncio
-    async def test_delete_key(self, cache_service):
-        """Тест удаления ключа"""
-        key = "test_key"
-        value = "test_value"
+    async def test_set_get_with_ttl(self, cache):
+        """Тест TTL функциональности"""
+        await cache.set("test_key", "test_value", ttl=1)
         
-        # Устанавливаем значение
-        await cache_service.set(key, value)
-        
-        # Проверяем, что значение существует
-        assert await cache_service.exists(key) is True
-        
-        # Удаляем значение
-        success = await cache_service.delete(key)
-        assert success is True
-        
-        # Проверяем, что значение удалено
-        assert await cache_service.exists(key) is False
-    
-    @pytest.mark.asyncio
-    async def test_ttl_functionality(self, cache_service):
-        """Тест функциональности TTL"""
-        key = "test_key"
-        value = "test_value"
-        
-        # Устанавливаем значение с коротким TTL
-        await cache_service.set(key, value, ttl=1)
-        
-        # Проверяем, что значение существует
-        assert await cache_service.exists(key) is True
+        # Значение должно быть доступно сразу
+        result = await cache.get("test_key")
+        assert result == "test_value"
         
         # Ждем истечения TTL
         await asyncio.sleep(1.1)
         
-        # Проверяем, что значение истекло
-        assert await cache_service.exists(key) is False
+        # Значение должно быть удалено
+        result = await cache.get("test_key")
+        assert result is None
     
     @pytest.mark.asyncio
-    async def test_clear_pattern(self, cache_service):
-        """Тест очистки по паттерну"""
-        # Устанавливаем несколько значений
-        await cache_service.set("seo:domain1", "value1")
-        await cache_service.set("seo:domain2", "value2")
-        await cache_service.set("user:profile1", "value3")
+    async def test_delete(self, cache):
+        """Тест удаления ключа"""
+        await cache.set("test_key", "test_value")
+        await cache.delete("test_key")
         
-        # Очищаем только seo ключи
-        deleted_count = await cache_service.clear_pattern("seo:*")
-        assert deleted_count == 2
-        
-        # Проверяем, что seo ключи удалены
-        assert await cache_service.exists("seo:domain1") is False
-        assert await cache_service.exists("seo:domain2") is False
-        
-        # Проверяем, что user ключ остался
-        assert await cache_service.exists("user:profile1") is True
+        result = await cache.get("test_key")
+        assert result is None
     
     @pytest.mark.asyncio
-    async def test_clear_all(self, cache_service):
-        """Тест очистки всего кэша"""
-        # Устанавливаем несколько значений
-        await cache_service.set("key1", "value1")
-        await cache_service.set("key2", "value2")
+    async def test_clear(self, cache):
+        """Тест очистки кэша"""
+        await cache.set("key1", "value1")
+        await cache.set("key2", "value2")
         
-        # Очищаем весь кэш
-        success = await cache_service.clear_all()
-        assert success is True
+        await cache.clear()
         
-        # Проверяем, что все ключи удалены
-        assert await cache_service.exists("key1") is False
-        assert await cache_service.exists("key2") is False
+        assert await cache.get("key1") is None
+        assert await cache.get("key2") is None
     
     @pytest.mark.asyncio
-    async def test_get_stats(self, cache_service):
-        """Тест получения статистики"""
-        # Устанавливаем несколько значений
-        await cache_service.set("key1", "value1")
-        await cache_service.set("key2", "value2")
+    async def test_exists(self, cache):
+        """Тест проверки существования ключа"""
+        await cache.set("test_key", "test_value")
         
-        # Получаем статистику
-        stats = await cache_service.get_stats()
+        assert await cache.exists("test_key") is True
+        assert await cache.exists("nonexistent_key") is False
+    
+    @pytest.mark.asyncio
+    async def test_ttl(self, cache):
+        """Тест получения TTL"""
+        await cache.set("test_key", "test_value", ttl=3600)
         
-        # Проверяем базовые поля
-        assert "memory_cache_size" in stats
-        assert "redis_connected" in stats
-        assert stats["memory_cache_size"] == 2
+        ttl = await cache.ttl("test_key")
+        assert ttl > 0
+        assert ttl <= 3600
+    
+    @pytest.mark.asyncio
+    async def test_max_size_eviction(self, cache):
+        """Тест вытеснения при превышении размера"""
+        # Заполняем кэш до максимума
+        for i in range(5):
+            await cache.set(f"key{i}", f"value{i}")
+        
+        # Добавляем еще один ключ
+        await cache.set("new_key", "new_value")
+        
+        # Первый ключ должен быть вытеснен
+        assert await cache.get("key0") is None
+        assert await cache.get("new_key") == "new_value"
+    
+    @pytest.mark.asyncio
+    async def test_keys_pattern(self, cache):
+        """Тест получения ключей по паттерну"""
+        await cache.set("user:1", "value1")
+        await cache.set("user:2", "value2")
+        await cache.set("post:1", "value3")
+        
+        user_keys = await cache.keys("user:*")
+        assert len(user_keys) == 2
+        assert "user:1" in user_keys
+        assert "user:2" in user_keys
+        
+        all_keys = await cache.keys("*")
+        assert len(all_keys) == 3
 
 
-@pytest.mark.asyncio
+class TestRedisCache:
+    """Тесты для RedisCache"""
+    
+    @pytest.fixture
+    def redis_cache(self):
+        """Redis кэш для тестирования"""
+        return RedisCache("redis://localhost:6379")
+    
+    @pytest.mark.asyncio
+    async def test_redis_initialization(self, redis_cache):
+        """Тест инициализации Redis кэша"""
+        assert redis_cache.redis_url == "redis://localhost:6379"
+        assert redis_cache._client is None
+    
+    @pytest.mark.asyncio
+    async def test_get_client(self, redis_cache):
+        """Тест получения Redis клиента"""
+        with patch('app.cache.redis') as mock_redis:
+            mock_client = Mock()
+            mock_redis.from_url.return_value = mock_client
+            
+            client = await redis_cache._get_client()
+            
+            assert client == mock_client
+            mock_redis.from_url.assert_called_once_with(
+                "redis://localhost:6379", 
+                decode_responses=False
+            )
+    
+    @pytest.mark.asyncio
+    async def test_set_get_with_mock(self, redis_cache):
+        """Тест установки и получения с моком Redis"""
+        with patch('app.cache.redis') as mock_redis:
+            mock_client = AsyncMock()
+            mock_redis.from_url.return_value = mock_client
+            
+            test_data = {"key": "value"}
+            serialized_data = CacheSerializer.serialize(test_data)
+            
+            # Тестируем set
+            await redis_cache.set("test_key", test_data, ttl=3600)
+            
+            mock_client.setex.assert_called_once_with(
+                "redis:test_key", 3600, serialized_data
+            )
+            
+            # Тестируем get
+            mock_client.get.return_value = serialized_data
+            result = await redis_cache.get("test_key")
+            
+            assert result == test_data
+            mock_client.get.assert_called_once_with("redis:test_key")
+    
+    @pytest.mark.asyncio
+    async def test_delete_with_mock(self, redis_cache):
+        """Тест удаления с моком Redis"""
+        with patch('app.cache.redis') as mock_redis:
+            mock_client = AsyncMock()
+            mock_redis.from_url.return_value = mock_client
+            mock_client.delete.return_value = 1
+            
+            result = await redis_cache.delete("test_key")
+            
+            assert result is True
+            mock_client.delete.assert_called_once_with("redis:test_key")
+    
+    @pytest.mark.asyncio
+    async def test_close(self, redis_cache):
+        """Тест закрытия соединения"""
+        with patch('app.cache.redis') as mock_redis:
+            mock_client = AsyncMock()
+            mock_redis.from_url.return_value = mock_client
+            
+            # Получаем клиента
+            await redis_cache._get_client()
+            
+            # Закрываем соединение
+            await redis_cache.close()
+            
+            mock_client.close.assert_called_once()
+            assert redis_cache._client is None
+
+
+class TestCacheManager:
+    """Тесты для CacheManager"""
+    
+    @pytest.fixture
+    def cache_manager(self):
+        """Менеджер кэша для тестирования"""
+        return CacheManager()
+    
+    @pytest.mark.asyncio
+    async def test_get_from_memory_cache(self, cache_manager):
+        """Тест получения из memory кэша"""
+        await cache_manager.memory_cache.set("test_key", "test_value")
+        
+        result = await cache_manager.get("test_key", use_redis=False)
+        assert result == "test_value"
+    
+    @pytest.mark.asyncio
+    async def test_set_to_memory_cache(self, cache_manager):
+        """Тест установки в memory кэш"""
+        result = await cache_manager.set("test_key", "test_value", use_redis=False)
+        assert result is True
+        
+        cached_value = await cache_manager.memory_cache.get("test_key")
+        assert cached_value == "test_value"
+    
+    @pytest.mark.asyncio
+    async def test_delete_from_memory_cache(self, cache_manager):
+        """Тест удаления из memory кэша"""
+        await cache_manager.memory_cache.set("test_key", "test_value")
+        
+        result = await cache_manager.delete("test_key", use_redis=False)
+        assert result is True
+        
+        cached_value = await cache_manager.memory_cache.get("test_key")
+        assert cached_value is None
+    
+    @pytest.mark.asyncio
+    async def test_exists_in_memory_cache(self, cache_manager):
+        """Тест проверки существования в memory кэше"""
+        await cache_manager.memory_cache.set("test_key", "test_value")
+        
+        assert await cache_manager.exists("test_key", use_redis=False) is True
+        assert await cache_manager.exists("nonexistent_key", use_redis=False) is False
+    
+    @pytest.mark.asyncio
+    async def test_ttl_from_memory_cache(self, cache_manager):
+        """Тест получения TTL из memory кэша"""
+        await cache_manager.memory_cache.set("test_key", "test_value", ttl=3600)
+        
+        ttl = await cache_manager.ttl("test_key", use_redis=False)
+        assert ttl > 0
+        assert ttl <= 3600
+    
+    @pytest.mark.asyncio
+    async def test_keys_from_memory_cache(self, cache_manager):
+        """Тест получения ключей из memory кэша"""
+        await cache_manager.memory_cache.set("user:1", "value1")
+        await cache_manager.memory_cache.set("user:2", "value2")
+        
+        keys = await cache_manager.keys("user:*", use_redis=False)
+        assert len(keys) == 2
+        assert "user:1" in keys
+        assert "user:2" in keys
+
+
 class TestCacheDecorators:
     """Тесты для декораторов кэширования"""
     
-    @pytest.fixture
-    async def cache_service(self):
-        """Фикстура для сервиса кэширования"""
-        config = CacheConfig(enable_serialization=True)
-        service = CacheService(config)
-        await service.clear_all()
-        return service
-    
-    async def test_cached_decorator(self, cache_service):
-        """Тест декоратора cached"""
+    @pytest.mark.asyncio
+    async def test_cache_result_decorator(self):
+        """Тест декоратора cache_result"""
+        call_count = 0
         
-        @cached(ttl=60, key_prefix="test")
-        async def expensive_function(param1, param2):
-            await asyncio.sleep(0.1)  # Симулируем дорогую операцию
+        @cache_result(ttl=3600, key_prefix="test")
+        async def test_function(param1, param2):
+            nonlocal call_count
+            call_count += 1
             return f"result_{param1}_{param2}"
         
-        # Первый вызов - должен выполниться функция
-        result1 = await expensive_function("a", "b")
+        # Первый вызов - функция выполняется
+        result1 = await test_function("a", "b")
         assert result1 == "result_a_b"
+        assert call_count == 1
         
-        # Второй вызов - должен вернуться из кэша
-        result2 = await expensive_function("a", "b")
+        # Второй вызов с теми же параметрами - результат из кэша
+        result2 = await test_function("a", "b")
         assert result2 == "result_a_b"
+        assert call_count == 1  # Функция не вызывалась повторно
         
-        # Проверяем, что результат закэширован
-        cache_key = CacheKey.prefix("test", "a", "b")
-        cached_result = await cache_service.get(cache_key)
-        assert cached_result == "result_a_b"
+        # Вызов с другими параметрами - функция выполняется снова
+        result3 = await test_function("c", "d")
+        assert result3 == "result_c_d"
+        assert call_count == 2
     
-    async def test_cache_invalidate_decorator(self, cache_service):
-        """Тест декоратора cache_invalidate"""
+    @pytest.mark.asyncio
+    async def test_invalidate_cache_decorator(self):
+        """Тест декоратора invalidate_cache"""
+        # Сначала кэшируем некоторые данные
+        cache_manager = CacheManager()
+        await cache_manager.set("test:key1", "value1")
+        await cache_manager.set("test:key2", "value2")
         
-        # Сначала устанавливаем некоторые значения в кэш
-        await cache_service.set("seo:domain1", "value1")
-        await cache_service.set("seo:domain2", "value2")
-        await cache_service.set("user:profile1", "value3")
-        
-        @cache_invalidate("seo:*")
-        async def update_seo_data():
-            return "updated"
+        @invalidate_cache("test:*")
+        async def test_function():
+            return "result"
         
         # Выполняем функцию
-        result = await update_seo_data()
-        assert result == "updated"
+        result = await test_function()
+        assert result == "result"
         
-        # Проверяем, что seo ключи удалены
-        assert await cache_service.exists("seo:domain1") is False
-        assert await cache_service.exists("seo:domain2") is False
-        
-        # Проверяем, что user ключ остался
-        assert await cache_service.exists("user:profile1") is True
+        # Проверяем, что кэш очищен
+        assert await cache_manager.get("test:key1") is None
+        assert await cache_manager.get("test:key2") is None
 
 
-class TestSpecializedCache:
-    """Тесты для специализированных кэшей"""
+class TestSEOCache:
+    """Тесты для SEOCache"""
+    
+    @pytest.fixture
+    def seo_cache(self):
+        """SEO кэш для тестирования"""
+        return SEOCache(ttl=3600)
     
     @pytest.mark.asyncio
-    async def test_seo_cache(self):
-        """Тест SEO кэша"""
-        # Тестируем статические методы
-        result = await SEOCache.get_analysis_result("example.com")
-        # Пока метод не реализован, проверяем что он существует
-        assert SEOCache.get_analysis_result is not None
+    async def test_get_set_analysis(self, seo_cache):
+        """Тест получения и установки SEO анализа"""
+        analysis_data = {"score": 85, "recommendations": ["test"]}
+        
+        # Устанавливаем анализ
+        result = await seo_cache.set_analysis("example.com", analysis_data)
+        assert result is True
+        
+        # Получаем анализ
+        cached_analysis = await seo_cache.get_analysis("example.com")
+        assert cached_analysis == analysis_data
     
     @pytest.mark.asyncio
-    async def test_user_cache(self):
-        """Тест пользовательского кэша"""
-        # Тестируем статические методы
-        result = await UserCache.get_user_profile(123)
-        # Пока метод не реализован, проверяем что он существует
-        assert UserCache.get_user_profile is not None
+    async def test_get_set_recommendations(self, seo_cache):
+        """Тест получения и установки рекомендаций"""
+        recommendations = [{"type": "link", "text": "test"}]
+        
+        # Устанавливаем рекомендации
+        result = await seo_cache.set_recommendations("example.com", recommendations)
+        assert result is True
+        
+        # Получаем рекомендации
+        cached_recommendations = await seo_cache.get_recommendations("example.com")
+        assert cached_recommendations == recommendations
+    
+    @pytest.mark.asyncio
+    async def test_invalidate_domain(self, seo_cache):
+        """Тест инвалидации данных домена"""
+        # Устанавливаем данные
+        await seo_cache.set_analysis("example.com", {"score": 85})
+        await seo_cache.set_recommendations("example.com", [{"type": "link"}])
+        
+        # Инвалидируем домен
+        result = await seo_cache.invalidate_domain("example.com")
+        assert result is True
+        
+        # Проверяем, что данные удалены
+        assert await seo_cache.get_analysis("example.com") is None
+        assert await seo_cache.get_recommendations("example.com") is None
+
+
+class TestUserCache:
+    """Тесты для UserCache"""
+    
+    @pytest.fixture
+    def user_cache(self):
+        """User кэш для тестирования"""
+        return UserCache(ttl=1800)
+    
+    @pytest.mark.asyncio
+    async def test_get_set_user(self, user_cache):
+        """Тест получения и установки пользователя"""
+        user_data = {"id": 1, "email": "test@example.com", "username": "testuser"}
+        
+        # Устанавливаем пользователя
+        result = await user_cache.set_user(1, user_data)
+        assert result is True
+        
+        # Получаем пользователя
+        cached_user = await user_cache.get_user(1)
+        assert cached_user == user_data
+    
+    @pytest.mark.asyncio
+    async def test_invalidate_user(self, user_cache):
+        """Тест инвалидации пользователя"""
+        user_data = {"id": 1, "email": "test@example.com"}
+        
+        # Устанавливаем пользователя
+        await user_cache.set_user(1, user_data)
+        
+        # Инвалидируем пользователя
+        result = await user_cache.invalidate_user(1)
+        assert result is True
+        
+        # Проверяем, что данные удалены
+        assert await user_cache.get_user(1) is None
 
 
 class TestCacheIntegration:
     """Интеграционные тесты кэширования"""
     
     @pytest.mark.asyncio
-    async def test_full_cache_workflow(self):
-        """Тест полного цикла работы с кэшем"""
-        config = CacheConfig(enable_serialization=True)
-        cache_service = CacheService(config)
+    async def test_memory_redis_fallback(self):
+        """Тест fallback между memory и Redis кэшем"""
+        cache_manager = CacheManager()
         
-        # Очищаем кэш
-        await cache_service.clear_all()
+        # Устанавливаем значение только в memory
+        await cache_manager.set("test_key", "test_value", use_redis=False)
         
-        # Устанавливаем данные
-        test_data = {
-            "domain": "example.com",
-            "analysis": {
-                "score": 85.5,
-                "recommendations": ["link1", "link2"]
-            }
-        }
-        
-        await cache_service.set("seo:example.com", test_data, ttl=3600)
-        
-        # Получаем данные
-        retrieved_data = await cache_service.get("seo:example.com")
-        assert retrieved_data == test_data
-        
-        # Проверяем TTL
-        ttl = await cache_service.ttl("seo:example.com")
-        assert ttl > 0
-        
-        # Получаем статистику
-        stats = await cache_service.get_stats()
-        assert stats["memory_cache_size"] == 1
-        
-        # Очищаем кэш
-        await cache_service.clear_all()
-        
-        # Проверяем, что данные удалены
-        assert await cache_service.get("seo:example.com") is None
-
-
-class TestCacheErrorHandling:
-    """Тесты обработки ошибок кэширования"""
+        # Получаем значение (должно быть из memory)
+        result = await cache_manager.get("test_key")
+        assert result == "test_value"
     
     @pytest.mark.asyncio
-    async def test_redis_connection_error(self):
-        """Тест ошибки подключения к Redis"""
-        # Создаем конфигурацию с неверным URL Redis
-        config = CacheConfig(redis_url="redis://invalid:6379")
-        cache_service = CacheService(config)
+    async def test_cache_manager_close(self):
+        """Тест закрытия менеджера кэша"""
+        cache_manager = CacheManager()
         
-        # Должен работать с in-memory кэшем
-        success = await cache_service.set("test_key", "test_value")
-        assert success is True
-        
-        value = await cache_service.get("test_key")
-        assert value == "test_value"
-    
-    @pytest.mark.asyncio
-    async def test_serialization_error(self):
-        """Тест ошибки сериализации"""
-        config = CacheConfig(enable_serialization=True)
-        cache_service = CacheService(config)
-        
-        # Создаем объект, который нельзя сериализовать
-        class UnserializableObject:
-            def __init__(self):
-                self.circular_ref = None
-            
-            def __getstate__(self):
-                raise TypeError("Cannot serialize")
-        
-        obj = UnserializableObject()
-        obj.circular_ref = obj  # Создаем циклическую ссылку
-        
-        # Должен обработать ошибку и вернуть False
-        success = await cache_service.set("test_key", obj)
-        assert success is False
+        # Если Redis доступен, закрываем соединение
+        if cache_manager.redis_cache:
+            await cache_manager.close()
+            assert cache_manager.redis_cache._client is None
 
 
 class TestCachePerformance:
     """Тесты производительности кэширования"""
     
     @pytest.mark.asyncio
-    async def test_concurrent_access(self):
-        """Тест конкурентного доступа к кэшу"""
-        config = CacheConfig(enable_serialization=True)
-        cache_service = CacheService(config)
+    async def test_memory_cache_performance(self):
+        """Тест производительности memory кэша"""
+        cache = MemoryCache(max_size=1000)
         
-        # Создаем несколько задач для конкурентного доступа
-        async def cache_operation(task_id):
-            key = f"task_{task_id}"
-            value = f"value_{task_id}"
-            
-            await cache_service.set(key, value)
-            retrieved = await cache_service.get(key)
-            return retrieved == value
-        
-        # Запускаем 10 конкурентных операций
-        tasks = [cache_operation(i) for i in range(10)]
-        results = await asyncio.gather(*tasks)
-        
-        # Все операции должны быть успешными
-        assert all(results)
-    
-    @pytest.mark.asyncio
-    async def test_memory_cleanup(self):
-        """Тест очистки памяти"""
-        config = CacheConfig(enable_serialization=True)
-        cache_service = CacheService(config)
+        start_time = time.time()
         
         # Устанавливаем много значений
-        for i in range(1000):
-            await cache_service.set(f"key_{i}", f"value_{i}")
+        for i in range(100):
+            await cache.set(f"key{i}", f"value{i}")
         
-        # Проверяем, что количество записей ограничено
-        stats = await cache_service.get_stats()
-        assert stats["memory_cache_size"] <= 1000
+        # Получаем значения
+        for i in range(100):
+            await cache.get(f"key{i}")
         
-        # Очищаем кэш
-        await cache_service.clear_all()
+        duration = time.time() - start_time
         
-        # Проверяем, что кэш пуст
-        stats = await cache_service.get_stats()
-        assert stats["memory_cache_size"] == 0 
+        # Операции должны быть быстрыми
+        assert duration < 1.0
+    
+    @pytest.mark.asyncio
+    async def test_cache_decorator_performance(self):
+        """Тест производительности декоратора кэширования"""
+        call_count = 0
+        
+        @cache_result(ttl=3600)
+        async def expensive_function(param):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.1)  # Имитируем дорогую операцию
+            return f"result_{param}"
+        
+        start_time = time.time()
+        
+        # Первый вызов
+        result1 = await expensive_function("test")
+        
+        # Второй вызов (должен быть из кэша)
+        result2 = await expensive_function("test")
+        
+        duration = time.time() - start_time
+        
+        assert result1 == result2
+        assert call_count == 1  # Функция вызвалась только один раз
+        assert duration < 0.2  # Второй вызов должен быть быстрым
+
+
+class TestCacheErrorHandling:
+    """Тесты обработки ошибок в кэшировании"""
+    
+    @pytest.mark.asyncio
+    async def test_redis_connection_error(self):
+        """Тест обработки ошибки подключения к Redis"""
+        cache_manager = CacheManager()
+        
+        # Если Redis недоступен, операции должны работать с memory кэшем
+        result = await cache_manager.set("test_key", "test_value")
+        assert result is True
+        
+        cached_value = await cache_manager.get("test_key")
+        assert cached_value == "test_value"
+    
+    @pytest.mark.asyncio
+    async def test_serialization_error_handling(self):
+        """Тест обработки ошибок сериализации"""
+        # Создаем объект, который нельзя сериализовать
+        class UnserializableObject:
+            def __init__(self):
+                self.self_ref = self
+        
+        obj = UnserializableObject()
+        
+        with pytest.raises(Exception):
+            CacheSerializer.serialize(obj)
+    
+    @pytest.mark.asyncio
+    async def test_cache_manager_edge_cases(self):
+        """Тест граничных случаев менеджера кэша"""
+        cache_manager = CacheManager()
+        
+        # Тест с пустым ключом
+        result = await cache_manager.set("", "value")
+        assert result is True
+        
+        cached_value = await cache_manager.get("")
+        assert cached_value == "value"
+        
+        # Тест с None значением
+        result = await cache_manager.set("none_key", None)
+        assert result is True
+        
+        cached_value = await cache_manager.get("none_key")
+        assert cached_value is None 

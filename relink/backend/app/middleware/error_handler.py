@@ -335,4 +335,4 @@ def setup_error_handlers(app):
 
 
 # Экспорт для обратной совместимости
-BlinkErrorHandlerMiddleware = ErrorHandlerMiddleware 
+RelinkErrorHandlerMiddleware = ErrorHandlerMiddleware 

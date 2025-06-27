@@ -1396,8 +1396,8 @@ async def startup_event():
     # Создаем директорию для логов
     os.makedirs("logs", exist_ok=True)
     
-    monitoring.logger.info("🚀 Blink SEO Platform запущен!")
-    print("🚀 Blink SEO Platform v1.0.0 запущен!")
+    monitoring.logger.info("🚀 reLink SEO Platform запущен!")
+    print("🚀 reLink SEO Platform v1.0.0 запущен!")
 
 
 if __name__ == "__main__":

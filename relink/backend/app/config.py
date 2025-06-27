@@ -170,4 +170,4 @@ def reload_settings():
 
 
 # Экспорт для обратной совместимости
-BlinkSettings = Settings 
+RelinkSettings = Settings 

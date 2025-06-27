@@ -420,7 +420,7 @@ class ValidationUtils:
 
 
 # Экспорт для обратной совместимости
-BlinkValidation = {
+RelinkValidation = {
     "UserRegistrationModel": UserRegistrationModel,
     "UserLoginModel": UserLoginModel,
     "DomainAnalysisModel": DomainAnalysisModel,

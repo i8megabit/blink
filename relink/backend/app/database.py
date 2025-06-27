@@ -191,7 +191,7 @@ async def reset_test_db():
 
 
 # Экспорт для обратной совместимости
-BlinkDatabase = {
+RelinkDatabase = {
     "get_db": get_db,
     "init_db": init_db,
     "close_db": close_db,

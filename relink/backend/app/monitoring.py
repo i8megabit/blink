@@ -403,7 +403,7 @@ metrics_collector = MetricsCollector()
 performance_monitor = PerformanceMonitor()
 
 # Экспорт для обратной совместимости
-BlinkMonitoring = {
+RelinkMonitoring = {
     "logger": logger,
     "metrics_collector": metrics_collector,
     "performance_monitor": performance_monitor,

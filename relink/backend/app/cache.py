@@ -506,7 +506,7 @@ class UserCache:
 
 
 # Экспорт для обратной совместимости
-BlinkCache = {
+RelinkCache = {
     "cache_manager": cache_manager,
     "cache_result": cache_result,
     "invalidate_cache": invalidate_cache,

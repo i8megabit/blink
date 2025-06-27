@@ -396,4 +396,4 @@ def setup_exception_handlers(app):
 
 
 # Экспорт для обратной совместимости
-BlinkBaseException = RelinkBaseException 
+RelinkBaseException = RelinkBaseException 
