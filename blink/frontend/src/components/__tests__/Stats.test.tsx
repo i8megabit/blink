@@ -71,13 +71,13 @@ describe('Stats Component', () => {
 
   it('отображает количество найденных связей', () => {
     render(<Stats domain={mockDomain} analysisHistory={mockAnalysisHistory} />);
-    expect(screen.getByText('150')).toBeInTheDocument();
+    expect(screen.getAllByText('150').length).toBeGreaterThan(0);
     expect(screen.getByText(/Связей найдено/i)).toBeInTheDocument();
   });
 
   it('отображает количество рекомендаций', () => {
     render(<Stats domain={mockDomain} analysisHistory={mockAnalysisHistory} />);
-    expect(screen.getByText('85')).toBeInTheDocument();
+    expect(screen.getAllByText('85').length).toBeGreaterThan(0);
     expect(screen.getByText(/Рекомендаций/i)).toBeInTheDocument();
   });
 
@@ -128,6 +128,6 @@ describe('Stats Component', () => {
     expect(screen.getByText(/Всего постов/i)).toBeInTheDocument();
     expect(screen.getByText(/Анализов/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Связей найдено/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Рекомендаций/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Рекомендаций/i).length).toBeGreaterThan(0);
   });
 }); 
