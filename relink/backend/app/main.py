@@ -401,13 +401,13 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Проверка здоровья сервиса."""
-    return {"status": "healthy", "version": "4.1.1.022"}
+    """Проверка здоровья приложения."""
+    return {"status": "healthy", "version": settings.api.version}
 
 @app.get("/api/v1/health")
 async def api_health():
-    """API health check."""
-    return {"status": "healthy", "version": "4.1.1.022"}
+    """Проверка здоровья API."""
+    return {"status": "healthy", "version": settings.api.version}
 
 @app.get("/api/v1/version")
 async def get_version():
@@ -418,7 +418,7 @@ async def get_version():
             with open(version_file, 'r', encoding='utf-8') as f:
                 version = f.read().strip()
         else:
-            version = "4.1.1.019"
+            version = settings.api.version
         
         return {
             "version": version,
@@ -428,7 +428,7 @@ async def get_version():
         }
     except Exception as e:
         return {
-            "version": "4.1.1.019",
+            "version": settings.api.version,
             "buildDate": datetime.now().strftime('%Y-%m-%d'),
             "error": str(e)
         }
@@ -445,7 +445,7 @@ async def get_settings():
             "notifications": True,
             "export": True
         },
-        "version": "4.1.1.019"
+        "version": settings.api.version
     }
 
 @app.get("/api/v1/ollama_status")

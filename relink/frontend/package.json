@@ -1,7 +1,7 @@
 {
   "name": "relink-frontend",
   "private": true,
-  "version": "4.1.1",
+  "version": "1.0.1",
   "type": "module",
   "description": "reLink - Мировая платформа для SEO-инженеров с AI и современными технологиями",
   "scripts": {

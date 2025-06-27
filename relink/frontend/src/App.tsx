@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Header from './components/Header'
 import { DomainInput } from './components/DomainInput'
 import { DomainsList } from './components/DomainsList'
@@ -19,9 +19,13 @@ import Insights from './components/Insights'
 import Analytics from './components/Analytics'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useNotifications } from './hooks/useNotifications'
+import { useTheme } from './hooks/useTheme'
 import { Domain, Recommendation, AnalysisStats, AIThought, OllamaStatus as OllamaStatusType, WebSocketMessage, BenchmarkHistory } from './types'
 
 function App() {
+  // Тема приложения
+  const { theme, changeTheme, isLoaded } = useTheme()
+  
   // Основные состояния
   const [domain] = useState('')
   const [domains, setDomains] = useState<Domain[]>([])

@@ -4,6 +4,7 @@
 """
 
 import os
+import subprocess
 from typing import Optional, Dict, Any
 from pydantic_settings import BaseSettings
 from pydantic import validator, Field
@@ -11,6 +12,29 @@ from functools import lru_cache
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_version_from_readme() -> str:
+    """
+    Извлекает версию из README.md или возвращает значение по умолчанию
+    """
+    try:
+        # Пытаемся запустить скрипт извлечения версии
+        result = subprocess.run(
+            ["python", "scripts/extract_version.py"],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            logger.info(f"Версия извлечена из README: {version}")
+            return version
+    except Exception as e:
+        logger.warning(f"Не удалось извлечь версию из README: {e}")
+    
+    # Fallback на переменную окружения или значение по умолчанию
+    return os.getenv("API_VERSION", "4.1.1")
 
 
 class DatabaseSettings(BaseSettings):
@@ -90,7 +114,7 @@ class APISettings(BaseSettings):
     """Настройки API"""
     title: str = Field(default="reLink SEO API", env="API_TITLE")
     description: str = Field(default="AI-powered SEO platform API", env="API_DESCRIPTION")
-    version: str = Field(default="1.0.0", env="API_VERSION")
+    version: str = Field(default_factory=get_version_from_readme, env="API_VERSION")
     debug: bool = Field(default=False, env="API_DEBUG")
     docs_url: str = Field(default="/docs", env="API_DOCS_URL")
     redoc_url: str = Field(default="/redoc", env="API_REDOC_URL")
@@ -160,6 +184,7 @@ def get_settings() -> Settings:
     try:
         settings = Settings()
         logger.info(f"Настройки загружены для среды: {settings.environment}")
+        logger.info(f"Версия API: {settings.api.version}")
         return settings
     except Exception as e:
         logger.error(f"Ошибка загрузки настроек: {e}")

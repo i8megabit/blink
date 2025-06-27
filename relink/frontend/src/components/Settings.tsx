@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
+import { useTheme } from '../hooks/useTheme';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -28,8 +29,10 @@ export function Settings({
   className,
   onSettingsChange
 }: SettingsProps) {
+  const { theme, changeTheme } = useTheme();
+  
   const [settings, setSettings] = useState<AppSettings>({
-    theme: 'system',
+    theme: theme,
     language: 'ru',
     autoRefresh: true,
     refreshInterval: 30,
@@ -43,36 +46,29 @@ export function Settings({
     loadSettings();
   }, []);
 
+  // Синхронизируем локальное состояние с глобальной темой
+  useEffect(() => {
+    setSettings(prev => ({ ...prev, theme }));
+  }, [theme]);
+
   const loadSettings = async () => {
     try {
       const response = await fetch('/api/v1/settings');
       if (response.ok) {
         const data = await response.json();
         const loadedSettings = data.settings || settings;
+        
+        // Обновляем настройки, но НЕ применяем тему автоматически
         setSettings(loadedSettings);
-        applyTheme(loadedSettings.theme);
+        
+        // Синхронизируем тему только если она отличается от текущей
+        if (loadedSettings.theme !== theme) {
+          changeTheme(loadedSettings.theme);
+        }
       }
     } catch (err) {
       console.error('Ошибка загрузки настроек:', err);
     }
-  };
-
-  const applyTheme = (theme: string) => {
-    const root = document.documentElement;
-    
-    // Удаляем все классы тем
-    root.classList.remove('light', 'dark');
-    
-    if (theme === 'system') {
-      // Определяем системную тему
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      root.classList.add(systemTheme);
-    } else {
-      root.classList.add(theme);
-    }
-    
-    // Сохраняем в localStorage
-    localStorage.setItem('theme', theme);
   };
 
   const saveSettings = async () => {
@@ -87,8 +83,6 @@ export function Settings({
       });
 
       if (response.ok) {
-        // Применяем тему только при сохранении
-        applyTheme(settings.theme);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         
@@ -110,6 +104,11 @@ export function Settings({
     value: AppSettings[K]
   ) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    
+    // Если изменяется тема, применяем её сразу
+    if (key === 'theme') {
+      changeTheme(value as 'light' | 'dark' | 'system');
+    }
   };
 
   const themeOptions = [

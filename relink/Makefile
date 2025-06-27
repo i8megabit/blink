@@ -2,7 +2,7 @@
 # SEO Link Recommender - Makefile
 # ========================================
 
-.PHONY: help version get-version set-version tag-version release-version build test clean docs
+.PHONY: help version get-version set-version tag-version release-version build test clean docs version-update version-sync
 
 # Переменные
 PYTHON := python3
@@ -21,34 +21,61 @@ help: ## Показать справку
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 
 # ========================================
-# Управление версиями
+# Управление версиями (SemVer 2.0)
 # ========================================
 
-version: get-version ## Показать текущую версию (алиас для get-version)
+.PHONY: version version-current version-bump version-release version-prerelease version-set version-validate version-changelog
 
-get-version: ## Показать текущую версию
-	@echo "$(GREEN)📦 Получение информации о версии...$(NC)"
-	@$(PYTHON) $(VERSION_MANAGER) get
+version: version-current
+	@echo "📦 Информация о версии"
 
-set-version: ## Установить новую версию (использование: make set-version VERSION=3.0.18)
-	@if [ -z "$(VERSION)" ]; then \
-		echo "$(RED)❌ Укажите версию: make set-version VERSION=3.0.18$(NC)"; \
+version-current:
+	@echo "🔍 Текущая версия:"
+	@$(PYTHON) $(VERSION_MANAGER) current
+
+version-bump:
+	@echo "🚀 Увеличение версии..."
+	@if [ -z "$(TYPE)" ]; then \
+		echo "❌ Укажите TYPE=major|minor|patch"; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)🔄 Установка версии $(VERSION)...$(NC)"
-	@$(PYTHON) $(VERSION_MANAGER) set $(VERSION)
+	@$(PYTHON) $(VERSION_MANAGER) bump --type $(TYPE)
 
-tag-version: ## Создать Git тег для текущей версии
-	@echo "$(GREEN)🏷️ Создание Git тега...$(NC)"
-	@$(PYTHON) $(VERSION_MANAGER) tag
+version-release:
+	@echo "🎉 Создание релиза..."
+	@$(PYTHON) $(VERSION_MANAGER) release --type $(or $(TYPE),patch)
 
-release-version: ## Полный релиз (установка версии + тег + push)
-	@if [ -z "$(VERSION)" ]; then \
-		echo "$(RED)❌ Укажите версию: make release-version VERSION=3.0.18$(NC)"; \
+version-prerelease:
+	@echo "🔧 Создание prerelease..."
+	@if [ -z "$(NAME)" ]; then \
+		echo "❌ Укажите NAME=имя_prerelease"; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)🚀 Начинаем релиз версии $(VERSION)...$(NC)"
-	@$(PYTHON) $(VERSION_MANAGER) release $(VERSION)
+	@$(PYTHON) $(VERSION_MANAGER) prerelease --prerelease $(NAME) --type $(or $(TYPE),rc)
+
+version-set:
+	@echo "⚙️ Установка версии..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Укажите VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) set --version $(VERSION)
+
+version-validate:
+	@echo "✅ Валидация версии..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Укажите VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) validate --version $(VERSION)
+
+version-changelog:
+	@echo "📝 Обновление changelog..."
+	@if [ -z "$(CHANGES)" ]; then \
+		echo "❌ Укажите CHANGES=\"изменение1 изменение2\""; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) changelog --changes $(CHANGES)
 
 # ========================================
 # Сборка и тестирование
