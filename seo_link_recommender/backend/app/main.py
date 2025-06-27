@@ -518,8 +518,8 @@ class WPRequest(BaseModel):
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-# Оптимальная модель для SEO задач: qwen2.5:7b - отличный баланс качества/стабильности/ресурсов
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+# Оптимизированная модель для SEO задач: qwen2.5:7b-optimized - расширенный контекст 8192 токена
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-optimized")
 
 # 🎯 ОПТИМИЗИРОВАННЫЕ НАСТРОЙКИ ТОКЕНОВ для модели qwen2.5:7b
 # Модель имеет лимит контекста 8192 токена, оставляем запас для промпта и ответа
@@ -2066,7 +2066,7 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
             await websocket_manager.send_ollama_info(client_id, {
                 "status": "starting",
                 "model": OLLAMA_MODEL,
-                "model_info": "qwen2.5:7b - улучшенный семантический анализ",
+                "model_info": "qwen2.5:7b-optimized - расширенный контекст 8192 токена",
                 "articles_count": len(articles),
                 "prompt_length": len(qwen_optimized_prompt),
                 "timeout": 300,

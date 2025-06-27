@@ -83,10 +83,10 @@ services:
       sleep 60 && 
       echo 'Подтягиваем модель...' && 
       ollama pull qwen2.5:7b && 
-      echo 'Модель загружена, настраиваем КОНСЕРВАТИВНЫЕ параметры...' && 
+      echo 'Модель загружена, настраиваем СТАБИЛЬНЫЕ параметры...' && 
       ollama create qwen2.5:7b-optimized -f /dev/stdin <<EOF
       FROM qwen2.5:7b
-      # ОПТИМИЗИРОВАННЫЕ параметры для работы с большими промптами
+      # СТАБИЛЬНЫЕ параметры для работы с большими промптами
       PARAMETER num_ctx 8192
       PARAMETER num_batch 128
       PARAMETER num_thread 4
@@ -96,13 +96,13 @@ services:
       PARAMETER top_p 0.9
       PARAMETER repeat_penalty 1.1
       PARAMETER seed 42
-      # Стабильность превыше всего
+      # Приоритет стабильности работы
       PARAMETER stop "\\n\\n"
       EOF
-      echo 'Консервативная модель создана для стабильности!' &&
+      echo 'Стабильная модель создана для надежной работы!' &&
       echo 'Предзагружаем модель...' &&
-      ollama run qwen2.5:7b-optimized 'Модель готова в консервативном режиме' &&
-      echo 'Модель настроена для минимальной нагрузки!' &&
+      ollama run qwen2.5:7b-optimized 'Модель готова в стабильном режиме' &&
+      echo 'Модель настроена для оптимальной производительности!' &&
       wait"
     healthcheck:
       test: ["CMD", "curl", "-f", "-m", "60", "http://localhost:11434/api/tags"]
