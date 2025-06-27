@@ -1,13 +1,35 @@
-# 🔗 SEO Link Recommender
+# 🔗 Blink - AI-Powered SEO Platform
 
-> Интеллектуальная система генерации внутренних ссылок с использованием LLM и RAG
+> Мировая платформа для SEO-инженеров с искусственным интеллектом и современными технологиями
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-green.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![AI](https://img.shields.io/badge/AI-LLM%20+%20RAG-orange.svg)
 
-## 🏗️ Архитектура решения
+## 🚀 Что нового в Blink 4.0.0
+
+### 🔥 Мажорный рефакторинг
+- **Полная переработка архитектуры** - удалены все legacy-компоненты
+- **Современный стек технологий** - Vite, TypeScript, Tailwind CSS
+- **Оптимизация для Apple Silicon** - специальные настройки для M1/M2/M4
+- **Улучшенная производительность** - быстрая загрузка и отзывчивый интерфейс
+
+### 🎯 Новые возможности
+- **AI-анализ контента** - семантический анализ с помощью Ollama
+- **Умные рекомендации** - генерация внутренних ссылок на основе ИИ
+- **Бенчмарки моделей** - сравнение производительности различных LLM
+- **Реальное время** - WebSocket соединения для live-обновлений
+
+### 🛠️ Технические улучшения
+- **TypeScript 5+** - строгая типизация и современный JavaScript
+- **Vite 5+** - быстрая сборка и горячая перезагрузка
+- **Tailwind CSS 3+** - современный дизайн-система
+- **React 18+** - Concurrent Features и Suspense
+
+## 🏗️ Архитектура
 
 ```mermaid
 graph TB
@@ -18,7 +40,7 @@ graph TB
     
     subgraph "🐳 Docker Environment"
         subgraph "Frontend Container :3000"
-            F[⚛️ React Frontend<br/>HTML + JSX + CSS]
+            F[⚛️ React + TypeScript<br/>Vite + Tailwind]
             N[🔧 Nginx<br/>Static Files Server]
         end
         
@@ -76,381 +98,185 @@ graph TB
     class EXT external
 ```
 
-## 📊 Архитектура данных
-
-```mermaid
-erDiagram
-    DOMAINS ||--o{ WORDPRESS_POSTS : "содержит"
-    DOMAINS ||--o{ THEMATIC_GROUPS : "группирует"
-    DOMAINS ||--o{ ANALYSIS_HISTORY : "отслеживает"
-    DOMAINS ||--o{ LINK_RECOMMENDATIONS : "генерирует"
-    DOMAINS ||--o{ CUMULATIVE_INSIGHTS : "накапливает"
-
-    WORDPRESS_POSTS ||--o{ ARTICLE_EMBEDDINGS : "векторизует"
-    WORDPRESS_POSTS ||--o{ SEMANTIC_CONNECTIONS : "связывает"
-    WORDPRESS_POSTS }o--|| THEMATIC_GROUPS : "принадлежит"
-
-    SEMANTIC_CONNECTIONS ||--o{ LINK_RECOMMENDATIONS : "основа для"
-    
-    THEMATIC_GROUPS ||--o{ THEMATIC_CLUSTER_ANALYSIS : "анализирует"
-    
-    MODEL_CONFIGURATIONS ||--o{ BENCHMARK_RUNS : "тестирует"
-    BENCHMARK_RUNS ||--o{ BENCHMARK_COMPARISONS : "сравнивает"
-
-    DOMAINS {
-        int id PK
-        string name "example.com"
-        string display_name
-        string description  
-        string language "ru/en"
-        string category
-        datetime created_at
-        datetime updated_at
-        bool is_active
-        int total_posts
-        int total_analyses
-        datetime last_analysis_at
-    }
-
-    WORDPRESS_POSTS {
-        int id PK
-        int domain_id FK
-        int thematic_group_id FK
-        int wp_post_id "WordPress ID"
-        string title
-        text content
-        text excerpt
-        string link
-        text semantic_summary "Для LLM"
-        json key_concepts "Массив концепций"
-        json entity_mentions "NER данные"
-        string content_type "guide/review/news"
-        string difficulty_level "easy/medium/hard"
-        string target_audience
-        float content_quality_score
-        float semantic_richness "Плотность семантики"
-        float linkability_score "Потенциал ссылок"
-        datetime published_at
-        datetime created_at
-        datetime updated_at
-        datetime last_analyzed_at
-    }
-
-    SEMANTIC_CONNECTIONS {
-        int id PK
-        int source_post_id FK
-        int target_post_id FK
-        string connection_type "semantic/topical/hierarchical"
-        float strength "0.0-1.0"
-        float confidence
-        int usage_count "Накопительно"
-        float success_rate
-        float evolution_score "Эволюция связи"
-        text connection_context "Объяснение"
-        string suggested_anchor
-        json alternative_anchors
-        bool bidirectional
-        json semantic_tags
-        string theme_intersection
-        datetime created_at
-        datetime updated_at
-        datetime validated_at
-        datetime last_recommended_at
-    }
-
-    LINK_RECOMMENDATIONS {
-        int id PK
-        int domain_id FK  
-        int source_post_id FK
-        int target_post_id FK
-        string anchor_text
-        text reasoning
-        float quality_score
-        int generation_count "Сколько раз генерировалась"
-        int improvement_iterations
-        string status "active/deprecated/improved"
-        int semantic_connection_id FK
-        int previous_version_id FK "Эволюция"
-        text improvement_reason
-        datetime created_at
-        datetime updated_at
-    }
-
-    CUMULATIVE_INSIGHTS {
-        int id PK
-        int domain_id FK
-        string insight_type "pattern/gap/opportunity/trend"
-        string insight_category "semantic/structural/thematic"
-        string title
-        text description
-        json evidence "Подтверждающие данные"
-        float impact_score
-        float confidence_level
-        float actionability
-        json related_posts
-        json related_clusters
-        json related_connections
-        string status "discovered/validated/applied"
-        int applied_count
-        datetime created_at
-        datetime validated_at
-    }
-```
-
-## ⚡ Поток обработки данных
-
-```mermaid
-flowchart TD
-    subgraph "📊 Входные данные"
-        WP[🌐 WordPress Sites<br/>REST API /wp-json/wp/v2/posts]
-        USER[👤 User Input<br/>Domain URLs]
-    end
-
-    subgraph "🔄 Процесс обработки"
-        FETCH[📥 Smart Fetching<br/>Delta Indexing]
-        PARSE[🔍 Content Parsing<br/>BeautifulSoup + NLP]
-        NLP[🧠 NLP Processing<br/>NLTK + TF-IDF]
-        EMBED[📐 Vectorization<br/>ChromaDB Embeddings]
-        CLUSTER[🎯 Thematic Clustering<br/>K-Means + Semantic Analysis]
-    end
-
-    subgraph "🤖 AI/LLM Слой"
-        OLLAMA[🦙 Ollama LLM<br/>qwen2.5:7b-turbo]
-        THOUGHT[💭 AI Thought Generator<br/>Intelligent Reasoning]
-        CONTEXT[🧮 Context Builder<br/>RAG + Historical Data]
-        GENERATE[⚡ Link Generation<br/>Semantic + Strategic]
-    end
-
-    subgraph "💾 Хранилища данных"
-        PG[🗄️ PostgreSQL<br/>Structured Data]
-        CHROMA[🔍 ChromaDB<br/>Vector Embeddings]
-        CACHE[⚡ Memory Cache<br/>Hot Data]
-    end
-
-    subgraph "🧬 Кумулятивный интеллект"
-        EVOLVE[🌱 Evolution Engine<br/>Learning from History]
-        INSIGHTS[💡 Insight Generator<br/>Pattern Recognition]
-        DEDUPE[🔄 Deduplication<br/>Smart Filtering]
-        RANK[🎯 Intelligent Ranking<br/>Quality Scoring]
-    end
-
-    subgraph "📤 Выходные данные"
-        API[🚀 REST API<br/>JSON Responses]
-        WS[🔌 WebSocket<br/>Real-time Updates]
-        RECS[📋 Link Recommendations<br/>with Reasoning]
-    end
-
-    USER --> FETCH
-    WP --> FETCH
-    FETCH --> PARSE
-    PARSE --> NLP
-    NLP --> EMBED
-    EMBED --> CLUSTER
-    
-    PARSE --> PG
-    EMBED --> CHROMA
-    CLUSTER --> PG
-
-    CLUSTER --> CONTEXT
-    PG --> CONTEXT
-    CHROMA --> CONTEXT
-    CONTEXT --> OLLAMA
-    OLLAMA --> THOUGHT
-    THOUGHT --> GENERATE
-    
-    GENERATE --> EVOLVE
-    PG --> EVOLVE
-    EVOLVE --> INSIGHTS
-    INSIGHTS --> DEDUPE
-    DEDUPE --> RANK
-    
-    RANK --> CACHE
-    INSIGHTS --> CACHE
-    
-    RANK --> API
-    RANK --> WS
-    API --> RECS
-    WS --> RECS
-
-    RECS -.->|👍 Feedback| EVOLVE
-    CACHE -.->|📊 Analytics| INSIGHTS
-```
-
 ## 🚀 Быстрый старт
 
-### Требования
-- **Docker Desktop** (рекомендуется)
+### Предварительные требования
+- **Docker** и **Docker Compose**
+- **Git**
+- **Node.js 18+** (для разработки)
 - **Python 3.11+** (для разработки)
-- **16GB RAM** (минимум для Ollama)
 
-### 🐳 Запуск через Docker (рекомендуется)
+### Установка и запуск
 
+1. **Клонирование репозитория**
 ```bash
-git clone https://github.com/yourname/seo_link_recommender.git
-cd seo_link_recommender
-docker compose -f seo_link_recommender/docker-compose.yml up --build
+git clone https://github.com/your-username/blink.git
+cd blink
 ```
 
-**Доступные сервисы:**
-- 🌍 **Frontend**: http://localhost:3000
-- 🚀 **Backend API**: http://localhost:8000
-- 🤖 **Ollama LLM**: http://localhost:11434
-- 🗄️ **PostgreSQL**: localhost:5432
-
-### 💻 Локальная разработка
-
+2. **Запуск с Docker**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r seo_link_recommender/backend/requirements.txt
-export DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@localhost/seo_db
-uvicorn app.main:app --app-dir seo_link_recommender/backend/app --reload
+# Сборка и запуск всех сервисов
+docker-compose up -d --build
+
+# Просмотр логов
+docker-compose logs -f
 ```
 
-## 🤖 Конфигурация LLM
+3. **Доступ к приложению**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Ollama**: http://localhost:11434
 
-### Основная модель: qwen2.5:7b-turbo
-- 🎯 **Оптимизирована для SEO задач**
-- 🇷🇺 **Отличное понимание русского языка**
-- ⚡ **Высокая скорость генерации**
-- 💾 **Размер: ~4.3GB**
+### Разработка
 
+1. **Установка зависимостей**
 ```bash
-ollama pull qwen2.5:7b
+# Backend
+cd blink/backend
+pip install -r requirements.txt
+
+# Frontend
+cd blink/frontend
+npm install
 ```
 
-### Альтернативные модели
-
-| Модель | Размер | Сценарий использования |
-|--------|--------|----------------------|
-| `gemma3:1b` | ~1.8GB | 💡 Слабые устройства |
-| `qwen2.5:7b-instruct` | ~4.3GB | 📝 Инструкции и гайды |
-| `llama3.1:8b` | ~4.7GB | 🏆 Максимальное качество |
-| `mistral:7b` | ~4.1GB | 📄 Текстовые задачи |
-
+2. **Запуск в режиме разработки**
 ```bash
-export OLLAMA_MODEL=имя_модели
+# Backend (в одном терминале)
+cd blink/backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend (в другом терминале)
+cd blink/frontend
+npm run dev
 ```
 
-## 🔗 API Endpoints
+## 📚 Документация
 
-### Основные эндпоинты
+### API Endpoints
 
-| Метод | Путь | Описание |
-|-------|------|----------|
-| `POST` | `/api/v1/wp_index` | 🏠 **Основной эндпоинт** - индексация домена |
-| `GET` | `/api/v1/models/available` | 🤖 Список доступных LLM моделей |
-| `GET` | `/api/v1/domains` | 🌐 Список индексированных доменов |
-| `GET` | `/api/v1/analysis_history` | 📊 История анализов |
-| `GET` | `/api/v1/health` | ❤️ Проверка здоровья системы |
-| `WS` | `/ws/{client_id}` | 🔌 WebSocket для прогресса |
+#### Основные эндпоинты
+- `GET /api/v1/health` - Проверка здоровья системы
+- `GET /api/v1/domains` - Список доменов
+- `POST /api/v1/wp_index` - Индексация WordPress сайта
+- `GET /api/v1/analysis_history` - История анализов
+- `POST /api/v1/benchmarks/run` - Запуск бенчмарков
 
-### Пример запроса
+#### WebSocket
+- `ws://localhost:8000/ws/{client_id}` - Реальное время обновления
 
+### Конфигурация
+
+#### Переменные окружения
 ```bash
-curl -X POST "http://localhost:8000/api/v1/wp_index" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "example.com",
-    "client_id": "user123",
-    "comprehensive": true
-  }'
+# Database
+DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+
+# Ollama
+OLLAMA_URL=http://ollama:11434/api/generate
+OLLAMA_MODEL=qwen2.5:7b-turbo
+
+# Frontend
+VITE_API_URL=http://localhost:8000
 ```
 
-## 🧠 Возможности системы
+## 🤝 Вклад в проект
 
-### ✨ Интеллектуальные функции
-- 🎯 **Семантический анализ** контента
-- 🧮 **RAG-поиск** по векторным представлениям
-- 🤖 **LLM-генерация** осмысленных связей
-- 🧬 **Кумулятивное обучение** на исторических данных
-- 💡 **Автоматические инсайты** и рекомендации
+### Форк и разработка
 
-### 📊 Аналитика и метрики
-- 📈 **Качество связей** (0.0-1.0)
-- 🎲 **Семантическая плотность** контента
-- 🔗 **Потенциал линковки** статей
-- 📋 **История эволюции** рекомендаций
-- 🎯 **Тематическая кластеризация**
-
-### 🚀 Производительность
-- ⚡ **~15-25 tokens/sec** в контейнерном режиме
-- 🎭 **Двухрежимная система**: CPU + GPU
-- 🔄 **Умная дельта-индексация**
-- 💾 **Кэширование** горячих данных
-- 🧠 **Отложенный прогрев** моделей
-
-## 🧪 Тестирование
-
+1. **Форк репозитория**
 ```bash
-# Все тесты
-python -m pytest -q
-
-# Конкретные компоненты
-python -m pytest seo_link_recommender/backend/tests/test_health.py -v
-python -m pytest seo_link_recommender/backend/tests/test_wp.py -v
+# Создайте форк на GitHub
+# Затем клонируйте ваш форк
+git clone https://github.com/your-username/blink.git
+cd blink
 ```
 
-## 🔧 Настройка окружения
-
-### Переменные окружения
-
+2. **Создание ветки для фичи**
 ```bash
-# LLM конфигурация
-export OLLAMA_URL=http://localhost:11434/api/generate
-export OLLAMA_MODEL=qwen2.5:7b-turbo
-
-# База данных
-export DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@localhost/seo_db
-
-# Производительность
-export OLLAMA_CONTEXT_LENGTH=4096
-export OLLAMA_BATCH_SIZE=512
-export OLLAMA_NUM_PARALLEL=2
+git checkout -b feature/amazing-feature
 ```
 
-### Docker переменные
+3. **Коммит изменений**
+```bash
+git add .
+git commit -m "feat: add amazing feature"
+git push origin feature/amazing-feature
+```
 
-См. файл `docker-compose.yml` для полного списка оптимизационных переменных Apple M4.
+4. **Создание Pull Request**
 
-## 📈 Мониторинг
+### Стандарты кода
 
-- 🏥 **Health Check**: `GET /api/v1/health`
-- 🤖 **Ollama Status**: `GET /api/v1/ollama_status`
-- 📊 **Real-time WebSocket**: `/ws/{client_id}`
-- 📝 **Логи Docker**: `docker compose logs -f`
-
-## 🛠️ Разработка
+- **TypeScript** - строгая типизация для всего frontend кода
+- **Python** - PEP 8, type hints, docstrings
+- **Git** - Conventional Commits
+- **Тесты** - покрытие > 80% для критических компонентов
 
 ### Структура проекта
 
 ```
-seo_link_recommender/
-├── 🌐 frontend/          # React UI
-├── 🚀 backend/           # FastAPI + AI
-├── 🗄️ postgres_data/    # База данных  
-├── 📦 ollama_models/     # Модели LLM
-├── 🔧 scripts/          # Утилиты
-└── 📋 docker-compose.yml # Оркестрация
+blink/
+├── frontend/                 # React + TypeScript + Vite
+│   ├── src/
+│   │   ├── components/      # React компоненты
+│   │   ├── hooks/          # Кастомные хуки
+│   │   ├── types/          # TypeScript типы
+│   │   └── main.tsx        # Точка входа
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/                 # FastAPI + Python
+│   ├── app/
+│   │   └── main.py         # Основное приложение
+│   ├── tests/              # Тесты
+│   └── requirements.txt
+├── docker-compose.yml       # Docker конфигурация
+└── README.md
 ```
-
-### Ключевые компоненты
-
-- **IntelligentThoughtGenerator**: Генерация AI мыслей
-- **AdvancedRAGManager**: Семантический поиск
-- **CumulativeIntelligenceManager**: Обучение на данных
-- **WebSocketManager**: Real-time обновления
 
 ## 📄 Лицензия
 
-MIT License - подробности в файле `LICENSE`
+Этот проект лицензирован под **Apache License 2.0** - см. файл [LICENSE](LICENSE) для деталей.
+
+### Основные положения Apache 2.0:
+- ✅ **Коммерческое использование** разрешено
+- ✅ **Модификация** разрешена
+- ✅ **Распространение** разрешено
+- ✅ **Патентное использование** разрешено
+- ✅ **Частное использование** разрешено
+- ❌ **Гарантии** не предоставляются
+- ❌ **Ответственность** ограничена
+
+### Для форков:
+При создании форка или производной работы:
+1. Сохраните уведомление об авторских правах
+2. Укажите изменения в файлах
+3. Включите копию лицензии Apache 2.0
+4. Добавьте уведомление об использовании Apache 2.0
+
+## 🆘 Поддержка
+
+### Сообщество
+- **Issues**: [GitHub Issues](https://github.com/your-username/blink/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/blink/discussions)
+- **Wiki**: [GitHub Wiki](https://github.com/your-username/blink/wiki)
+
+### Коммерческая поддержка
+Для коммерческой поддержки и консультаций обращайтесь:
+- **Email**: support@blink.ai
+- **Telegram**: @blink_support
+
+## 🙏 Благодарности
+
+- **Ollama** - за отличную локальную LLM платформу
+- **Qwen** - за качественные модели для русского языка
+- **FastAPI** - за современный Python веб-фреймворк
+- **React** - за лучшую библиотеку для UI
+- **Tailwind CSS** - за утилитарный CSS фреймворк
 
 ---
 
-<div align="center">
+**Blink** - Мировая платформа для SEO-инженеров с AI и современными технологиями.
 
-**🔗 SEO Link Recommender** - Интеллектуальная генерация внутренних ссылок
-
-Made with ❤️ and 🤖 AI
-
-</div>
+*Сделано с ❤️ для SEO-сообщества*
