@@ -45,7 +45,7 @@
   </linearGradient>
   
   <!-- Заголовок -->
-  <text x="600" y="40" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" 
+  <text x="600" y="40" text-anchor="middle" font-family="Inter, -apple-system, reLinkMacSystemFont, sans-serif" 
         font-size="28" font-weight="700" fill="#1C1C1E">
     🚀 SEO Benchmark Results Dashboard
   </text>

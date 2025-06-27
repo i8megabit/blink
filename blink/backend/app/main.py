@@ -799,7 +799,7 @@ class AdvancedRAGManager:
 @app.get("/")
 async def root():
     """Корневой endpoint."""
-    return {"message": "Blink API v4.0.0", "status": "running"}
+    return {"message": "reLink API v4.0.0", "status": "running"}
 
 
 @app.get("/health")
@@ -957,7 +957,7 @@ async def startup_event():
     global websocket_manager
     websocket_manager = WebSocketManager()
     initialize_rag_system()
-    print("🚀 Blink API v4.0.0 запущен!")
+    print("🚀 reLink API v4.0.0 запущен!")
 
 
 if __name__ == "__main__":

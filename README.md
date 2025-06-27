@@ -1,4 +1,4 @@
-# 🔗 Blink - AI-Powered SEO Platform
+# 🔗 reLink - AI-Powered SEO Platform
 
 > Мировая платформа для SEO-инженеров с искусственным интеллектом и современными технологиями
 
@@ -10,7 +10,7 @@
 ![AI](https://img.shields.io/badge/AI-LLM%20+%20RAG-orange.svg)
 ![Tests](https://img.shields.io/badge/tests-vitest%20+%20playwright-brightgreen.svg)
 
-## 🚀 Что нового в Blink 4.0.0
+## 🚀 Что нового в reLink 4.0.0
 
 ### 🔥 Мажорный рефакторинг
 - **Полная переработка архитектуры** - удалены все legacy-компоненты
@@ -102,7 +102,7 @@
 ## 🏗️ Архитектура
 
 ```
-blink/
+reLink/
 ├── backend/                 # FastAPI backend
 │   ├── app/
 │   │   └── main.py         # Основное приложение с API
@@ -133,8 +133,8 @@ blink/
 ### Запуск в production
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-username/blink.git
-cd blink
+git clone https://github.com/your-username/reLink.git
+cd reLink
 
 # Запуск всех сервисов
 docker-compose up -d --build
@@ -319,14 +319,14 @@ curl http://localhost:11434/api/tags
 - [Component Library](http://localhost:6006) - Storybook (в разработке)
 
 ### Сообщество
-- [Issues](https://github.com/your-username/blink/issues) - Баг репорты и feature requests
-- [Discussions](https://github.com/your-username/blink/discussions) - Обсуждения
-- [Wiki](https://github.com/your-username/blink/wiki) - Дополнительная документация
+- [Issues](https://github.com/your-username/reLink/issues) - Баг репорты и feature requests
+- [Discussions](https://github.com/your-username/reLink/discussions) - Обсуждения
+- [Wiki](https://github.com/your-username/reLink/wiki) - Дополнительная документация
 
 ### Контакты
 - **TheFounder**: @eberil
-- **Telegram**: @blink_support
-- **Discord**: [Blink Community](https://discord.gg/blink)
+- **Telegram**: @reLink_support
+- **Discord**: [reLink Community](https://discord.gg/reLink)
 
 ---
 
@@ -348,4 +348,4 @@ curl http://localhost:11434/api/tags
 
 ---
 
-*Blink - Мировая платформа для SEO-инженеров с AI и современными технологиями* 🚀
+*reLink - Мировая платформа для SEO-инженеров с AI и современными технологиями* 🚀

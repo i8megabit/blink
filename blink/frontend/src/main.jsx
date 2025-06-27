@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
-console.log('🚀 Blink (Vite) - React приложение загружается!')
+console.log('🚀 reLink (Vite) - React приложение загружается!')
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -1,4 +1,4 @@
-# 🚀 Отчет о развертывании Blink v4.0.0
+# 🚀 Отчет о развертывании reLink v4.0.0
 
 ## 📋 Выполненные задачи
 
@@ -17,12 +17,12 @@
 ### ✅ 2. Публикация в Docker Hub
 
 **Опубликованные образы:**
-- `eberil/blink-backend:4.0.0` ✅
-- `eberil/blink-backend:prod` ✅
-- `eberil/blink-backend:latest` ✅
-- `eberil/blink-frontend:4.0.0` ✅
-- `eberil/blink-frontend:prod` ✅
-- `eberil/blink-frontend:latest` ✅
+- `eberil/reLink-backend:4.0.0` ✅
+- `eberil/reLink-backend:prod` ✅
+- `eberil/reLink-backend:latest` ✅
+- `eberil/reLink-frontend:4.0.0` ✅
+- `eberil/reLink-frontend:prod` ✅
+- `eberil/reLink-frontend:latest` ✅
 
 **Каскадное тегирование:** Реализовано согласно требованиям
 
@@ -34,10 +34,10 @@
 3. Развернуто приложение с тегом `4.0.0`
 
 **Статус контейнеров:**
-- ✅ `blink-backend-1` - healthy (eberil/blink-backend:4.0.0)
-- ✅ `blink-frontend-1` - running (eberil/blink-frontend:4.0.0)
-- ✅ `blink-db-1` - running (postgres:16)
-- ✅ `blink-ollama-1` - starting (ollama/ollama:latest)
+- ✅ `reLink-backend-1` - healthy (eberil/reLink-backend:4.0.0)
+- ✅ `reLink-frontend-1` - running (eberil/reLink-frontend:4.0.0)
+- ✅ `reLink-db-1` - running (postgres:16)
+- ✅ `reLink-ollama-1` - starting (ollama/ollama:latest)
 
 ### ✅ 4. CI/CD Workflow для GitHub
 

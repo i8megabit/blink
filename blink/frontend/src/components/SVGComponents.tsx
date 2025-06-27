@@ -1,6 +1,6 @@
 import React from 'react'
 
-// 🎨 ЛОГОТИП Blink
+// 🎨 ЛОГОТИП reLink
 export const Logo: React.FC<{ className?: string; size?: number }> = ({ 
   className = "", 
   size = 32 

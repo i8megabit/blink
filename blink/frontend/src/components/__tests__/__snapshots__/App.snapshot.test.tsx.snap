@@ -22,7 +22,7 @@ exports[`App Snapshot > рендерится без изменений 1`] = `
           <h1
             class="text-lg font-semibold"
           >
-            Blink
+            reLink
           </h1>
         </div>
       </div>
@@ -1228,7 +1228,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           <h1
             class="text-lg font-semibold"
           >
-            Blink
+            reLink
           </h1>
         </div>
       </div>
@@ -2434,7 +2434,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           <h1
             class="text-lg font-semibold"
           >
-            Blink
+            reLink
           </h1>
         </div>
       </div>
@@ -3640,7 +3640,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           <h1
             class="text-lg font-semibold"
           >
-            Blink
+            reLink
           </h1>
         </div>
       </div>
@@ -4846,7 +4846,7 @@ exports[`App Snapshot > рендерится с активной вкладко�
           <h1
             class="text-lg font-semibold"
           >
-            Blink
+            reLink
           </h1>
         </div>
       </div>

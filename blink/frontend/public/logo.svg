@@ -35,7 +35,7 @@
   </g>
   
   <!-- Текст "reLink" -->
-  <text x="45" y="26" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" 
+  <text x="45" y="26" font-family="Inter, -apple-system, reLinkMacSystemFont, sans-serif" 
         font-size="18" font-weight="600" fill="#1f2937" letter-spacing="-0.02em">
     reLink
   </text>
