@@ -12,7 +12,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
-      - OLLAMA_MODEL=qwen2.5:7b-optimized
+      - OLLAMA_MODEL=qwen2.5:7b-turbo
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
@@ -53,71 +53,86 @@ services:
       - ./ollama_models:/root/.ollama
       - ./scripts:/scripts
     environment:
-      - OLLAMA_KEEP_ALIVE=24h
-      - OLLAMA_REQUEST_TIMEOUT=1200s
-      - OLLAMA_MAX_LOADED_MODELS=1
-      - OLLAMA_NUM_PARALLEL=1
-      - OLLAMA_MAX_QUEUE=2
-      - OLLAMA_CONCURRENT_REQUESTS=1
+      # 🚀 ОПТИМИЗАЦИЯ ДЛЯ APPLE M4
+      - OLLAMA_KEEP_ALIVE=2h
+      - OLLAMA_REQUEST_TIMEOUT=300s
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_QUEUE=4
+      - OLLAMA_CONCURRENT_REQUESTS=2
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_ORIGINS=*
-      - OLLAMA_LOAD_TIMEOUT=1200s
-      - OLLAMA_RUNNER_TIMEOUT=1200s
+      - OLLAMA_LOAD_TIMEOUT=120s
+      - OLLAMA_RUNNER_TIMEOUT=300s
       - OLLAMA_MODELS=/root/.ollama/models
       - OLLAMA_DEBUG=0
-      - OLLAMA_MAX_TOKENS=8192
-      - OLLAMA_CONTEXT_LENGTH=8192
-      - OLLAMA_BATCH_SIZE=128
+      
+      # 🎯 ОПТИМИЗАЦИЯ КОНТЕКСТА И БАТЧИНГА
+      - OLLAMA_MAX_TOKENS=4096
+      - OLLAMA_CONTEXT_LENGTH=4096
+      - OLLAMA_BATCH_SIZE=512
       - OLLAMA_TEMPERATURE=0.7
       - OLLAMA_TOP_P=0.9
       - OLLAMA_REPEAT_PENALTY=1.1
       - OLLAMA_SEED=42
-      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-optimized
-      - OLLAMA_WORKERS=1
-      - OLLAMA_FLASH_ATTENTION=0
+      
+      # 🔥 МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ ДЛЯ APPLE SILICON
+      - OLLAMA_FLASH_ATTENTION=1
       - OLLAMA_METAL=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_COMPUTE_UNIT_LIMIT=0
+      - OLLAMA_GPU_LAYERS=-1
+      
+      # 🧠 ОПТИМИЗАЦИЯ ПАМЯТИ
+      - OLLAMA_LOW_MEM=false
+      - OLLAMA_MEM_FRACTION=0.9
+      
+      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-turbo
+      - OLLAMA_WORKERS=2
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-c"]
     command: |
       "ollama serve & 
-      sleep 60 && 
-      echo 'Подтягиваем модель...' && 
+      sleep 45 && 
+      echo '🚀 Загружаем ТУРБО модель для Apple M4...' && 
       ollama pull qwen2.5:7b && 
-      echo 'Модель загружена, настраиваем СТАБИЛЬНЫЕ параметры...' && 
-      ollama create qwen2.5:7b-optimized -f /dev/stdin <<EOF
+      echo '⚡ Создаем ТУРБО оптимизированную модель...' && 
+      ollama create qwen2.5:7b-turbo -f /dev/stdin <<EOF
       FROM qwen2.5:7b
-      # СТАБИЛЬНЫЕ параметры для работы с большими промптами
-      PARAMETER num_ctx 8192
-      PARAMETER num_batch 128
-      PARAMETER num_thread 4
-      PARAMETER num_gpu 0
-      PARAMETER num_predict 1024
+      # 🔥 ТУРБО параметры для Apple M4
+      PARAMETER num_ctx 4096
+      PARAMETER num_batch 512
+      PARAMETER num_thread 8
+      PARAMETER num_gpu -1
+      PARAMETER num_predict 2048
       PARAMETER temperature 0.7
       PARAMETER top_p 0.9
       PARAMETER repeat_penalty 1.1
       PARAMETER seed 42
-      # Приоритет стабильности работы
-      PARAMETER stop "\\n\\n"
+      PARAMETER mirostat 2
+      PARAMETER mirostat_tau 5.0
+      PARAMETER mirostat_eta 0.1
+      # Убираем стопы для лучшей скорости
       EOF
-      echo 'Стабильная модель создана для надежной работы!' &&
-      echo 'Предзагружаем модель...' &&
-      ollama run qwen2.5:7b-optimized 'Модель готова в стабильном режиме' &&
-      echo 'Модель настроена для оптимальной производительности!' &&
+      echo '🎯 ТУРБО модель готова!' &&
+      echo '⚡ Предпрогреваем GPU...' &&
+      ollama run qwen2.5:7b-turbo 'Система инициализирована в режиме максимальной производительности!' &&
+      echo '🔥 Apple M4 GPU активирован!' &&
       wait"
     healthcheck:
-      test: ["CMD", "curl", "-f", "-m", "60", "http://localhost:11434/api/tags"]
-      interval: 120s
-      timeout: 90s
+      test: ["CMD", "curl", "-f", "-m", "30", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 45s
       retries: 5
-      start_period: 900s
+      start_period: 600s
     deploy:
       resources:
         limits:
-          memory: 12G
-          cpus: '6.0'
+          memory: 16G
+          cpus: '8.0'
         reservations:
-          memory: 6G
-          cpus: '2.0'
+          memory: 8G
+          cpus: '4.0'
     ulimits:
       memlock:
         soft: -1
