@@ -24,8 +24,8 @@ from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import Integer, Text, JSON, select, DateTime, ARRAY, Float, String, Index, ForeignKey, func
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
 
 # Загрузка NLTK данных при старте
@@ -508,7 +508,7 @@ DATABASE_URL = os.getenv(
 )
 
 engine = create_async_engine(DATABASE_URL)
-AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 # Инициализация RAG-системы
 chroma_client = None
@@ -1139,11 +1139,11 @@ async def generate_links(text: str) -> list[str]:
         "Не добавляй лишние символы или объяснения. "
         f"Текст: {text}"
     )
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=720.0) as client:  # Увеличиваем до 12 минут для стабильности
         response = await client.post(
             OLLAMA_URL,
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=60,
+            timeout=720,  # 12 минут на запрос
         )
     response.raise_for_status()
     data = response.json()
@@ -1275,7 +1275,7 @@ async def fetch_and_store_wp_posts(domain: str, client_id: Optional[str] = None)
                         existing_post.excerpt = clean_excerpt
                         existing_post.link = post_link
                         existing_post.updated_at = datetime.utcnow()
-                        existing_post.last_analyzed_at = None  # Сброс для переиндексации
+                        existing_post.last_analyzed_at = None  # type: ignore # Сброс для переиндексации
                         
                         delta_stats['updated_posts'] += 1
                         print(f"🔄 Обновлен пост: {title}")
@@ -1322,7 +1322,7 @@ async def fetch_and_store_wp_posts(domain: str, client_id: Optional[str] = None)
         actual_posts_count = posts_count_result.scalar()
         
         # Обновляем статистику домена
-        domain_obj.total_posts = actual_posts_count
+        domain_obj.total_posts = actual_posts_count if actual_posts_count is not None else 0
         domain_obj.updated_at = datetime.utcnow()
         
         print(f"📊 Обновлена статистика домена: {actual_posts_count} постов в БД")
@@ -1613,7 +1613,7 @@ async def process_batch_with_ollama(
         print(f"🤖 Обрабатываю батч {batch_idx} через Ollama (размер промпта: {len(comprehensive_prompt)} символов)")
         
         start_time = datetime.now()
-        async with httpx.AsyncClient(timeout=300.0) as client:  # Увеличиваем тайм-аут до 5 минут
+        async with httpx.AsyncClient(timeout=600.0) as client:  # Увеличиваем тайм-аут до 10 минут
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -1630,7 +1630,7 @@ async def process_batch_with_ollama(
                         "num_thread": 6        # Оптимальное количество потоков
                     }
                 },
-                timeout=300  # 5 минут на батч
+                timeout=600  # 10 минут на батч
             )
         
         request_time = (datetime.now() - start_time).total_seconds()
@@ -1745,7 +1745,7 @@ async def process_cumulative_batch_with_ollama(
         print(f"🧠 Кумулятивный анализ батча {batch_idx} ({'межкластерный' if is_cross_cluster else 'внутрикластерный'})")
         
         start_time = datetime.now()
-        async with httpx.AsyncClient(timeout=240.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:  # Увеличиваем до 10 минут
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -1762,7 +1762,7 @@ async def process_cumulative_batch_with_ollama(
                         "num_thread": 6
                     }
                 },
-                timeout=240
+                timeout=600  # 10 минут
             )
         
         request_time = (datetime.now() - start_time).total_seconds()
@@ -2021,7 +2021,7 @@ URL: {article['link']}
         
         # Оптимизированные настройки для стабильной работы qwen2.5:7b
         start_time = datetime.now()
-        async with httpx.AsyncClient(timeout=120.0) as client:  # Увеличиваем до 2 минут
+        async with httpx.AsyncClient(timeout=600.0) as client:  # Увеличиваем до 10 минут для стабильности
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -2040,7 +2040,7 @@ URL: {article['link']}
                         "num_thread": 6      # Больше потоков для скорости
                     }
                 },
-                timeout=120  # Дублируем тайм-аут
+                timeout=600  # 10 минут на запрос
             )
         
         request_time = (datetime.now() - start_time).total_seconds()
@@ -2055,9 +2055,17 @@ URL: {article['link']}
         
         if response.status_code != 200:
             error_msg = f"❌ Ollama вернула код {response.status_code}"
-            print(error_msg)
+            print(f"{error_msg}. Ответ: {response.text[:200]}...")
+            
+            # Если 499 - клиент отменил запрос (таймаут)
+            if response.status_code == 499:
+                error_msg = "❌ Таймаут загрузки модели Ollama. Модель загружается впервые и требует времени."
+                detailed_msg = f"Попробуйте еще раз через 2-3 минуты. Модель {OLLAMA_MODEL} должна остаться в памяти после первой загрузки."
+            else:
+                detailed_msg = f"HTTP статус: {response.status_code}. Ответ: {response.text[:100]}..."
+                
             if client_id:
-                await websocket_manager.send_error(client_id, error_msg, f"HTTP статус: {response.status_code}")
+                await websocket_manager.send_error(client_id, error_msg, detailed_msg)
             return [], 0.0
         
         data = response.json()
@@ -2224,6 +2232,58 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
     return recommendations
 
 
+async def warmup_ollama() -> bool:
+    """Прогрев модели Ollama для предотвращения таймаутов с повторными попытками."""
+    print("🔥 Прогрев модели Ollama с повторными попытками...")
+    
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            print(f"🔄 Попытка прогрева {attempt}/{max_attempts}")
+            
+            # Увеличиваем таймаут с каждой попыткой
+            timeout_seconds = 180 + (attempt * 60)  # 180s, 240s, 300s
+            
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                response = await client.post(
+                    OLLAMA_URL,
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": "Тест",
+                        "stream": False,
+                        "options": {
+                            "num_predict": 5,  # Минимальный ответ
+                            "temperature": 0.1,
+                            "num_ctx": 1024    # Маленький контекст для быстроты
+                        }
+                    },
+                    timeout=timeout_seconds
+                )
+                
+                if response.status_code == 200:
+                    print(f"✅ Модель {OLLAMA_MODEL} успешно прогрета за попытку {attempt}")
+                    return True
+                else:
+                    print(f"⚠️ Попытка {attempt}: статус {response.status_code}")
+                    if attempt < max_attempts:
+                        print(f"🔄 Ожидание 10 секунд перед следующей попыткой...")
+                        await asyncio.sleep(10)
+                    
+        except httpx.TimeoutException:
+            print(f"⏰ Попытка {attempt}: таймаут {timeout_seconds}s")
+            if attempt < max_attempts:
+                print(f"🔄 Ожидание 15 секунд перед следующей попыткой...")
+                await asyncio.sleep(15)
+        except Exception as e:
+            print(f"❌ Попытка {attempt}: ошибка {e}")
+            if attempt < max_attempts:
+                print(f"🔄 Ожидание 10 секунд перед следующей попыткой...")
+                await asyncio.sleep(10)
+    
+    print(f"❌ Не удалось прогреть модель за {max_attempts} попыток")
+    return False
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     """Создает таблицы и инициализирует RAG-систему при запуске."""
@@ -2232,6 +2292,18 @@ async def on_startup() -> None:
     
     # Инициализируем RAG-систему
     initialize_rag_system()
+    
+    # Прогреваем модель Ollama в фоне (с задержкой для завершения загрузки контейнера)
+    async def delayed_warmup():
+        await asyncio.sleep(30)  # Ждем 30 секунд для стабилизации Ollama
+        print("🚀 Начинаю отложенный прогрев Ollama...")
+        success = await warmup_ollama()
+        if success:
+            print("🔥 Модель успешно прогрета и готова к работе!")
+        else:
+            print("⚠️ Прогрев не удался, но сервис продолжит работу")
+    
+    asyncio.create_task(delayed_warmup())
 
 
 @app.post("/api/v1/test")
@@ -2320,20 +2392,15 @@ async def wp_generate_recommendations(req: WPRequest) -> dict[str, list[dict[str
         if req.client_id:
             await websocket_manager.send_step(
                 req.client_id, 
-                "Генерация рекомендаций", 
+                "Стабильная генерация", 
                 0, 
-                9, 
-                f"Анализ домена {req.domain} для создания рекомендаций"
+                7, 
+                f"Анализ домена {req.domain} с генерацией по одной рекомендации"
             )
         
-        # Генерируем рекомендации через полную индексацию
-        rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
-        
-        if isinstance(rag_result, tuple) and len(rag_result) == 2:
-            recs, total_analysis_time = rag_result
-        else:
-            recs = rag_result if isinstance(rag_result, list) else []
-            total_analysis_time = 0.0
+        # Используем стабильную генерацию вместо полной индексации
+        recs = await generate_stable_recommendations(req.domain, req.client_id)
+        total_analysis_time = 0.0  # Время считаем внутри функции
         
         # Сохраняем историю рекомендаций
         async with AsyncSessionLocal() as session:
@@ -2388,6 +2455,83 @@ async def wp_generate_recommendations(req: WPRequest) -> dict[str, list[dict[str
         
         if req.client_id:
             await websocket_manager.send_error(req.client_id, "Критическая ошибка генерации", error_msg)
+        
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/api/v1/wp_stable")
+async def wp_stable_recommendations(req: WPRequest) -> dict[str, list[dict[str, str]]]:
+    """Стабильная генерация рекомендаций по одной за раз (новый подход)."""
+    try:
+        if req.client_id:
+            await websocket_manager.send_step(
+                req.client_id, 
+                "Инициализация стабильной генерации", 
+                0, 
+                7, 
+                f"Подготовка к стабильному анализу домена {req.domain}"
+            )
+        
+        # Используем стабильную генерацию
+        recs = await generate_stable_recommendations(req.domain, req.client_id)
+        
+        # Сохраняем результаты в БД
+        async with AsyncSessionLocal() as session:
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == req.domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if domain_obj:
+                domain_obj.total_analyses += 1
+                domain_obj.last_analysis_at = datetime.utcnow()
+                
+                analysis = AnalysisHistory(
+                    domain_id=domain_obj.id,
+                    posts_analyzed=min(10, domain_obj.total_posts),  # Анализируем максимум 10 статей
+                    connections_found=len(recs),
+                    recommendations_generated=len(recs),
+                    recommendations=recs,
+                    thematic_analysis={
+                        "analysis_type": "stable_generation",
+                        "method": "single_recommendation_per_request",
+                        "max_requests": 5,
+                        "timeout_per_request": "60s"
+                    },
+                    semantic_metrics={
+                        "stability_focused": True,
+                        "recommendations_generated": len(recs),
+                        "deduplication": "applied"
+                    },
+                    quality_assessment={
+                        "methodology": "stable_single_requests",
+                        "reliability": "high",
+                        "timeout_resistance": "improved"
+                    },
+                    llm_model_used=f"{OLLAMA_MODEL} (stable_mode)",
+                    processing_time_seconds=None,  # Время считается внутри функции
+                    completed_at=datetime.utcnow()
+                )
+                session.add(analysis)
+                await session.commit()
+        
+        if req.client_id:
+            await websocket_manager.send_progress(req.client_id, {
+                "type": "complete",
+                "message": "Стабильная генерация завершена!",
+                "recommendations_count": len(recs),
+                "method": "stable_single_requests",
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        return {"recommendations": recs}
+        
+    except Exception as e:
+        error_msg = f"Ошибка стабильной генерации: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        if req.client_id:
+            await websocket_manager.send_error(req.client_id, "Критическая ошибка стабильной генерации", error_msg)
         
         raise HTTPException(status_code=500, detail=error_msg)
 
@@ -2538,7 +2682,7 @@ async def ollama_status() -> dict[str, object]:
         }
         
         # Проверяем доступность сервера Ollama
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 # Проверяем общий статус сервера
                 health_response = await client.get(f"{OLLAMA_URL.replace('/api/generate', '')}/api/tags")
@@ -2959,3 +3103,257 @@ async def root():
     """Редирект на фронтенд."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="http://localhost:3000")
+
+
+async def generate_stable_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
+    """Стабильная генерация рекомендаций по одной за раз с ограничением до 5 запросов."""
+    print(f"🚀 Запуск стабильной генерации для домена {domain} (client: {client_id})")
+    
+    analysis_start_time = datetime.now()
+    all_recommendations = []
+    
+    try:
+        # Шаг 1: Загрузка статей из БД
+        if client_id:
+            await websocket_manager.send_step(client_id, "Загрузка статей", 1, 7, "Получение статей из базы данных...")
+        
+        async with AsyncSessionLocal() as session:
+            # Получаем домен
+            domain_result = await session.execute(
+                select(Domain).where(Domain.name == domain)
+            )
+            domain_obj = domain_result.scalar_one_or_none()
+            
+            if not domain_obj:
+                error_msg = f"❌ Домен {domain} не найден в БД"
+                print(error_msg)
+                if client_id:
+                    await websocket_manager.send_error(client_id, error_msg)
+                return []
+            
+            # Получаем ТОП статей с лучшими метриками
+            result = await session.execute(
+                select(WordPressPost)
+                .where(WordPressPost.domain_id == domain_obj.id)
+                .order_by(WordPressPost.linkability_score.desc(), WordPressPost.published_at.desc())
+                .limit(10)  # Ограничиваем до 10 лучших статей
+            )
+            db_posts = result.scalars().all()
+        
+        if not db_posts:
+            error_msg = "❌ Нет статей для анализа"
+            print(error_msg)
+            if client_id:
+                await websocket_manager.send_error(client_id, error_msg)
+            return []
+        
+        print(f"📊 Выбрано {len(db_posts)} топовых статей")
+        
+        # Шаг 2: Преобразуем в формат для анализа
+        if client_id:
+            await websocket_manager.send_step(client_id, "Подготовка данных", 2, 7, "Обработка статей...")
+        
+        articles_data = []
+        for post in db_posts:
+            articles_data.append({
+                "title": post.title,
+                "link": post.link,
+                "content": post.content[:800],  # Ограничиваем контент
+                "key_concepts": post.key_concepts or [],
+                "content_type": post.content_type or "article",
+                "linkability_score": post.linkability_score or 0.5
+            })
+        
+        # Шаг 3: Прогрев модели
+        if client_id:
+            await websocket_manager.send_step(client_id, "Прогрев модели", 3, 7, "Подготовка Ollama...")
+        
+        warmup_success = await warmup_ollama()
+        if not warmup_success:
+            print("⚠️ Прогрев модели не удался, продолжаем...")
+        
+        # Шаг 4-6: Генерируем рекомендации по одной
+        max_recommendations = 5  # Ограничиваем до 5 рекомендаций
+        
+        for i in range(max_recommendations):
+            if client_id:
+                await websocket_manager.send_step(
+                    client_id, 
+                    f"Генерация рекомендации {i+1}/{max_recommendations}", 
+                    4 + i, 
+                    7, 
+                    f"Поиск связей для рекомендации {i+1}..."
+                )
+            
+            # Выбираем случайную пару статей для анализа
+            import random
+            if len(articles_data) >= 2:
+                article_pair = random.sample(articles_data, 2)
+                
+                # Генерируем одну рекомендацию для этой пары
+                single_rec = await generate_single_recommendation(
+                    domain, article_pair, articles_data, i+1, client_id
+                )
+                
+                if single_rec:
+                    all_recommendations.extend(single_rec)
+                    print(f"✅ Рекомендация {i+1}: получено {len(single_rec)} связей")
+                else:
+                    print(f"⚠️ Рекомендация {i+1}: пустой результат")
+        
+        # Шаг 7: Финализация
+        if client_id:
+            await websocket_manager.send_step(client_id, "Завершение", 7, 7, f"Готово! Получено {len(all_recommendations)} рекомендаций")
+        
+        # Дедуплицируем результаты
+        unique_recommendations = deduplicate_and_rank_recommendations(all_recommendations, domain)
+        
+        total_analysis_time = (datetime.now() - analysis_start_time).total_seconds()
+        print(f"✅ Стабильная генерация завершена: {len(unique_recommendations)} рекомендаций за {total_analysis_time:.1f}с")
+        
+        return unique_recommendations
+        
+    except Exception as e:
+        error_msg = f"❌ Ошибка стабильной генерации: {e}"
+        print(error_msg)
+        if client_id:
+            await websocket_manager.send_error(client_id, "Критическая ошибка генерации", str(e))
+        
+        error_time = (datetime.now() - analysis_start_time).total_seconds()
+        return []
+
+
+async def generate_single_recommendation(
+    domain: str, 
+    article_pair: List[Dict], 
+    all_articles: List[Dict], 
+    rec_number: int,
+    client_id: Optional[str] = None
+) -> List[Dict]:
+    """Генерирует одну рекомендацию для пары статей."""
+    
+    if len(article_pair) != 2:
+        return []
+    
+    source_article = article_pair[0]
+    target_article = article_pair[1]
+    
+    # Создаем компактный промпт для одной рекомендации
+    single_prompt = f"""Анализ внутренних ссылок для сайта {domain}
+
+ИСТОЧНИК:
+Заголовок: {source_article['title']}
+URL: {source_article['link']}
+Контент: {source_article['content'][:200]}...
+Концепции: {', '.join(source_article['key_concepts'][:3])}
+
+ЦЕЛЬ:
+Заголовок: {target_article['title']}
+URL: {target_article['link']}
+Контент: {target_article['content'][:200]}...
+Концепции: {', '.join(target_article['key_concepts'][:3])}
+
+ЗАДАЧА: Найти ОДНУ качественную внутреннюю ссылку от источника к цели.
+
+КРИТЕРИИ:
+✅ Тематическая связь между статьями
+✅ Польза для читателя
+✅ Естественность анкора
+
+ПРАВИЛА анкора:
+- Описывать содержание целевой страницы
+- НЕ использовать: "сайт", "ресурс", "портал"
+- Примеры: "подробное руководство", "полный обзор"
+
+ФОРМАТ ОТВЕТА:
+{source_article['link']} -> {target_article['link']} | анкор_текст | обоснование
+
+ОТВЕТ:"""
+    
+    try:
+        if client_id:
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "processing_single",
+                "recommendation_number": rec_number,
+                "source_title": source_article['title'][:50],
+                "target_title": target_article['title'][:50],
+                "model": OLLAMA_MODEL
+            })
+        
+        print(f"🤖 Генерация рекомендации {rec_number}: {source_article['title'][:30]} -> {target_article['title'][:30]}")
+        
+        start_time = datetime.now()
+        
+        # Повторные попытки с увеличивающимся таймаутом
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
+            try:
+                timeout_seconds = 120 + (attempt * 60)  # 120s, 180s
+                
+                async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                    response = await client.post(
+                        OLLAMA_URL,
+                        json={
+                            "model": OLLAMA_MODEL,
+                            "prompt": single_prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.3,
+                                "num_ctx": 2048,      # Маленький контекст
+                                "num_predict": 150,   # Короткий ответ
+                                "top_p": 0.8,
+                                "top_k": 40,
+                                "repeat_penalty": 1.1,
+                                "num_thread": 4       # Меньше потоков
+                            }
+                        },
+                        timeout=timeout_seconds
+                    )
+                
+                # Если получили ответ, выходим из цикла
+                break
+                
+            except httpx.TimeoutException:
+                print(f"⏰ Рекомендация {rec_number}, попытка {attempt}: таймаут {timeout_seconds}s")
+                if attempt < max_attempts:
+                    print(f"🔄 Повторная попытка через 5 секунд...")
+                    await asyncio.sleep(5)
+                    continue
+                else:
+                    print(f"❌ Все попытки исчерпаны для рекомендации {rec_number}")
+                    return []
+            except Exception as e:
+                print(f"❌ Ошибка попытки {attempt} для рекомендации {rec_number}: {e}")
+                if attempt < max_attempts:
+                    await asyncio.sleep(5)
+                    continue
+                else:
+                    return []
+        
+        request_time = (datetime.now() - start_time).total_seconds()
+        
+        if client_id:
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "single_completed",
+                "recommendation_number": rec_number,
+                "processing_time": f"{request_time:.1f}s",
+                "response_length": len(response.text) if response.status_code == 200 else 0
+            })
+        
+        if response.status_code != 200:
+            print(f"❌ Ошибка Ollama для рекомендации {rec_number}: код {response.status_code}")
+            return []
+        
+        data = response.json()
+        content = data.get("response", "")
+        
+        print(f"📝 Рекомендация {rec_number}: ответ {len(content)} символов за {request_time:.1f}с")
+        
+        # Парсим одну рекомендацию
+        single_recommendations = parse_ollama_recommendations(content, domain, all_articles)
+        
+        return single_recommendations
+        
+    except Exception as e:
+        print(f"❌ Ошибка генерации рекомендации {rec_number}: {e}")
+        return []

@@ -20,7 +20,7 @@
       --apple-green: #34C759;
       --apple-orange: #FF9500;
       --apple-red: #FF3B30;
-      --apple-gray: #8E8E93;
+      --apple-gray: #4A4A4A;
       --apple-gray-light: #F2F2F7;
       --apple-gray-dark: #1C1C1E;
       --apple-black: #000000;
@@ -310,11 +310,13 @@
       height: 100%;
       background: linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light));
       border-radius: 4px;
-      transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1), background 0.4s ease;
+      transition: width 0.3s ease-out, background 0.4s ease;
       animation: shimmer 2.5s ease-in-out infinite;
       will-change: width;
       position: relative;
       overflow: hidden;
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
 
     .progress-bar::before {
@@ -611,7 +613,7 @@
     }
 
     .text-center { text-align: center; }
-         .text-muted { color: #6E6E73; font-weight: 500; }
+         .text-muted { color: #3A3A3A; font-weight: 500; }
     .font-weight-bold { font-weight: 600; }
     .font-weight-semibold { font-weight: 500; }
 
@@ -672,6 +674,11 @@
       const [websocket, setWebsocket] = React.useState(null);
       const [clientId, setClientId] = React.useState(null);
       const [connectionStatus, setConnectionStatus] = React.useState('disconnected');
+      
+      // Refs для оптимизации прогресс-бара без перерендеринга
+      const progressBarRef = React.useRef(null);
+      const progressTextRef = React.useRef(null);
+      const progressDetailsRef = React.useRef(null);
       const [currentAnalysisId, setCurrentAnalysisId] = React.useState(null);
       const [recommendations, setRecommendations] = React.useState([]);
       
@@ -794,29 +801,26 @@
           case 'progress':
             addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
             
-            // Плавное обновление с анимацией
-            setAnalysisStats(prev => {
-              // Добавляем класс анимации если значительное изменение
-              const shouldAnimate = !prev || Math.abs(prev.percentage - data.percentage) > 5;
-              
-              return {
-                ...prev,
-                step: data.step,
-                current: data.current,
-                total: data.total,
-                percentage: data.percentage,
-                details: data.details,
-                shouldAnimate: shouldAnimate
-              };
-            });
+            // Прямое обновление DOM без перерендеринга React
+            if (progressBarRef.current) {
+              progressBarRef.current.style.width = `${data.percentage}%`;
+            }
+            if (progressTextRef.current) {
+              progressTextRef.current.textContent = `${data.step} (${data.current}/${data.total}) - ${data.percentage}%`;
+            }
+            if (progressDetailsRef.current) {
+              progressDetailsRef.current.textContent = data.details;
+            }
             
-            // Убираем класс анимации через короткое время
-            setTimeout(() => {
-              setAnalysisStats(prev => ({
-                ...prev,
-                shouldAnimate: false
-              }));
-            }, 400);
+            // Обновляем состояние только для логики, но не для рендеринга
+            setAnalysisStats(prev => ({
+              step: data.step,
+              current: data.current,
+              total: data.total,
+              percentage: data.percentage,
+              details: data.details,
+              shouldAnimate: false // Отключаем анимации React
+            }));
             break;
             
           case 'ollama':
@@ -1120,11 +1124,11 @@
           <div className="analysis-overlay">
             <div className="analysis-window">
               <div className="text-center mb-4">
-                <h2 className="hero-title" style={{fontSize: '2rem', marginBottom: '0.5rem', color: '#1C1C1E', fontWeight: '600'}}>
+                <h2 className="hero-title" style={{fontSize: '2rem', marginBottom: '0.5rem', color: '#000000', fontWeight: '600'}}>
                   <i data-feather="cpu" className="icon-apple" style={{marginRight: '12px', color: '#007AFF'}}></i>
                   Кумулятивный анализ <span style={{color: '#007AFF', fontWeight: '700'}}>{domain}</span>
                 </h2>
-                <p style={{color: '#6E6E73', fontSize: '1.1rem', fontWeight: '500'}}>
+                <p style={{color: '#000000', fontSize: '1.1rem', fontWeight: '500'}}>
                   Накопление знаний и эволюция рекомендаций
                 </p>
               </div>
@@ -1137,13 +1141,13 @@
                 }}>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                      <div className="font-weight-bold" style={{fontSize: '1.25rem'}}>
-                        {analysisError ? 'Ошибка анализа' : analysisStats.step}
+                      <div ref={progressTextRef} className="font-weight-bold" style={{fontSize: '1.25rem'}}>
+                        {analysisError ? 'Ошибка анализа' : (analysisStats ? analysisStats.step : 'Подготовка...')}
                       </div>
                       <div style={{opacity: 0.8}}>
                         {analysisError ? 
                           'Процесс прерван' :
-                          `${analysisStats.current}/${analysisStats.total} (${analysisStats.percentage}%)`
+                          (analysisStats ? `${analysisStats.current}/${analysisStats.total} (${analysisStats.percentage}%)` : '0/0 (0%)')
                         }
                       </div>
                     </div>
@@ -1155,9 +1159,10 @@
                   
                   <div className="progress-apple">
                     <div 
+                      ref={progressBarRef}
                       className="progress-bar" 
                       style={{
-                        width: analysisError ? '100%' : `${analysisStats.percentage}%`,
+                        width: analysisError ? '100%' : (analysisStats ? `${analysisStats.percentage}%` : '0%'),
                         background: analysisError ? 
                           'linear-gradient(90deg, var(--apple-red), #ff6b6b)' :
                           'linear-gradient(90deg, var(--apple-blue), var(--apple-blue-light))'
@@ -1165,8 +1170,8 @@
                     ></div>
                   </div>
                   
-                  <div className="mt-2" style={{color: '#1C1C1E', fontSize: '0.95rem', fontWeight: '500'}}>
-                    {analysisError ? analysisError.details : analysisStats.details}
+                  <div ref={progressDetailsRef} className="mt-2" style={{color: '#FFFFFF', fontSize: '0.95rem', fontWeight: '500'}}>
+                    {analysisError ? analysisError.details : (analysisStats ? analysisStats.details : 'Ожидание...')}
                   </div>
                 </div>
               )}
@@ -1217,7 +1222,7 @@
                         [{log.timestamp}] {log.message}
                       </div>
                       {log.details && (
-                        <div className="mt-1" style={{color: '#6E6E73', fontSize: '0.9rem', fontWeight: '500'}}>
+                        <div className="mt-1" style={{color: '#FFFFFF', fontSize: '0.9rem', fontWeight: '500'}}>
                           {log.details}
                         </div>
                       )}
@@ -1524,7 +1529,7 @@
                               {/* Индикатор уровня интеллекта */}
                               {domainObj.intelligence_level > 0 && (
                                 <div className="mt-3">
-                                  <div style={{fontSize: '0.8rem', color: '#6E6E73', marginBottom: '4px'}}>
+                                  <div style={{fontSize: '0.8rem', color: '#000000', marginBottom: '4px'}}>
                                     Уровень кумулятивного интеллекта
                                   </div>
                                   <div style={{
@@ -1540,7 +1545,7 @@
                                       transition: 'width 0.8s ease'
                                     }}></div>
                                   </div>
-                                  <div style={{fontSize: '0.7rem', color: '#8E8E93', marginTop: '2px'}}>
+                                  <div style={{fontSize: '0.7rem', color: '#000000', marginTop: '2px'}}>
                                     {(domainObj.intelligence_level * 100).toFixed(1)}% развития
                                   </div>
                                 </div>
@@ -1586,7 +1591,7 @@
                                         </div>
                                         
                                         <div className="mb-2">
-                                          <div style={{fontSize: '0.8rem', color: '#6E6E73', marginBottom: '4px'}}>Анкор:</div>
+                                          <div style={{fontSize: '0.8rem', color: '#000000', marginBottom: '4px'}}>Анкор:</div>
                                           <div style={{
                                             background: 'rgba(255, 149, 0, 0.1)',
                                             padding: '8px',
@@ -1599,12 +1604,12 @@
                                         </div>
                                         
                                         <div className="mb-2">
-                                          <div style={{fontSize: '0.8rem', color: '#6E6E73', marginBottom: '4px'}}>От:</div>
+                                          <div style={{fontSize: '0.8rem', color: '#000000', marginBottom: '4px'}}>От:</div>
                                           <div style={{fontSize: '0.8rem', wordBreak: 'break-all'}}>{rec.from}</div>
                                         </div>
                                         
                                         <div>
-                                          <div style={{fontSize: '0.8rem', color: '#6E6E73', marginBottom: '4px'}}>К:</div>
+                                          <div style={{fontSize: '0.8rem', color: '#000000', marginBottom: '4px'}}>К:</div>
                                           <div style={{fontSize: '0.8rem', wordBreak: 'break-all'}}>{rec.to}</div>
                                         </div>
                                       </div>
@@ -1839,7 +1844,7 @@
                                   {notification.message}
                                 </div>
                                 
-                                <div style={{fontSize: '0.85rem', color: '#6E6E73'}}>
+                                <div style={{fontSize: '0.85rem', color: '#3A3A3A'}}>
                                   {notification.timestamp.toLocaleString('ru-RU')}
                                 </div>
                               </div>
