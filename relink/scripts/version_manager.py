@@ -23,6 +23,10 @@ import sqlite3
 import tempfile
 
 
+# TODO: Добавить валидацию версии
+# TODO: Добавить валидацию changelog
+# TODO: Добавить валидацию README
+
 @dataclass
 class Version:
     """Класс для работы с версиями по SemVer 2.0"""
