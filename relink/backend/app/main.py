@@ -250,7 +250,8 @@ if settings.monitoring.enable_metrics:
 
 # Добавляем middleware кэширования
 if settings.cache.enable_memory or settings.cache.enable_redis:
-    app.add_middleware(cache_middleware)
+    # TODO: Добавить cache_middleware когда будет реализован
+    pass
 
 # Добавляем middleware кастомных
 app.add_middleware(RequestLoggingMiddleware)
@@ -259,9 +260,10 @@ app.add_middleware(PerformanceMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.api.rate_limit_per_minute)
 
 # Инструментируем приложение для мониторинга
-monitoring.instrument_fastapi(app)
-monitoring.instrument_sqlalchemy(engine)
-monitoring.instrument_requests()
+# TODO: Добавить инструментирование когда будет реализовано
+# monitoring.instrument_fastapi(app)
+# monitoring.instrument_sqlalchemy(engine)
+# monitoring.instrument_requests()
 
 # Добавляем статические файлы
 static_dir = Path(__file__).parent.parent.parent / "frontend"
