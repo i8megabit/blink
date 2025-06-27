@@ -1,102 +1,79 @@
 """
-Модуль кэширования с Redis
+Redis кэширование для микросервиса документации
 """
 
 import json
-import pickle
+import logging
 from typing import Any, Optional, Union
-from datetime import timedelta
 import aioredis
-import structlog
-from .config import settings, get_redis_url, get_cache_key
+from .config import settings
 
-logger = structlog.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class RedisCache:
-    """Класс для работы с Redis кэшем"""
+    """Асинхронный класс для работы с Redis кэшем"""
     
     def __init__(self):
         self.redis: Optional[aioredis.Redis] = None
-        self._connection_pool: Optional[aioredis.ConnectionPool] = None
+        self.prefix = settings.cache_prefix
+        self.default_ttl = settings.cache_ttl
     
     async def connect(self) -> None:
         """Подключение к Redis"""
         try:
-            redis_url = get_redis_url()
-            self._connection_pool = aioredis.ConnectionPool.from_url(
-                redis_url,
+            self.redis = aioredis.from_url(
+                f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}",
+                password=settings.redis_password,
                 encoding="utf-8",
-                decode_responses=True,
-                max_connections=20
+                decode_responses=True
             )
-            self.redis = aioredis.Redis(connection_pool=self._connection_pool)
-            
             # Проверяем подключение
             await self.redis.ping()
-            logger.info("Redis подключен успешно", url=redis_url)
-            
+            logger.info("Successfully connected to Redis")
         except Exception as e:
-            logger.error("Ошибка подключения к Redis", error=str(e))
-            raise
+            logger.error(f"Failed to connect to Redis: {e}")
+            self.redis = None
     
     async def disconnect(self) -> None:
         """Отключение от Redis"""
         if self.redis:
             await self.redis.close()
-        if self._connection_pool:
-            await self._connection_pool.disconnect()
-        logger.info("Redis отключен")
+            logger.info("Disconnected from Redis")
     
-    async def get(self, key: str, default: Any = None) -> Any:
+    def _get_key(self, key: str) -> str:
+        """Получение полного ключа с префиксом"""
+        return f"{self.prefix}{key}"
+    
+    async def get(self, key: str) -> Optional[Any]:
         """Получение значения из кэша"""
         if not self.redis:
-            return default
+            return None
         
         try:
-            cache_key = get_cache_key("data", key)
-            value = await self.redis.get(cache_key)
-            
-            if value is None:
-                return default
-            
-            # Пытаемся десериализовать JSON
-            try:
+            full_key = self._get_key(key)
+            value = await self.redis.get(full_key)
+            if value:
                 return json.loads(value)
-            except json.JSONDecodeError:
-                # Если не JSON, возвращаем как есть
-                return value
-                
+            return None
         except Exception as e:
-            logger.error("Ошибка получения из кэша", key=key, error=str(e))
-            return default
+            logger.error(f"Error getting value from cache: {e}")
+            return None
     
-    async def set(
-        self, 
-        key: str, 
-        value: Any, 
-        ttl: Optional[int] = None,
-        serialize: bool = True
-    ) -> bool:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Установка значения в кэш"""
         if not self.redis:
             return False
         
         try:
-            cache_key = get_cache_key("data", key)
-            ttl = ttl or settings.cache_ttl
-            
-            if serialize and not isinstance(value, (str, bytes)):
-                serialized_value = json.dumps(value, ensure_ascii=False, default=str)
-            else:
-                serialized_value = value
-            
-            await self.redis.setex(cache_key, ttl, serialized_value)
-            logger.debug("Значение установлено в кэш", key=key, ttl=ttl)
+            full_key = self._get_key(key)
+            ttl = ttl or self.default_ttl
+            serialized_value = json.dumps(value, ensure_ascii=False)
+            await self.redis.setex(full_key, ttl, serialized_value)
+            logger.debug(f"Cached value for key: {key}")
             return True
-            
         except Exception as e:
-            logger.error("Ошибка установки в кэш", key=key, error=str(e))
+            logger.error(f"Error setting value in cache: {e}")
             return False
     
     async def delete(self, key: str) -> bool:
@@ -105,13 +82,11 @@ class RedisCache:
             return False
         
         try:
-            cache_key = get_cache_key("data", key)
-            result = await self.redis.delete(cache_key)
-            logger.debug("Значение удалено из кэша", key=key, deleted=bool(result))
-            return bool(result)
-            
+            full_key = self._get_key(key)
+            result = await self.redis.delete(full_key)
+            return result > 0
         except Exception as e:
-            logger.error("Ошибка удаления из кэша", key=key, error=str(e))
+            logger.error(f"Error deleting value from cache: {e}")
             return False
     
     async def exists(self, key: str) -> bool:
@@ -120,41 +95,27 @@ class RedisCache:
             return False
         
         try:
-            cache_key = get_cache_key("data", key)
-            return bool(await self.redis.exists(cache_key))
+            full_key = self._get_key(key)
+            return await self.redis.exists(full_key) > 0
         except Exception as e:
-            logger.error("Ошибка проверки существования ключа", key=key, error=str(e))
+            logger.error(f"Error checking key existence: {e}")
             return False
     
-    async def expire(self, key: str, ttl: int) -> bool:
-        """Установка TTL для ключа"""
+    async def clear(self, pattern: str = "*") -> bool:
+        """Очистка кэша по паттерну"""
         if not self.redis:
             return False
         
         try:
-            cache_key = get_cache_key("data", key)
-            return bool(await self.redis.expire(cache_key, ttl))
-        except Exception as e:
-            logger.error("Ошибка установки TTL", key=key, error=str(e))
-            return False
-    
-    async def clear_pattern(self, pattern: str) -> int:
-        """Очистка ключей по паттерну"""
-        if not self.redis:
-            return 0
-        
-        try:
-            cache_pattern = get_cache_key("data", pattern)
-            keys = await self.redis.keys(cache_pattern)
+            full_pattern = self._get_key(pattern)
+            keys = await self.redis.keys(full_pattern)
             if keys:
-                deleted = await self.redis.delete(*keys)
-                logger.info("Очищены ключи по паттерну", pattern=pattern, deleted=deleted)
-                return deleted
-            return 0
-            
+                await self.redis.delete(*keys)
+                logger.info(f"Cleared {len(keys)} cache keys")
+            return True
         except Exception as e:
-            logger.error("Ошибка очистки по паттерну", pattern=pattern, error=str(e))
-            return 0
+            logger.error(f"Error clearing cache: {e}")
+            return False
     
     async def get_stats(self) -> dict:
         """Получение статистики кэша"""
@@ -163,17 +124,17 @@ class RedisCache:
         
         try:
             info = await self.redis.info()
+            keys = await self.redis.keys(f"{self.prefix}*")
+            
             return {
                 "connected": True,
-                "used_memory": info.get("used_memory_human", "0B"),
+                "total_keys": len(keys),
+                "memory_used": info.get("used_memory_human", "N/A"),
                 "connected_clients": info.get("connected_clients", 0),
-                "total_commands_processed": info.get("total_commands_processed", 0),
-                "keyspace_hits": info.get("keyspace_hits", 0),
-                "keyspace_misses": info.get("keyspace_misses", 0),
-                "uptime_in_seconds": info.get("uptime_in_seconds", 0)
+                "uptime": info.get("uptime_in_seconds", 0)
             }
         except Exception as e:
-            logger.error("Ошибка получения статистики Redis", error=str(e))
+            logger.error(f"Error getting cache stats: {e}")
             return {"connected": False, "error": str(e)}
 
 

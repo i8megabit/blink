@@ -15,7 +15,6 @@ LABEL maintainer="seo-team" \
 # Устанавливаем системные зависимости и создаем пользователя
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    git \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser \
     && useradd -r -g appuser -m -d /home/appuser appuser
@@ -62,6 +61,7 @@ RUN chown -R appuser:appuser /app && \
 
 # Копируем код приложения
 COPY --chown=appuser:appuser docs/app ./app
+COPY --chown=appuser:appuser docs/static ./static
 COPY --chown=appuser:appuser VERSION ./VERSION
 COPY --chown=appuser:appuser README.md ./README.md
 COPY --chown=appuser:appuser TECHNICAL_ROADMAP.md ./TECHNICAL_ROADMAP.md
