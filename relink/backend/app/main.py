@@ -455,21 +455,44 @@ async def get_ollama_status():
             response = await client.get("http://ollama:11434/api/tags")
             if response.status_code == 200:
                 models = response.json().get("models", [])
+                model_names = [model.get("name", "") for model in models]
+                
                 return {
+                    "ready_for_work": len(model_names) > 0,
+                    "server_available": True,
+                    "model_loaded": len(model_names) > 0,
+                    "message": f"Готов к работе ({len(model_names)} моделей)" if model_names else "Модели не загружены",
                     "status": "available",
-                    "models": [model.get("name", "") for model in models],
+                    "connection": "connected",
+                    "models_count": len(model_names),
+                    "available_models": model_names,
+                    "timestamp": datetime.now().isoformat(),
                     "last_check": datetime.now().isoformat()
                 }
             else:
                 return {
+                    "ready_for_work": False,
+                    "server_available": False,
+                    "model_loaded": False,
+                    "message": f"Ollama ответил со статусом {response.status_code}",
                     "status": "error",
-                    "message": f"Ollama responded with status {response.status_code}",
+                    "connection": "disconnected",
+                    "models_count": 0,
+                    "available_models": [],
+                    "timestamp": datetime.now().isoformat(),
                     "last_check": datetime.now().isoformat()
                 }
     except Exception as e:
         return {
+            "ready_for_work": False,
+            "server_available": False,
+            "model_loaded": False,
+            "message": f"Ошибка подключения: {str(e)}",
             "status": "unavailable",
-            "message": str(e),
+            "connection": "disconnected",
+            "models_count": 0,
+            "available_models": [],
+            "timestamp": datetime.now().isoformat(),
             "last_check": datetime.now().isoformat()
         }
 

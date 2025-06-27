@@ -43,11 +43,6 @@ export function Settings({
     loadSettings();
   }, []);
 
-  // Применяем тему при изменении настроек
-  useEffect(() => {
-    applyTheme(settings.theme);
-  }, [settings.theme]);
-
   const loadSettings = async () => {
     try {
       const response = await fetch('/api/v1/settings');
@@ -92,6 +87,8 @@ export function Settings({
       });
 
       if (response.ok) {
+        // Применяем тему только при сохранении
+        applyTheme(settings.theme);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         

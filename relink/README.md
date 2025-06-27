@@ -8,8 +8,8 @@
 
 ## 📊 Метрики проекта
 
-![Lines of Code](https://img.shields.io/badge/lines%20of%20code-18,429-brightgreen)
-![Files](https://img.shields.io/badge/files-95-blue)
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-17,951-brightgreen)
+![Files](https://img.shields.io/badge/files-97-blue)
 ![Python](https://img.shields.io/badge/python-3.11+-yellow)
 ![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue)
 ![Docker](https://img.shields.io/badge/docker-20.10+-orange)
