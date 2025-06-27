@@ -34,7 +34,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# Импортируем новые модули
+# Импортируем модули
 from .config import settings, get_settings
 from .exceptions import (
     RelinkBaseException, ErrorHandler, ErrorResponse,
@@ -80,7 +80,6 @@ except LookupError:
 RUSSIAN_STOP_WORDS = set(stopwords.words('russian'))
 
 # 🔒 КРИТИЧЕСКИЙ СЕМАФОР ДЛЯ ОГРАНИЧЕНИЯ НАГРУЗКИ НА OLLAMA
-# Максимум 1 одновременный запрос к Ollama для предотвращения перегрузки системы
 OLLAMA_SEMAPHORE = asyncio.Semaphore(1)
 
 @dataclass
