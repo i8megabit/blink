@@ -2761,3 +2761,29 @@ async def get_ollama_status():
             "last_check": datetime.now().isoformat()
         }
 
+
+@app.get("/api/v1/version")
+async def get_version():
+    """Получает версию приложения."""
+    try:
+        # Пытаемся прочитать версию из файла VERSION
+        version_file = Path(__file__).parent.parent.parent / "VERSION"
+        if version_file.exists():
+            with open(version_file, 'r', encoding='utf-8') as f:
+                version = f.read().strip()
+        else:
+            version = "3.0.17"  # Версия по умолчанию
+        
+        return {
+            "version": version,
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "commitHash": os.getenv("GIT_COMMIT_HASH", ""),
+            "environment": os.getenv("ENVIRONMENT", "development")
+        }
+    except Exception as e:
+        return {
+            "version": "3.0.17",
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "error": str(e)
+        }
+

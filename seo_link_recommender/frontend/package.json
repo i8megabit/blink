@@ -1,6 +1,6 @@
 {
   "name": "seo-link-recommender-frontend",
-  "version": "2.0.0",
+  "version": "3.0.17",
   "type": "module",
   "description": "Мировая платформа для SEO-инженеров - современный фронтенд с TypeScript и AI",
   "scripts": {

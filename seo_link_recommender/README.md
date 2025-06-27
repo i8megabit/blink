@@ -1,4 +1,8 @@
-# 🚀 SEO Link Recommender
+# 🚀 SEO Link Recommender v3.0.17
+
+**Версия:** 3.0.17  
+**Дата релиза:** 2024-12-19  
+**Статус:** Production Ready
 
 Интеллектуальная система для генерации внутренних ссылок с использованием AI и семантического анализа.
 
@@ -11,6 +15,7 @@
 - 📈 **A/B тестирование** моделей
 - 🌐 **WordPress интеграция**
 - ⚡ **Параллельные frontend** (Classic + Vite)
+- 🏷️ **Система управления версиями** с автоматическими Git тегами
 
 ## 🚀 Быстрый старт
 
@@ -30,245 +35,97 @@ docker-compose up --build
 docker-compose -f docker-compose.vite.yml up --build
 ```
 
-## 🌐 Доступ к приложениям
+### Нативный GPU (максимальная производительность)
+```bash
+# Настройка нативного GPU
+./scripts/native-gpu-setup.sh
 
-### Параллельный режим
+# Запуск с GPU
+docker-compose -f docker-compose.native-gpu.yml up
+```
+
+## 🌐 Доступ к приложению
+
 | Сервис | URL | Описание |
 |--------|-----|----------|
-| 🎯 **Classic Frontend** | http://localhost:3000 | Обычный вариант |
-| ⚡ **Vite Frontend** | http://localhost:3001 | Современный вариант |
+| 🎯 **Classic Frontend** | http://localhost:3000 | Стабильный интерфейс |
+| ⚡ **Vite Frontend** | http://localhost:3001 | Современный интерфейс |
 | 🔧 **Backend API** | http://localhost:8000 | FastAPI backend |
+| 📚 **API Docs** | http://localhost:8000/docs | Swagger документация |
 | 🧠 **Ollama** | http://localhost:11434 | LLM сервис |
 
-### Обычный режим
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
-- Ollama: http://localhost:11434
+## 🏷️ Управление версиями
 
-## 🏗️ Архитектура
-
-```
-┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Frontend      │
-│   (Classic)     │    │   (Vite)        │
-└─────────────────┘    └─────────────────┘
-         │                       │
-         └───────────────────────┼───┐
-                                 │   │
-                    ┌─────────────▼───▼─────────────┐
-                    │         Backend               │
-                    │      (FastAPI + SQLAlchemy)   │
-                    └─────────────┬─────────────────┘
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         │                        │                        │
-┌────────▼────────┐    ┌──────────▼──────────┐    ┌───────▼────────┐
-│   PostgreSQL    │    │      Ollama         │    │   ChromaDB     │
-│   (Database)    │    │   (LLM Models)      │    │   (Vector DB)  │
-└─────────────────┘    └─────────────────────┘    └─────────────────┘
-```
-
-## 🔧 Технологии
-
-### Backend
-- **FastAPI** - современный веб-фреймворк
-- **SQLAlchemy** - ORM для работы с БД
-- **PostgreSQL** - основная база данных
-- **ChromaDB** - векторная база данных
-- **Ollama** - локальные LLM модели
-
-### Frontend
-- **React** - пользовательский интерфейс
-- **TypeScript** - типизированный JavaScript
-- **Tailwind CSS** - стилизация
-- **Vite** - современный сборщик (опционально)
-
-### AI/ML
-- **Qwen2.5:7b** - основная LLM модель
-- **TF-IDF** - векторизация текста
-- **Кластеризация** - тематическая группировка
-- **Семантический анализ** - понимание контекста
-
-## 📊 Основные функции
-
-### 1. Индексация WordPress
 ```bash
-# Анализ WordPress сайта
-curl -X POST http://localhost:8000/api/v1/wp_index \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "example.com"}'
-```
+# Показать версию
+make version
 
-### 2. Генерация рекомендаций
-```bash
-# Получение рекомендаций
-curl -X POST http://localhost:8000/api/v1/wp_index \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "example.com", "comprehensive": true}'
-```
+# Установить новую версию
+make set-version VERSION=3.0.18
 
-### 3. Мониторинг Ollama
-```bash
-# Проверка статуса
-curl http://localhost:8000/api/v1/ollama_status
-```
-
-## 🧠 AI Возможности
-
-### Семантический анализ
-- Извлечение ключевых концепций
-- Тематическая кластеризация
-- Оценка связности контента
-
-### Кумулятивный интеллект
-- Накопление знаний о связях
-- Эволюция рекомендаций
-- Анализ успешности внедрения
-
-### A/B тестирование моделей
-- Сравнение производительности
-- Оценка качества рекомендаций
-- Оптимизация параметров
-
-## 🚀 Производительность
-
-### Оптимизация для Apple M4
-- **OLLAMA_METAL=1** - использование Metal Performance Shaders
-- **OLLAMA_FLASH_ATTENTION=1** - ускорение внимания
-- **OLLAMA_KV_CACHE_TYPE=q8_0** - квантованный кэш
-- **16GB памяти** для Ollama
-- **8 CPU cores** для максимальной производительности
-
-### Мониторинг ресурсов
-```bash
-# Статус контейнеров
-docker-compose ps
-
-# Использование ресурсов
-docker stats
-
-# Логи Ollama
-docker-compose logs -f ollama
-```
-
-## 🔍 Отладка
-
-### Проблемы с запуском
-```bash
-# Проверка портов
-lsof -i :3000
-lsof -i :8000
-lsof -i :11434
-
-# Очистка Docker
-docker system prune -f
-docker volume prune -f
-```
-
-### Проблемы с Ollama
-```bash
-# Проверка моделей
-curl http://localhost:11434/api/tags
-
-# Перезапуск Ollama
-docker-compose restart ollama
-```
-
-### Логи приложения
-```bash
-# Все логи
-docker-compose logs -f
-
-# Логи конкретного сервиса
-docker-compose logs -f backend
-docker-compose logs -f frontend
+# Создать релиз
+make release-version VERSION=3.0.18
 ```
 
 ## 📚 Документация
 
-- [Параллельный запуск](PARALLEL_SETUP.md)
-- [Быстрый старт](QUICK_START.md)
-- [GPU руководство](GPU_GUIDE.md)
-- [UI архитектура](UI_ARCHITECTURE_RULES.md)
+**📖 [Полная документация](UNIFIED_DOCUMENTATION.md)** — все аспекты проекта в одном файле
 
-## 🛠️ Разработка
+### Быстрые ссылки
+- [🚀 Быстрый старт](UNIFIED_DOCUMENTATION.md#-как-быстро-начать-работу)
+- [🏗️ Архитектура](UNIFIED_DOCUMENTATION.md#️-архитектура-системы)
+- [⚡ Производительность](UNIFIED_DOCUMENTATION.md#-производительность-и-оптимизация)
+- [🔧 Управление версиями](UNIFIED_DOCUMENTATION.md#-управление-версиями)
+- [🐳 Docker](UNIFIED_DOCUMENTATION.md#-docker-и-развертывание)
+- [🧠 AI и ML](UNIFIED_DOCUMENTATION.md#-ai-и-машинное-обучение)
 
-### Установка зависимостей
-```bash
-# Backend
-cd backend
-pip install -r requirements.txt
+## 🧪 Тестирование
 
-# Frontend
-cd frontend
-npm install
-```
-
-### Запуск в режиме разработки
-```bash
-# Backend
-cd backend
-uvicorn app.main:app --reload
-
-# Frontend (Classic)
-cd frontend
-npm run dev
-
-# Frontend (Vite)
-cd frontend
-npm run dev:vite
-```
-
-### Тестирование
 ```bash
 # Backend тесты
-cd backend
-pytest
+cd backend && python -m pytest tests/ -v
 
 # Frontend тесты
-cd frontend
-npm test
+cd frontend && npm test
+
+# Интеграционные тесты
+docker-compose exec backend python -m pytest tests/ -v
 ```
 
-## 📈 Мониторинг и аналитика
+## 🔍 Мониторинг
 
-### Метрики производительности
-- Время генерации рекомендаций
-- Использование памяти и CPU
-- Качество рекомендаций
-- Успешность внедрения
+```bash
+# Проверка здоровья
+curl http://localhost:8000/api/v1/health
 
-### Логирование
-- Структурированные логи
-- Мониторинг ошибок
-- Трассировка запросов
-- Аналитика использования
+# Статус Ollama
+curl http://localhost:11434/api/tags
 
-## 🔒 Безопасность
+# Логи
+docker-compose logs -f
+```
 
-- Изоляция контейнеров
-- Безопасные переменные окружения
-- Валидация входных данных
-- Логирование безопасности
+## 🚀 Продакшн
+
+```bash
+# Публикация в Docker Hub
+./scripts/publish-dockerhub.sh latest
+
+# Продакшн конфигурация
+docker-compose -f docker-compose.prod.yml up -d
+```
 
 ## 🤝 Вклад в проект
 
-1. Fork репозитория
+1. Форкните репозиторий
 2. Создайте feature branch
-3. Внесите изменения
-4. Добавьте тесты
-5. Создайте Pull Request
+3. Внесите изменения с тестами
+4. Создайте Pull Request
 
 ## 📄 Лицензия
 
-MIT License - см. файл [LICENSE](LICENSE)
-
-## 🆘 Поддержка
-
-- Создайте Issue для багов
-- Обсудите в Discussions
-- Обратитесь к документации
+MIT License - см. [LICENSE](LICENSE)
 
 ---
 
-**🎉 Готово!** Теперь у вас есть мощная система для генерации внутренних ссылок с использованием AI. 
+**📖 [Читать полную документацию](UNIFIED_DOCUMENTATION.md)** 
