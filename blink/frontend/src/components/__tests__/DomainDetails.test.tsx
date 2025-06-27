@@ -3,138 +3,162 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import DomainDetails from '../DomainDetails';
 
-// Мокаем API вызовы
-vi.mock('../../hooks/useApi', () => ({
-  useApi: () => ({
-    getDomainDetails: vi.fn().mockResolvedValue({
-      domain: 'example.com',
-      score: 85,
-      status: 'analyzed',
-      seo_score: 90,
-      performance_score: 80,
-      accessibility_score: 85,
-      best_practices_score: 88,
-      recommendations: [
-        { type: 'error', message: 'Missing meta description', priority: 'high' },
-        { type: 'warning', message: 'Slow loading time', priority: 'medium' }
-      ],
-      links: [
-        { url: 'https://example.com/page1', text: 'Page 1', status: 'active' },
-        { url: 'https://example.com/page2', text: 'Page 2', status: 'broken' }
-      ]
-    })
-  })
-}));
+// Мокаем fetch
+global.fetch = vi.fn();
 
 describe('DomainDetails Component', () => {
   const user = userEvent.setup();
+  const mockOnBack = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // Мокаем успешный ответ API
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        posts: [
+          {
+            id: 1,
+            title: 'Test Post 1',
+            link: 'https://example.com/post1',
+            content_type: 'article',
+            difficulty_level: 'medium',
+            linkability_score: 85,
+            semantic_richness: 90,
+            created_at: '2024-01-01T00:00:00Z',
+            key_concepts: ['SEO', 'Marketing']
+          },
+          {
+            id: 2,
+            title: 'Test Post 2',
+            link: 'https://example.com/post2',
+            content_type: 'guide',
+            difficulty_level: 'easy',
+            linkability_score: 75,
+            semantic_richness: 80,
+            created_at: '2024-01-02T00:00:00Z',
+            key_concepts: ['Content', 'Strategy']
+          }
+        ]
+      })
+    });
   });
 
   it('рендерится без ошибок', () => {
-    render(<DomainDetails domainId="1" />);
-    expect(screen.getByText(/Детали домена/i)).toBeInTheDocument();
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
+    expect(screen.getByText(/Загрузка/i)).toBeInTheDocument();
   });
 
   it('отображает индикатор загрузки при загрузке данных', () => {
-    render(<DomainDetails domainId="1" />);
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     expect(screen.getByText(/Загрузка/i)).toBeInTheDocument();
   });
 
   it('отображает информацию о домене после загрузки', async () => {
-    render(<DomainDetails domainId="1" />);
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
       expect(screen.getByText('example.com')).toBeInTheDocument();
     });
   });
 
-  it('отображает SEO метрики', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('отображает количество статей', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/SEO Score/i)).toBeInTheDocument();
-      expect(screen.getByText('90')).toBeInTheDocument();
+      expect(screen.getByText(/2 статей/i)).toBeInTheDocument();
     });
   });
 
-  it('отображает рекомендации', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('отображает вкладки', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Рекомендации/i)).toBeInTheDocument();
-      expect(screen.getByText(/Missing meta description/i)).toBeInTheDocument();
+      expect(screen.getByText(/Обзор/i)).toBeInTheDocument();
+      expect(screen.getByText(/Статьи/i)).toBeInTheDocument();
+      expect(screen.getByText(/Аналитика/i)).toBeInTheDocument();
     });
   });
 
-  it('отображает ссылки', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('переключается между вкладками', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Ссылки/i)).toBeInTheDocument();
-      expect(screen.getByText('Page 1')).toBeInTheDocument();
+      expect(screen.getByText(/Обзор/i)).toBeInTheDocument();
     });
+
+    await user.click(screen.getByText(/Статьи/i));
+    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
+  });
+
+  it('обрабатывает клик по кнопке "Назад"', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/Назад/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText(/Назад/i));
+    expect(mockOnBack).toHaveBeenCalledTimes(1);
   });
 
   it('обрабатывает ошибки загрузки', async () => {
     // Мокаем ошибку API
-    vi.mocked(require('../../hooks/useApi').useApi).mockReturnValue({
-      getDomainDetails: vi.fn().mockRejectedValue(new Error('Failed to load'))
-    });
+    (global.fetch as any).mockRejectedValue(new Error('Failed to load'));
 
-    render(<DomainDetails domainId="1" />);
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Ошибка загрузки/i)).toBeInTheDocument();
+      expect(screen.getByText('example.com')).toBeInTheDocument();
     });
   });
 
-  it('показывает кнопку обновления', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('отображает статистику в обзоре', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Обновить/i })).toBeInTheDocument();
+      expect(screen.getByText(/Всего статей/i)).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
     });
   });
 
-  it('обрабатывает клик по кнопке обновления', async () => {
-    const mockGetDomainDetails = vi.fn().mockResolvedValue({
-      domain: 'example.com',
-      score: 85
-    });
-
-    vi.mocked(require('../../hooks/useApi').useApi).mockReturnValue({
-      getDomainDetails: mockGetDomainDetails
-    });
-
-    render(<DomainDetails domainId="1" />);
+  it('отображает статьи во вкладке "Статьи"', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Обновить/i })).toBeInTheDocument();
+      expect(screen.getByText(/Статьи/i)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /Обновить/i }));
+    await user.click(screen.getByText(/Статьи/i));
     
-    expect(mockGetDomainDetails).toHaveBeenCalledTimes(2); // Первоначальная загрузка + обновление
+    expect(screen.getByText('Test Post 1')).toBeInTheDocument();
+    expect(screen.getByText('Test Post 2')).toBeInTheDocument();
   });
 
-  it('отображает статус домена', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('отображает типы контента', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Статус/i)).toBeInTheDocument();
-      expect(screen.getByText(/analyzed/i)).toBeInTheDocument();
+      expect(screen.getByText(/Статьи/i)).toBeInTheDocument();
     });
+
+    await user.click(screen.getByText(/Статьи/i));
+    
+    expect(screen.getByText('📄')).toBeInTheDocument(); // article icon
+    expect(screen.getByText('📖')).toBeInTheDocument(); // guide icon
   });
 
-  it('отображает общий балл', async () => {
-    render(<DomainDetails domainId="1" />);
+  it('отображает уровни сложности', async () => {
+    render(<DomainDetails domain="example.com" onBack={mockOnBack} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Общий балл/i)).toBeInTheDocument();
-      expect(screen.getByText('85')).toBeInTheDocument();
+      expect(screen.getByText(/Статьи/i)).toBeInTheDocument();
     });
+
+    await user.click(screen.getByText(/Статьи/i));
+    
+    expect(screen.getByText('Средний')).toBeInTheDocument();
+    expect(screen.getByText('Легкий')).toBeInTheDocument();
   });
 }); 
