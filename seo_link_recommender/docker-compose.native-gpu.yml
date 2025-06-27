@@ -1,0 +1,48 @@
+# 🚀 НАТИВНЫЙ GPU РЕЖИМ для Apple M4
+# Используйте этот файл ТОЛЬКО если Ollama установлена нативно на Mac
+# docker-compose -f docker-compose.native-gpu.yml up
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "8001:8000"  # Другой порт чтобы не конфликтовать
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - OLLAMA_URL=http://host.docker.internal:11434/api/generate  # Нативная Ollama
+      - OLLAMA_MODEL=qwen2.5:7b-turbo
+    depends_on:
+      - db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Доступ к хост-системе
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "3001:80"  # Другой порт
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: seo_user
+      POSTGRES_PASSWORD: seo_pass
+      POSTGRES_DB: seo_db
+    volumes:
+      - ./postgres_data_native:/var/lib/postgresql/data
+
+# Ollama запускается нативно на хосте с командой:
+# OLLAMA_HOST=0.0.0.0:11434 OLLAMA_METAL=1 OLLAMA_FLASH_ATTENTION=1 ollama serve 

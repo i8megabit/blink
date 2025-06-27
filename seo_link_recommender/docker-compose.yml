@@ -76,16 +76,25 @@ services:
       - OLLAMA_REPEAT_PENALTY=1.1
       - OLLAMA_SEED=42
       
-      # 🔥 МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ ДЛЯ APPLE SILICON
-      - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_METAL=1
-      - OLLAMA_KV_CACHE_TYPE=q8_0
-      - OLLAMA_COMPUTE_UNIT_LIMIT=0
-      - OLLAMA_GPU_LAYERS=-1
+      # 🔥 МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ ДЛЯ APPLE M4 КОНТЕЙНЕР
+      - OLLAMA_FLASH_ATTENTION=1        # CPU Flash Attention оптимизация
+      - OLLAMA_KV_CACHE_TYPE=q8_0       # Квантованный кэш для экономии памяти
+      - OLLAMA_COMPUTE_UNIT_LIMIT=0     # Без ограничений вычислительных единиц
+      - OLLAMA_CPU_OPTIMIZATION=1       # Включаем CPU оптимизации
+      - OLLAMA_SIMD_ACCELERATION=1      # SIMD ускорение для ARM64
+      - OLLAMA_NEON_OPTIMIZATION=1      # ARM NEON оптимизации
       
-      # 🧠 ОПТИМИЗАЦИЯ ПАМЯТИ
-      - OLLAMA_LOW_MEM=false
-      - OLLAMA_MEM_FRACTION=0.9
+      # ⚡ CPU ТУРБО-РЕЖИМ для Apple Silicon
+      - OLLAMA_THREADS=8                # Максимум потоков для M4
+      - OLLAMA_CPU_AFFINITY=0-7         # Привязка к Performance ядрам
+      - OLLAMA_PREFER_CPU=true          # Принудительное использование CPU
+      - OLLAMA_ARM64_OPTIMIZED=1        # ARM64 специфичные оптимизации
+      
+      # 🧠 ОПТИМИЗАЦИЯ ПАМЯТИ для M4
+      - OLLAMA_LOW_MEM=false            # Не экономим память - у M4 её достаточно
+      - OLLAMA_MEM_FRACTION=0.85        # 85% памяти контейнера для модели
+      - OLLAMA_MMAP_ENABLED=1           # Memory mapping для быстрого доступа
+      - OLLAMA_HUGE_PAGES=1             # Используем большие страницы памяти
       
       - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-turbo
       - OLLAMA_WORKERS=2
@@ -101,11 +110,14 @@ services:
       echo '⚡ Создаем ТУРБО модель (базовая)...' && 
       ollama create qwen2.5:7b-turbo -f /dev/stdin <<EOF
       FROM qwen2.5:7b
-      # 🔥 ТУРБО параметры для Apple M4
+      # 🔥 ТУРБО параметры для Apple M4 CPU
       PARAMETER num_ctx 4096
       PARAMETER num_batch 512
       PARAMETER num_thread 8
-      PARAMETER num_gpu -1
+      PARAMETER num_gpu 0
+      PARAMETER f16_kv true
+      PARAMETER use_mmap true
+      PARAMETER use_mlock true
       PARAMETER num_predict 2048
       PARAMETER temperature 0.7
       PARAMETER top_p 0.9
@@ -116,11 +128,14 @@ services:
       echo '🎯 Создаем INSTRUCT ТУРБО модель...' && 
       ollama create qwen2.5:7b-instruct-turbo -f /dev/stdin <<EOF
       FROM qwen2.5:7b-instruct
-      # 🎯 INSTRUCT ТУРБО для SEO задач
+      # 🎯 INSTRUCT ТУРБО для SEO задач M4 CPU
       PARAMETER num_ctx 4096
       PARAMETER num_batch 512
       PARAMETER num_thread 8
-      PARAMETER num_gpu -1
+      PARAMETER num_gpu 0
+      PARAMETER f16_kv true
+      PARAMETER use_mmap true
+      PARAMETER use_mlock true
       PARAMETER num_predict 2048
       PARAMETER temperature 0.6
       PARAMETER top_p 0.85
