@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BenchmarkHistory } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
+import { Progress } from './ui/Progress';
 import { 
-  BarChart3, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle,
-  Activity,
-  TrendingUp,
-  Target,
-  Calendar,
+  BarChart3,
   Play,
+  Pause,
+  RotateCcw,
+  Download,
   Eye,
+  Trash2,
+  CheckCircle,
+  AlertCircle,
+  Clock,
   Zap,
-  Award
+  Target,
+  TrendingUp
 } from 'lucide-react';
 
 interface BenchmarksProps {
@@ -56,28 +58,59 @@ export function Benchmarks({
     }
   };
 
-  const getStatusIcon = (completedAt: string | null) => {
-    if (completedAt) {
-      return <CheckCircle className="w-4 h-4 text-green-500" />;
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'running':
+        return <Play className="w-4 h-4 text-blue-500 animate-pulse" />;
+      case 'failed':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'pending':
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-500" />;
     }
-    return <Activity className="w-4 h-4 text-blue-500 animate-pulse" />;
   };
 
-  const getStatusBadge = (completedAt: string | null) => {
-    if (completedAt) {
-      return (
-        <Badge variant="success" className="flex items-center gap-1">
-          <CheckCircle className="w-3 h-3" />
-          Завершен
-        </Badge>
-      );
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return (
+          <Badge variant="success" className="flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" />
+            Завершен
+          </Badge>
+        );
+      case 'running':
+        return (
+          <Badge variant="warning" className="flex items-center gap-1">
+            <Play className="w-3 h-3" />
+            В процессе
+          </Badge>
+        );
+      case 'failed':
+        return (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Ошибка
+          </Badge>
+        );
+      case 'pending':
+        return (
+          <Badge variant="warning" className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Ожидает
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Неизвестно
+          </Badge>
+        );
     }
-    return (
-      <Badge variant="warning" className="flex items-center gap-1">
-        <Activity className="w-3 h-3" />
-        В процессе
-      </Badge>
-    );
   };
 
   const getScoreColor = (score: number | null) => {
@@ -178,12 +211,12 @@ export function Benchmarks({
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
-                        {getStatusIcon(benchmark.completed_at)}
+                        {getStatusIcon(benchmark.status)}
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
                             {benchmark.name}
                           </span>
-                          {getStatusBadge(benchmark.completed_at)}
+                          {getStatusBadge(benchmark.status)}
                         </div>
                       </div>
 
@@ -248,7 +281,7 @@ export function Benchmarks({
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
-                      {onViewBenchmark && benchmark.completed_at && (
+                      {onViewBenchmark && benchmark.status === 'completed' && (
                         <Button
                           variant="ghost"
                           size="sm"

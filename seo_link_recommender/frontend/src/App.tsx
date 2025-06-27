@@ -1,247 +1,247 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Domain, 
-  Recommendation, 
-  WebSocketMessage, 
-  OllamaStatus,
-  AIThought,
-  AnalysisStats
-} from './types';
-import { useNotifications } from './hooks/useNotifications';
-import { useWebSocket } from './hooks/useWebSocket';
-import { Notifications } from './components/Notifications';
-import { AnalysisProgress } from './components/AnalysisProgress';
-import { Recommendations } from './components/Recommendations';
-import { DomainInput } from './components/DomainInput';
-import { DomainsList } from './components/DomainsList';
-import { OllamaStatus as OllamaStatusComponent } from './components/OllamaStatus';
-import { AIAnalysisFlow } from './components/AIAnalysisFlow';
-import { Stats } from './components/Stats';
-import { AnalysisHistory } from './components/AnalysisHistory';
-import { Benchmarks } from './components/Benchmarks';
-import { Settings } from './components/Settings';
-import { Button } from './components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/Card';
-import { Badge } from './components/ui/Badge';
-import { cn } from './lib/utils';
-import { 
-  Globe, 
-  Play, 
-  RefreshCw, 
-  Activity,
-  CheckCircle,
-  AlertCircle,
-  BarChart3,
-  History,
-  Target,
-  Menu,
-  X
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react'
+import Header from './components/Header'
+import { DomainInput } from './components/DomainInput'
+import { DomainsList } from './components/DomainsList'
+import { AnalysisProgress } from './components/AnalysisProgress'
+import { Recommendations } from './components/Recommendations'
+import { Notifications } from './components/Notifications'
+import { OllamaStatus } from './components/OllamaStatus'
+import { AIAnalysisFlow } from './components/AIAnalysisFlow'
+import Metrics from './components/Metrics'
+import Charts from './components/Charts'
+import Export from './components/Export'
+import { AnalysisHistory } from './components/AnalysisHistory'
+import { Benchmarks } from './components/Benchmarks'
+import { Settings } from './components/Settings'
+import Insights from './components/Insights'
+import { useWebSocket } from './hooks/useWebSocket'
+import { useNotifications } from './hooks/useNotifications'
+import { Domain, Recommendation, AnalysisStats, AIThought, OllamaStatus as OllamaStatusType, WebSocketMessage } from './types'
 
 function App() {
   // Основные состояния
-  const [domains, setDomains] = useState<Domain[]>([]);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [currentDomain, setCurrentDomain] = useState<string>('');
+  const [domain] = useState('')
+  const [domains, setDomains] = useState<Domain[]>([])
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   
   // Состояния анализа
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisStats, setAnalysisStats] = useState<AnalysisStats | null>(null);
-  const [analysisStep, setAnalysisStep] = useState('');
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [aiThoughts, setAiThoughts] = useState<AIThought[]>([]);
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisStats, setAnalysisStats] = useState<AnalysisStats | null>(null)
+  const [analysisStep, setAnalysisStep] = useState('')
+  const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [aiThoughts, setAiThoughts] = useState<AIThought[]>([])
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
   
   // Состояния интерфейса
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'analysis' | 'history' | 'benchmarks' | 'settings'>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({
-    status: 'connecting',
-    connection: 'connecting',
-    models_count: 0,
-    available_models: [],
-    timestamp: new Date().toISOString(),
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatusType>({
     ready_for_work: false,
     server_available: false,
     model_loaded: false,
     message: 'Проверка статуса...',
-    last_check: new Date().toISOString()
-  });
+    status: 'connecting',
+    connection: '',
+    models_count: 0,
+    available_models: [],
+    timestamp: '',
+    last_check: ''
+  })
+
+  // Состояния метрик
+  const [metrics, setMetrics] = useState({
+    totalDomains: 0,
+    totalAnalyses: 0,
+    totalRecommendations: 0,
+    avgAnalysisTime: 0,
+    successRate: 0,
+    activeModels: 0
+  })
 
   // Генерация уникального ID клиента
-  const clientId = React.useMemo(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, []);
+  const clientId = React.useMemo(() => `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, [])
 
   // WebSocket и уведомления
-  const { notifications, addNotification, removeNotification, clearNotifications } = useNotifications();
-  const { status: connectionStatus, sendMessage, reconnect: connectWebSocket, error: wsError } = useWebSocket({
+  const { lastMessage } = useWebSocket({
     url: 'ws://localhost:8000/ws',
     clientId,
-    onMessage: handleWebSocketMessage,
-    onError: (error) => {
-      console.error('WebSocket ошибка:', error);
-      addNotification({
-        type: 'error',
-        title: 'Ошибка соединения',
-        message: 'Не удалось подключиться к серверу'
-      });
-    }
-  });
+    reconnectInterval: 5000
+  })
+  const { notifications, addNotification, removeNotification } = useNotifications()
 
-  // Обработчики WebSocket событий
+  // Загрузка доменов при монтировании
   useEffect(() => {
-    if (connectionStatus === 'connected') {
-      addNotification({
-        type: 'success',
-        title: 'Подключение установлено',
-        message: 'WebSocket соединение активно'
-      });
-    } else if (connectionStatus === 'disconnected') {
-      addNotification({
-        type: 'warning',
-        title: 'Соединение потеряно',
-        message: 'Попытка переподключения...'
-      });
+    loadDomains()
+    checkOllamaStatus()
+    loadMetrics()
+    
+    // Периодическая проверка статуса Ollama
+    const interval = setInterval(checkOllamaStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Обработка WebSocket сообщений
+  useEffect(() => {
+    if (lastMessage) {
+      handleWebSocketMessage(lastMessage)
     }
-  }, [connectionStatus, addNotification]);
+  }, [lastMessage])
 
   function handleWebSocketMessage(data: WebSocketMessage) {
-    console.log('WebSocket сообщение:', data);
+    console.log('📡 WebSocket сообщение:', data.type, data)
 
     switch (data.type) {
       case 'progress':
-        if (data.step) setAnalysisStep(data.step);
-        if (data.percentage !== undefined) setAnalysisProgress(data.percentage);
-        if (data.details) {
-          addNotification({
-            type: 'info',
-            title: data.step || 'Прогресс',
-            message: data.details
-          });
-        }
-        break;
+        setAnalysisStep(data.step || '')
+        setAnalysisProgress(data.percentage || 0)
+        setAnalysisStats({
+          current: data.current || 0,
+          total: data.total || 0,
+          details: data.details || ''
+        })
+        break
 
       case 'ai_thinking':
-        if (data.thought) {
-          const thought: AIThought = {
-            id: Date.now().toString(),
-            stage: data.thinking_stage || 'analyzing',
-            content: data.thought,
-            confidence: 0.7,
-            semantic_weight: 0.5,
-            related_concepts: [],
-            reasoning_chain: [],
-            timestamp: data.timestamp
-          };
-          setAiThoughts(prev => [...prev, thought]);
-        }
-        break;
+        setAiThoughts(prev => [...prev, {
+          id: Date.now().toString(),
+          type: 'ai_thinking',
+          thought: data.thought || '',
+          thinking_stage: data.thinking_stage || '',
+          emoji: data.emoji || '',
+          stage: data.stage || '',
+          content: data.content || '',
+          confidence: data.confidence || 0,
+          semantic_weight: data.semantic_weight || 0,
+          related_concepts: data.related_concepts || [],
+          reasoning_chain: data.reasoning_chain || [],
+          timestamp: data.timestamp
+        }])
+        break
 
       case 'enhanced_ai_thinking':
-        if (data.thought_id && data.content) {
-          const thought: AIThought = {
-            id: data.thought_id,
-            stage: data.stage || 'analyzing',
-            content: data.content,
-            confidence: data.confidence || 0.7,
-            semantic_weight: data.semantic_weight || 0.5,
-            related_concepts: data.related_concepts || [],
-            reasoning_chain: data.reasoning_chain || [],
-            timestamp: data.timestamp
-          };
-          setAiThoughts(prev => [...prev, thought]);
-        }
-        break;
+        setAiThoughts(prev => [...prev, {
+          id: data.thought_id || Date.now().toString(),
+          type: 'enhanced_ai_thinking',
+          stage: data.stage || '',
+          content: data.content || '',
+          confidence: data.confidence || 0,
+          semantic_weight: data.semantic_weight || 0,
+          related_concepts: data.related_concepts || [],
+          reasoning_chain: data.reasoning_chain || [],
+          timestamp: data.timestamp
+        }])
+        break
+
+      case 'ollama':
+        console.log('🤖 Ollama статус:', data.info)
+        break
 
       case 'error':
-        setAnalysisError(data.message || data.error || 'Неизвестная ошибка');
-        setIsAnalyzing(false);
         addNotification({
           type: 'error',
           title: 'Ошибка анализа',
-          message: data.message || data.error || 'Неизвестная ошибка'
-        });
-        break;
+          message: data.message || 'Неизвестная ошибка'
+        })
+        setIsAnalyzing(false)
+        break
 
-      case 'ollama':
-        if (data.info) {
-          addNotification({
-            type: 'info',
-            title: 'Ollama статус',
-            message: `Батч ${data.info.batch}: ${data.info.processing_time || 'обработка...'}`
-          });
-        }
-        break;
+      case 'ping':
+        // Поддержание соединения
+        break
+
+      default:
+        console.log('📡 Неизвестный тип сообщения:', data.type)
     }
   }
 
   // Загрузка доменов
-  const loadDomains = useCallback(async () => {
+  async function loadDomains() {
     try {
-      const response = await fetch('/api/v1/domains');
+      const response = await fetch('/api/v1/domains')
       if (response.ok) {
-        const data = await response.json();
-        setDomains(data.domains || []);
-      } else {
-        throw new Error('Не удалось загрузить домены');
+        const data = await response.json()
+        setDomains(data.domains || [])
       }
     } catch (error) {
-      console.error('Ошибка загрузки доменов:', error);
+      console.error('❌ Ошибка загрузки доменов:', error)
       addNotification({
         type: 'error',
         title: 'Ошибка загрузки',
         message: 'Не удалось загрузить список доменов'
-      });
+      })
     }
-  }, [addNotification]);
+  }
+
+  // Загрузка метрик
+  async function loadMetrics() {
+    try {
+      // Здесь можно добавить реальный API для метрик
+      // Пока используем моковые данные
+      setMetrics({
+        totalDomains: domains.length,
+        totalAnalyses: 42,
+        totalRecommendations: 156,
+        avgAnalysisTime: 2.3,
+        successRate: 94,
+        activeModels: 2
+      })
+    } catch (error) {
+      console.error('❌ Ошибка загрузки метрик:', error)
+    }
+  }
 
   // Проверка статуса Ollama
-  const checkOllamaStatus = useCallback(async () => {
+  async function checkOllamaStatus() {
     try {
-      const response = await fetch('/api/v1/ollama_status');
+      const response = await fetch('/api/v1/ollama_status')
       if (response.ok) {
-        const status = await response.json();
-        setOllamaStatus(status);
-      } else {
-        throw new Error('Не удалось проверить статус Ollama');
+        const status = await response.json()
+        setOllamaStatus(status)
       }
     } catch (error) {
-      console.error('Ошибка проверки статуса Ollama:', error);
-      setOllamaStatus(prev => ({
-        ...prev,
-        status: 'error',
-        connection: 'error',
+      console.error('❌ Ошибка проверки статуса Ollama:', error)
+      setOllamaStatus({
         ready_for_work: false,
         server_available: false,
         model_loaded: false,
-        message: 'Ошибка подключения к Ollama'
-      }));
+        message: 'Ошибка подключения к Ollama',
+        status: 'error',
+        connection: '',
+        models_count: 0,
+        available_models: [],
+        timestamp: '',
+        last_check: ''
+      })
     }
-  }, []);
+  }
 
   // Анализ домена
-  const handleAnalyzeDomain = useCallback(async (domain: string, comprehensive: boolean = true) => {
-    if (!domain.trim()) {
+  async function handleAnalyzeDomain(domainToAnalyze: string, comprehensive: boolean = true) {
+    if (!domainToAnalyze.trim()) {
       addNotification({
-        type: 'error',
-        title: 'Ошибка',
+        type: 'warning',
+        title: 'Внимание',
         message: 'Введите домен для анализа'
-      });
-      return;
+      })
+      return
     }
 
-    setIsAnalyzing(true);
-    setAnalysisError('');
-    setAnalysisProgress(0);
-    setAnalysisStep('Подготовка к анализу...');
-    setAiThoughts([]);
-    setCurrentDomain(domain);
-    setShowAIAnalysis(true);
-
-    // Подключаем WebSocket если не подключен
-    if (connectionStatus !== 'connected') {
-      connectWebSocket();
+    if (!ollamaStatus.ready_for_work) {
+      addNotification({
+        type: 'warning',
+        title: 'Система не готова',
+        message: 'Ollama не готова к работе'
+      })
+      return
     }
+
+    setIsAnalyzing(true)
+    setAnalysisStep('Начало анализа...')
+    setAnalysisProgress(0)
+    setAnalysisStats(null)
+    setAiThoughts([])
+    setShowAIAnalysis(true)
+    setRecommendations([])
 
     try {
       const response = await fetch('/api/v1/wp_index', {
@@ -250,329 +250,327 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          domain: domain.trim(),
-          comprehensive,
-          client_id: clientId
-        }),
-      });
+          domain: domainToAnalyze.trim(),
+          client_id: clientId,
+          comprehensive: comprehensive
+        })
+      })
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
+      const data = await response.json()
+      
       if (data.status === 'success') {
-        setRecommendations(data.recommendations || []);
-        setAnalysisStats({
-          postsAnalyzed: data.posts_found,
-          connectionsFound: data.recommendations?.length || 0,
-          recommendationsGenerated: data.recommendations?.length || 0,
-          processingTime: data.analysis_time
-        });
-        
+        setRecommendations(data.recommendations || [])
         addNotification({
           type: 'success',
           title: 'Анализ завершен',
-          message: `Найдено ${data.recommendations?.length || 0} рекомендаций для ${domain}`
-        });
-
-        // Обновляем список доменов
-        await loadDomains();
+          message: `Найдено ${data.recommendations?.length || 0} рекомендаций для ${data.posts_found || 0} статей`
+        })
+        
+        // Обновляем метрики после успешного анализа
+        loadMetrics()
       } else {
-        throw new Error(data.error || 'Ошибка анализа');
+        throw new Error(data.error || 'Неизвестная ошибка')
       }
+
     } catch (error) {
-      console.error('Ошибка анализа домена:', error);
-      setAnalysisError(error instanceof Error ? error.message : 'Неизвестная ошибка');
+      console.error('❌ Ошибка анализа:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
       addNotification({
         type: 'error',
         title: 'Ошибка анализа',
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка'
-      });
+        message: errorMessage
+      })
     } finally {
-      setIsAnalyzing(false);
-      setAnalysisProgress(100);
-      setAnalysisStep('Анализ завершен');
+      setIsAnalyzing(false)
+      setAnalysisStep('')
+      setAnalysisProgress(100)
     }
-  }, [addNotification, clientId, connectionStatus, connectWebSocket, loadDomains]);
+  }
 
   const handleCloseAIAnalysis = () => {
-    setShowAIAnalysis(false);
-    setAiThoughts([]);
-  };
+    setShowAIAnalysis(false)
+  }
 
-  // Загрузка данных при монтировании
-  useEffect(() => {
-    loadDomains();
-    checkOllamaStatus();
-    
-    // Периодическая проверка статуса Ollama
-    const interval = setInterval(checkOllamaStatus, 30000);
-    
-    return () => {
-      clearInterval(interval);
-      connectWebSocket();
-    };
-  }, [loadDomains, checkOllamaStatus, connectWebSocket]);
+  const handleExport = (format: string) => {
+    addNotification({
+      type: 'success',
+      title: 'Экспорт завершен',
+      message: `Данные экспортированы в формате ${format.toUpperCase()}`
+    })
+  }
 
+  // Рендер контента в зависимости от активной вкладки
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DomainInput 
-                onAnalyze={handleAnalyzeDomain}
-                isLoading={isAnalyzing}
-              />
-              <OllamaStatusComponent 
-                status={ollamaStatus}
-                onRefresh={checkOllamaStatus}
-              />
-            </div>
+            {/* Метрики */}
+            <Metrics metrics={metrics} />
             
-            {isAnalyzing && (
-              <AnalysisProgress
-                isActive={isAnalyzing}
-                currentStep={analysisStep}
-                progress={analysisProgress}
-                totalSteps={12}
-                aiThoughts={aiThoughts}
-                analysisStats={analysisStats || {}}
-                error={analysisError}
-              />
-            )}
-
-            {recommendations.length > 0 && (
-              <Recommendations
-                recommendations={recommendations}
-                domain={currentDomain}
-                isLoading={isAnalyzing}
-              />
-            )}
-
-            <Stats 
-              domain={domains.find(d => d.name === currentDomain) || null}
-              analysisHistory={[]}
-            />
-          </div>
-        );
-
-      case 'analysis':
-        return (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5" />
-                  Анализ доменов
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DomainsList
-                  domains={domains}
+            {/* Анализ домена */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Анализ домена</div>
+              </div>
+              <div className="card-content">
+                <DomainInput 
                   onAnalyze={handleAnalyzeDomain}
                   isLoading={isAnalyzing}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+
+            {isAnalyzing && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Прогресс анализа</div>
+                </div>
+                <div className="card-content">
+                  <AnalysisProgress 
+                    isActive={isAnalyzing}
+                    currentStep={analysisStep}
+                    progress={analysisProgress}
+                    totalSteps={10}
+                    aiThoughts={aiThoughts}
+                    analysisStats={analysisStats ? {
+                      postsAnalyzed: analysisStats.current || 0,
+                      connectionsFound: analysisStats.total || 0,
+                      recommendationsGenerated: recommendations.length,
+                      processingTime: 0
+                    } : {
+                      postsAnalyzed: 0,
+                      connectionsFound: 0,
+                      recommendationsGenerated: 0,
+                      processingTime: 0
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {recommendations.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Рекомендации</div>
+                </div>
+                <div className="card-content">
+                  <Recommendations 
+                    recommendations={recommendations}
+                    domain={domain}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Графики */}
+            <Charts 
+              analysisHistory={[
+                { date: '2024-01-01', value: 12 },
+                { date: '2024-01-02', value: 18 },
+                { date: '2024-01-03', value: 15 },
+                { date: '2024-01-04', value: 22 },
+                { date: '2024-01-05', value: 28 }
+              ]}
+              domainStats={[
+                { label: 'example.com', value: 45 },
+                { label: 'test.ru', value: 32 },
+                { label: 'demo.org', value: 28 },
+                { label: 'sample.net', value: 19 }
+              ]}
+              modelPerformance={[
+                { label: 'qwen2.5:7b-turbo', value: 65 },
+                { label: 'qwen2.5:7b-instruct', value: 35 }
+              ]}
+            />
           </div>
-        );
+        )
+
+      case 'domains':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold">Домены</h2>
+              <button 
+                className="btn btn-primary"
+                onClick={loadDomains}
+              >
+                Обновить
+              </button>
+            </div>
+            <DomainsList 
+              domains={domains} 
+              onAnalyze={handleAnalyzeDomain}
+            />
+          </div>
+        )
 
       case 'history':
         return (
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  История анализов
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  История анализов будет отображаться здесь
-                </p>
-              </CardContent>
-            </Card>
+            <h2 className="text-2xl font-semibold">История анализов</h2>
+            <AnalysisHistory />
           </div>
-        );
+        )
 
       case 'benchmarks':
         return (
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Бенчмарки моделей
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Бенчмарки моделей будут отображаться здесь
-                </p>
-              </CardContent>
-            </Card>
+            <h2 className="text-2xl font-semibold">Бенчмарки моделей</h2>
+            <Benchmarks />
           </div>
-        );
+        )
+
+      case 'export':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold">Экспорт данных</h2>
+            <Export 
+              recommendations={recommendations}
+              domain={domain}
+              onExport={handleExport}
+            />
+          </div>
+        )
+
+      case 'status':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold">Статус системы</h2>
+            <OllamaStatus 
+              status={ollamaStatus} 
+              onRefresh={checkOllamaStatus} 
+            />
+          </div>
+        )
 
       case 'settings':
         return (
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  Настройки
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Настройки приложения будут отображаться здесь
-                </p>
-              </CardContent>
-            </Card>
+            <h2 className="text-2xl font-semibold">Настройки</h2>
+            <Settings />
           </div>
-        );
+        )
+
+      case 'insights':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold">Аналитика</h2>
+            <Insights domain={domain} />
+          </div>
+        )
 
       default:
-        return null;
+        return (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-semibold mb-4">Добро пожаловать</h2>
+            <p className="text-muted">Выберите раздел в боковой панели</p>
+          </div>
+        )
     }
-  };
+  }
+
+  const getTabTitle = () => {
+    const titles: Record<string, string> = {
+      dashboard: 'Дашборд',
+      domains: 'Домены',
+      history: 'История анализов',
+      benchmarks: 'Бенчмарки',
+      export: 'Экспорт данных',
+      status: 'Статус системы',
+      settings: 'Настройки',
+      insights: 'Аналитика'
+    }
+    return titles[activeTab] || 'SEO Link Recommender'
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="app-container">
+      {/* Боковая панель */}
+      <aside className={`sidebar ${!sidebarOpen ? 'hidden' : ''}`}>
+        <div className="sidebar-header">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-semibold">
+              🔗
+            </div>
+            <h1 className="text-lg font-semibold">SEO Link Recommender</h1>
+          </div>
+        </div>
+        
+        <div className="sidebar-content">
+          <nav className="space-y-2">
+            {[
+              { id: 'dashboard', label: '📊 Дашборд', icon: '📊' },
+              { id: 'domains', label: '🌐 Домены', icon: '🌐' },
+              { id: 'history', label: '📋 История', icon: '📋' },
+              { id: 'benchmarks', label: '⚡ Бенчмарки', icon: '⚡' },
+              { id: 'export', label: '📤 Экспорт', icon: '📤' },
+              { id: 'status', label: '⚙️ Статус', icon: '⚙️' },
+              { id: 'settings', label: '🔧 Настройки', icon: '🔧' },
+              { id: 'insights', label: '📊 Аналитика', icon: '📊' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                  activeTab === tab.id 
+                    ? 'bg-accent text-accent-foreground' 
+                    : 'hover:bg-accent hover:text-accent-foreground'
+                }`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </aside>
+
+      {/* Основной контент */}
+      <main className="main-content">
+        <Header 
+          title={getTabTitle()}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          actions={
+            activeTab === 'dashboard' && recommendations.length > 0 ? (
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setActiveTab('export')}
+              >
+                📤 Экспорт
+              </button>
+            ) : undefined
+          }
+        />
+        
+        <div className="content-body">
+          {renderContent()}
+        </div>
+      </main>
+
       {/* Уведомления */}
-      <Notifications
-        notifications={notifications}
+      <Notifications 
+        notifications={notifications} 
         onRemove={removeNotification}
-        onClear={clearNotifications}
+        onClear={() => {
+          // Очистка всех уведомлений
+          notifications.forEach(notification => removeNotification(notification.id))
+        }}
       />
 
-      {/* AI Анализ Flow */}
+      {/* AI Analysis Flow */}
       <AIAnalysisFlow
         isVisible={showAIAnalysis}
-        onClose={handleCloseAIAnalysis}
         aiThoughts={aiThoughts}
         currentStage={analysisStep}
         progress={analysisProgress}
+        onClose={handleCloseAIAnalysis}
       />
-
-      <div className="flex">
-        {/* Боковая панель */}
-        <div className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}>
-          <div className="flex flex-col h-full">
-            {/* Заголовок */}
-            <div className="flex items-center justify-between p-4 border-b">
-              <div className="flex items-center gap-2">
-                <Globe className="w-6 h-6 text-blue-600" />
-                <h1 className="text-lg font-semibold">SEO Link Recommender</h1>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Навигация */}
-            <nav className="flex-1 p-4 space-y-2">
-              {[
-                { id: 'dashboard', label: 'Дашборд', icon: <Activity className="w-4 h-4" /> },
-                { id: 'analysis', label: 'Анализ', icon: <Target className="w-4 h-4" /> },
-                { id: 'history', label: 'История', icon: <History className="w-4 h-4" /> },
-                { id: 'benchmarks', label: 'Бенчмарки', icon: <BarChart3 className="w-4 h-4" /> },
-                { id: 'settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors",
-                    activeTab === tab.id
-                      ? "bg-blue-50 text-blue-700 border border-blue-200"
-                      : "text-gray-600 hover:bg-gray-50"
-                  )}
-                >
-                  {tab.icon}
-                  <span className="font-medium">{tab.label}</span>
-                </button>
-              ))}
-            </nav>
-
-            {/* Статус */}
-            <div className="p-4 border-t">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  connectionStatus === 'connected' ? "bg-green-500" : "bg-red-500"
-                )} />
-                <span className="text-sm text-gray-600">
-                  {connectionStatus === 'connected' ? 'Подключено' : 'Отключено'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  ollamaStatus.ready_for_work ? "bg-green-500" : "bg-yellow-500"
-                )} />
-                <span className="text-sm text-gray-600">
-                  {ollamaStatus.ready_for_work ? 'Ollama готова' : 'Ollama загружается'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Основной контент */}
-        <div className="flex-1 flex flex-col">
-          {/* Верхняя панель */}
-          <header className="bg-white shadow-sm border-b">
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden"
-                >
-                  <Menu className="w-5 h-5" />
-                </Button>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {activeTab === 'dashboard' && 'Дашборд'}
-                  {activeTab === 'analysis' && 'Анализ доменов'}
-                  {activeTab === 'history' && 'История анализов'}
-                  {activeTab === 'benchmarks' && 'Бенчмарки моделей'}
-                  {activeTab === 'settings' && 'Настройки'}
-                </h2>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">
-                  {domains.length} доменов
-                </Badge>
-                {isAnalyzing && (
-                  <Badge variant="default" className="bg-blue-100 text-blue-800">
-                    <Activity className="w-3 h-3 mr-1 animate-pulse" />
-                    Анализ
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </header>
-
-          {/* Контент */}
-          <main className="flex-1 p-6 overflow-y-auto">
-            {renderContent()}
-          </main>
-        </div>
-      </div>
     </div>
-  );
+  )
 }
 
-export default App; 
+export default App 

@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AnalysisHistory as AnalysisHistoryType } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { 
-  History, 
-  Clock, 
-  CheckCircle, 
+  History,
+  FileText,
+  Link,
+  Timer,
+  CheckCircle,
   AlertCircle,
-  Activity,
-  TrendingUp,
-  Target,
-  Calendar,
-  Play,
-  Eye
+  RefreshCw,
+  Download,
+  Eye,
+  Trash2
 } from 'lucide-react';
 
 interface AnalysisHistoryProps {
@@ -58,7 +58,7 @@ export function AnalysisHistory({
     if (completedAt) {
       return <CheckCircle className="w-4 h-4 text-green-500" />;
     }
-    return <Activity className="w-4 h-4 text-blue-500 animate-pulse" />;
+    return <Timer className="w-4 h-4 text-blue-500 animate-pulse" />;
   };
 
   const getStatusBadge = (completedAt: string | null) => {
@@ -72,7 +72,7 @@ export function AnalysisHistory({
     }
     return (
       <Badge variant="warning" className="flex items-center gap-1">
-        <Activity className="w-3 h-3" />
+        <Timer className="w-3 h-3" />
         В процессе
       </Badge>
     );
@@ -207,7 +207,7 @@ export function AnalysisHistory({
 
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
+                        <Timer className="w-4 h-4" />
                         <span>
                           {new Date(analysis.created_at).toLocaleDateString('ru-RU', {
                             year: 'numeric',
@@ -219,7 +219,7 @@ export function AnalysisHistory({
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Target className="w-4 h-4" />
+                        <Link className="w-4 h-4" />
                         <span>{analysis.llm_model_used}</span>
                       </div>
                     </div>
@@ -244,7 +244,7 @@ export function AnalysisHistory({
                         onClick={() => onRerunAnalysis(analysis)}
                         className="flex items-center gap-1"
                       >
-                        <Play className="w-4 h-4" />
+                        <Timer className="w-4 h-4" />
                         Повторить
                       </Button>
                     )}
