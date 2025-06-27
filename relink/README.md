@@ -22,7 +22,7 @@
 ### Параллельный запуск (рекомендуется)
 ```bash
 # Запуск обоих вариантов одновременно
-cd seo_link_recommender
+cd relink
 ./run_parallel.sh
 ```
 

@@ -35,6 +35,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Импортируем новые модули
+from .config import settings, get_settings
+from .exceptions import (
+    BlinkBaseException, ErrorHandler, ErrorResponse,
+    ValidationException, AuthenticationException, AuthorizationException,
+    NotFoundException, DatabaseException, OllamaException,
+    raise_not_found, raise_validation_error, raise_authentication_error,
+    raise_authorization_error, raise_database_error, raise_ollama_error
+)
+from .middleware import (
+    ErrorHandlerMiddleware, RequestLoggingMiddleware, RateLimitMiddleware,
+    SecurityMiddleware, PerformanceMiddleware, setup_error_handlers
+)
 from .monitoring import monitoring, monitoring_middleware, metrics_endpoint, health_check
 from .cache import cache_service, cache_middleware, cache_stats, cache_clear
 from .validation import (
@@ -208,24 +220,36 @@ cumulative_manager: Optional['CumulativeIntelligenceManager'] = None
 
 # Создаем FastAPI приложение с настройками мониторинга
 app = FastAPI(
-    title="Blink SEO Platform",
-    description="Платформа для SEO-инженеров с AI-анализом",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    title=settings.api.title,
+    version=settings.api.version,
+    description=settings.api.description,
+    docs_url=settings.api.docs_url,
+    redoc_url=settings.api.redoc_url,
+    debug=settings.debug
 )
 
 # Добавляем middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.api.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Добавляем middleware мониторинга
-app.middleware("http")(monitoring_middleware)
+if settings.monitoring.enable_metrics:
+    app.add_middleware(monitoring_middleware)
+
+# Добавляем middleware кэширования
+if settings.cache.enable_memory or settings.cache.enable_redis:
+    app.add_middleware(cache_middleware)
+
+# Добавляем middleware кастомных
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(SecurityMiddleware)
+app.add_middleware(PerformanceMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.api.rate_limit_per_minute)
 
 # Инструментируем приложение для мониторинга
 monitoring.instrument_fastapi(app)
