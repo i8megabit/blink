@@ -37,7 +37,7 @@ describe('VersionDisplay Component', () => {
   it('отображает дату сборки', () => {
     render(<VersionDisplay />);
     const today = new Date().toISOString().split('T')[0];
-    expect(screen.getByText(today)).toBeInTheDocument();
+    expect(screen.getByText(String(today))).toBeInTheDocument();
   });
 
   it('отображает разделитель', () => {
