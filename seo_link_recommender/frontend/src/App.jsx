@@ -33,7 +33,16 @@ function App() {
   const [currentThought, setCurrentThought] = useState(null)
   
   // Хуки
-  const { notifications, addNotification, removeNotification } = useNotifications()
+  const { 
+    notifications, 
+    selectedNotification,
+    addNotification, 
+    removeNotification,
+    showNotificationDetails,
+    hideNotificationDetails,
+    pauseNotification,
+    resumeNotification
+  } = useNotifications()
   const { 
     connectionStatus, 
     connectWebSocket, 
@@ -273,7 +282,12 @@ function App() {
       
       <Notifications 
         notifications={notifications} 
-        removeNotification={removeNotification} 
+        removeNotification={removeNotification}
+        selectedNotification={selectedNotification}
+        showNotificationDetails={showNotificationDetails}
+        hideNotificationDetails={hideNotificationDetails}
+        pauseNotification={pauseNotification}
+        resumeNotification={resumeNotification}
       />
     </div>
   )

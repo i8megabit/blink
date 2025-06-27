@@ -1425,6 +1425,7 @@
         console.log('🔍 ОТЛАДКА: clientId:', clientId);
         console.log('🔍 ОТЛАДКА: connectionStatus:', connectionStatus);
         console.log('🔍 ОТЛАДКА: isAnalyzing:', isAnalyzing);
+        console.log('🔍 ОТЛАДКА: analysisStep до:', analysisStep);
         
         if (!domainName) { 
           console.log('❌ ОТЛАДКА: Домен не выбран');
@@ -1447,24 +1448,29 @@
         setAnalysisStats({
           step: 'Инициализация',
           current: 0,
-          total: 9,
+          total: 12, // Увеличиваем общее количество шагов для кумулятивного анализа
           percentage: 0,
           details: 'Создание рекомендаций...'
         });
         setRecommendations([]);
         setIsAnalyzing(true);
         setShowRecommendations(true);
-        setAnalysisStep('analyzing'); // Устанавливаем состояние анализа
+        setAnalysisStep('analyzing'); // ВАЖНО: Устанавливаем состояние анализа для отображения модального окна
+        
+        console.log('🔍 ОТЛАДКА: analysisStep после установки:', 'analyzing');
+        console.log('🔍 ОТЛАДКА: isAnalyzing после установки:', true);
         
         addLog('info', `🚀 Генерация рекомендаций для: ${domainName}`, 'Анализ проиндексированного контента...');
         addNotification('info', 'Генерация рекомендаций', `Создание рекомендаций для ${domainName}`, 3000);
         
         try {
-          const resp = await fetch('http://localhost:8000/api/v1/wp_intelligent', {
+          // Запускаем кумулятивный анализ с генерацией рекомендаций
+          const resp = await fetch('http://localhost:8000/api/v1/wp_index', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               domain: domainName,
+              comprehensive: true, // ВАЖНО: включаем полный анализ с генерацией рекомендаций
               client_id: clientId
             })
           });
@@ -1475,10 +1481,21 @@
           }
           
           const data = await resp.json();
-          setRecommendations(data.recommendations || []);
-          setIsAnalyzing(false);
-          setAnalysisStep('results'); // Переходим к результатам
-          await loadDomains(); // Обновляем данные домена
+          
+          if (data.status === 'success') {
+            setRecommendations(data.recommendations || []);
+            setIsAnalyzing(false);
+            setAnalysisStep('results'); // Переходим к результатам
+            
+            // Показываем уведомление об успехе
+            const recCount = data.recommendations?.length || 0;
+            addNotification('success', 'Генерация завершена', 
+              `Создано ${recCount} рекомендаций за ${data.analysis_time?.toFixed(1) || 'неизвестное'} секунд`, 5000);
+            
+            await loadDomains(); // Обновляем данные домена
+          } else {
+            throw new Error(data.error || 'Неизвестная ошибка при генерации рекомендаций');
+          }
           
         } catch (err) {
           console.error('❌ Ошибка генерации рекомендаций:', err);
@@ -1514,7 +1531,14 @@
       }
 
       function AnalysisOverlay() {
-        if (analysisStep !== 'analyzing') return null;
+        console.log('🔍 ОТЛАДКА: AnalysisOverlay вызван, analysisStep:', analysisStep);
+        
+        if (analysisStep !== 'analyzing') {
+          console.log('🔍 ОТЛАДКА: AnalysisOverlay не отображается, analysisStep !== analyzing');
+          return null;
+        }
+        
+        console.log('🔍 ОТЛАДКА: AnalysisOverlay отображается!');
         
         return (
           <div className="analysis-overlay">
