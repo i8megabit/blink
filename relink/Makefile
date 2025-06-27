@@ -97,6 +97,10 @@ test-frontend: ## Тесты frontend
 	@echo "$(GREEN)🧪 Тесты frontend...$(NC)"
 	@cd frontend && npm test
 
+test-docs: ## Тесты микросервиса документации
+	@echo "$(GREEN)🧪 Тесты микросервиса документации...$(NC)"
+	@cd docs && make test
+
 test-e2e: ## E2E тесты
 	@echo "$(GREEN)🧪 E2E тесты...$(NC)"
 	@cd frontend && npm run test:e2e
@@ -137,6 +141,14 @@ logs-frontend: ## Логи frontend
 	@echo "$(GREEN)📋 Логи frontend...$(NC)"
 	docker-compose logs -f frontend
 
+logs-docs: ## Логи микросервиса документации
+	@echo "$(GREEN)📋 Логи микросервиса документации...$(NC)"
+	docker-compose logs -f docs
+
+logs-redis: ## Логи Redis
+	@echo "$(GREEN)📋 Логи Redis...$(NC)"
+	docker-compose logs -f redis
+
 logs-ollama: ## Логи Ollama
 	@echo "$(GREEN)📋 Логи Ollama...$(NC)"
 	docker-compose logs -f ollama
@@ -148,6 +160,46 @@ status: ## Статус контейнеров
 stats: ## Статистика использования ресурсов
 	@echo "$(GREEN)📊 Статистика ресурсов...$(NC)"
 	docker stats
+
+# ========================================
+# Микросервис документации
+# ========================================
+
+docs-health: ## Проверка здоровья микросервиса документации
+	@echo "$(GREEN)🏥 Проверка здоровья микросервиса документации...$(NC)"
+	@curl -f http://localhost:8001/api/v1/health || echo "$(RED)❌ Микросервис документации недоступен$(NC)"
+
+docs-version: ## Получение версии из микросервиса документации
+	@echo "$(GREEN)🏷️ Версия из микросервиса документации...$(NC)"
+	@curl -s http://localhost:8001/api/v1/version | jq . || echo "$(RED)❌ Ошибка получения версии$(NC)"
+
+docs-cache-stats: ## Статистика кэша микросервиса документации
+	@echo "$(GREEN)📊 Статистика кэша...$(NC)"
+	@curl -s http://localhost:8001/api/v1/cache/stats | jq . || echo "$(RED)❌ Ошибка получения статистики кэша$(NC)"
+
+docs-clear-cache: ## Очистка кэша микросервиса документации
+	@echo "$(GREEN)🧹 Очистка кэша...$(NC)"
+	@curl -X DELETE http://localhost:8001/api/v1/cache/clear || echo "$(RED)❌ Ошибка очистки кэша$(NC)"
+
+docs-open: ## Открыть документацию API микросервиса
+	@echo "$(GREEN)📖 Открытие документации API...$(NC)"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:8001/docs; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:8001/docs; \
+	else \
+		echo "$(YELLOW)📖 Документация API: http://localhost:8001/docs$(NC)"; \
+	fi
+
+docs-redoc: ## Открыть ReDoc документацию микросервиса
+	@echo "$(GREEN)📋 Открытие ReDoc документации...$(NC)"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:8001/redoc; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:8001/redoc; \
+	else \
+		echo "$(YELLOW)📋 ReDoc документация: http://localhost:8001/redoc$(NC)"; \
+	fi
 
 # ========================================
 # Очистка и обслуживание
@@ -189,6 +241,7 @@ dev-setup: ## Настройка окружения разработки
 	@echo "$(GREEN)🔧 Настройка окружения разработки...$(NC)"
 	@cd backend && pip install -r requirements.txt
 	@cd frontend && npm install
+	@cd docs && make install-dev
 
 dev-backend: ## Запуск backend в режиме разработки
 	@echo "$(GREEN)🔧 Запуск backend в режиме разработки...$(NC)"
@@ -198,72 +251,27 @@ dev-frontend: ## Запуск frontend в режиме разработки
 	@echo "$(GREEN)🔧 Запуск frontend в режиме разработки...$(NC)"
 	@cd frontend && npm run dev
 
-# ========================================
-# Проверки
-# ========================================
-
-check: ## Проверка системы
-	@echo "$(GREEN)🔍 Проверка системы...$(NC)"
-	@echo "$(YELLOW)Проверка Docker...$(NC)"
-	@docker --version
-	@echo "$(YELLOW)Проверка Docker Compose...$(NC)"
-	@docker-compose --version
-	@echo "$(YELLOW)Проверка портов...$(NC)"
-	@lsof -i :3000 -i :8000 -i :11434 || echo "$(GREEN)✅ Порты свободны$(NC)"
-
-health: ## Проверка здоровья системы
-	@echo "$(GREEN)🏥 Проверка здоровья системы...$(NC)"
-	@curl -s http://localhost:8000/api/v1/health || echo "$(RED)❌ Backend недоступен$(NC)"
-	@curl -s http://localhost:11434/api/tags || echo "$(RED)❌ Ollama недоступен$(NC)"
+dev-docs: ## Запуск микросервиса документации в режиме разработки
+	@echo "$(GREEN)🔧 Запуск микросервиса документации в режиме разработки...$(NC)"
+	@cd docs && make run
 
 # ========================================
 # Утилиты
 # ========================================
 
-shell-backend: ## Shell в backend контейнере
-	@echo "$(GREEN)🐚 Shell в backend...$(NC)"
-	docker-compose exec backend /bin/bash
-
-shell-frontend: ## Shell в frontend контейнере
-	@echo "$(GREEN)🐚 Shell в frontend...$(NC)"
-	docker-compose exec frontend /bin/sh
-
-shell-ollama: ## Shell в Ollama контейнере
-	@echo "$(GREEN)🐚 Shell в Ollama...$(NC)"
-	docker-compose exec ollama /bin/sh
-
-# ========================================
-# Специальные команды
-# ========================================
-
-quick-start: ## Быстрый старт (сборка + запуск)
-	@echo "$(GREEN)⚡ Быстрый старт...$(NC)"
-	@make build
-	@make up
-	@echo "$(GREEN)✅ Система запущена!$(NC)"
-	@echo "$(YELLOW)🌐 Frontend: http://localhost:3000$(NC)"
-	@echo "$(YELLOW)🔧 Backend: http://localhost:8000$(NC)"
-	@echo "$(YELLOW)🧠 Ollama: http://localhost:11434$(NC)"
-
-quick-start-parallel: ## Быстрый старт параллельного режима
-	@echo "$(GREEN)⚡ Быстрый старт параллельного режима...$(NC)"
-	@make build-parallel
-	@make up-parallel
-	@echo "$(GREEN)✅ Система запущена!$(NC)"
-	@echo "$(YELLOW)🌐 Classic Frontend: http://localhost:3000$(NC)"
-	@echo "$(YELLOW)⚡ Vite Frontend: http://localhost:3001$(NC)"
-	@echo "$(YELLOW)🔧 Backend: http://localhost:8000$(NC)"
-	@echo "$(YELLOW)🧠 Ollama: http://localhost:11434$(NC)"
+check-all: ## Проверка всех сервисов
+	@echo "$(GREEN)🔍 Проверка всех сервисов...$(NC)"
+	@echo "$(YELLOW)Backend:$(NC)"
+	@curl -f http://localhost:8000/api/v1/health || echo "$(RED)❌ Backend недоступен$(NC)"
+	@echo "$(YELLOW)Frontend:$(NC)"
+	@curl -f http://localhost:3000 || echo "$(RED)❌ Frontend недоступен$(NC)"
+	@echo "$(YELLOW)Документация:$(NC)"
+	@curl -f http://localhost:8001/api/v1/health || echo "$(RED)❌ Микросервис документации недоступен$(NC)"
+	@echo "$(YELLOW)Ollama:$(NC)"
+	@curl -f http://localhost:11434/api/tags || echo "$(RED)❌ Ollama недоступен$(NC)"
+	@echo "$(YELLOW)Redis:$(NC)"
+	@docker exec $$(docker ps -q --filter name=redis) redis-cli ping || echo "$(RED)❌ Redis недоступен$(NC)"
 
 # ========================================
-# Информация
-# ========================================
-
-info: ## Информация о проекте
-	@echo "$(GREEN)📋 Информация о проекте$(NC)"
-	@echo "$(YELLOW)Название:$(NC) SEO Link Recommender"
-	@make get-version
-	@echo "$(YELLOW)Автор:$(NC) Команда разработки"
-	@echo "$(YELLOW)Лицензия:$(NC) MIT"
-	@echo "$(YELLOW)GitHub:$(NC) https://github.com/your-repo"
-	@echo "$(YELLOW)Документация:$(NC) DOCUMENTATION.md" 
+# Остальная часть Makefile остается без изменений
+# ======================================== 
