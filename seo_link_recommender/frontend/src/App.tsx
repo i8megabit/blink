@@ -484,7 +484,10 @@ function App() {
       {/* Боковая панель */}
       <aside className={`sidebar ${!sidebarOpen ? 'hidden' : ''}`}>
         <div className="sidebar-header">
-          <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => setActiveTab('dashboard')}
+          >
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-semibold">
               🔗
             </div>

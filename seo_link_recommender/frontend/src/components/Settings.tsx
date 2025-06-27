@@ -15,7 +15,8 @@ import {
   Globe,
   Clock,
   Database,
-  Zap
+  Zap,
+  Check
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -42,16 +43,41 @@ export function Settings({
     loadSettings();
   }, []);
 
+  // Применяем тему при изменении настроек
+  useEffect(() => {
+    applyTheme(settings.theme);
+  }, [settings.theme]);
+
   const loadSettings = async () => {
     try {
       const response = await fetch('/api/v1/settings');
       if (response.ok) {
         const data = await response.json();
-        setSettings(data.settings || settings);
+        const loadedSettings = data.settings || settings;
+        setSettings(loadedSettings);
+        applyTheme(loadedSettings.theme);
       }
     } catch (err) {
       console.error('Ошибка загрузки настроек:', err);
     }
+  };
+
+  const applyTheme = (theme: string) => {
+    const root = document.documentElement;
+    
+    // Удаляем все классы тем
+    root.classList.remove('light', 'dark');
+    
+    if (theme === 'system') {
+      // Определяем системную тему
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(theme);
+    }
+    
+    // Сохраняем в localStorage
+    localStorage.setItem('theme', theme);
   };
 
   const saveSettings = async () => {
@@ -96,8 +122,8 @@ export function Settings({
   ];
 
   const languageOptions = [
-    { value: 'ru', label: 'Русский' },
-    { value: 'en', label: 'English' }
+    { value: 'ru', label: 'Русский', flag: '🇷🇺' },
+    { value: 'en', label: 'English', flag: '🇺🇸' }
   ];
 
   return (
@@ -110,41 +136,66 @@ export function Settings({
             Внешний вид
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div>
-            <label className="text-sm font-medium mb-2 block">Тема</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label className="text-sm font-medium mb-3 block text-foreground">
+              Тема оформления
+            </label>
+            <div className="grid grid-cols-3 gap-3">
               {themeOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => updateSetting('theme', option.value as AppSettings['theme'])}
                   className={cn(
-                    "flex items-center gap-2 p-3 rounded-lg border transition-colors",
+                    "flex flex-col items-center gap-2 p-4 rounded-lg border transition-all duration-200",
+                    "hover:shadow-md hover:scale-105",
                     settings.theme === option.value
-                      ? "bg-blue-50 border-blue-200 text-blue-700"
-                      : "bg-white border-gray-200 hover:bg-gray-50"
+                      ? "bg-primary/10 border-primary/30 text-primary shadow-md scale-105"
+                      : "bg-card border-border hover:bg-accent hover:border-accent-foreground/20"
                   )}
                 >
-                  {option.icon}
-                  <span className="text-sm">{option.label}</span>
+                  <div className={cn(
+                    "p-2 rounded-full",
+                    settings.theme === option.value 
+                      ? "bg-primary/20" 
+                      : "bg-muted"
+                  )}>
+                    {option.icon}
+                  </div>
+                  <span className="text-sm font-medium">{option.label}</span>
+                  {settings.theme === option.value && (
+                    <Check className="w-4 h-4 text-primary" />
+                  )}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-2 block">Язык</label>
-            <select
-              value={settings.language}
-              onChange={(e) => updateSetting('language', e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <label className="text-sm font-medium mb-3 block text-foreground">
+              Язык интерфейса
+            </label>
+            <div className="grid grid-cols-2 gap-3">
               {languageOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <button
+                  key={option.value}
+                  onClick={() => updateSetting('language', option.value)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border transition-all duration-200",
+                    "hover:shadow-md hover:scale-105",
+                    settings.language === option.value
+                      ? "bg-primary/10 border-primary/30 text-primary shadow-md scale-105"
+                      : "bg-card border-border hover:bg-accent hover:border-accent-foreground/20"
+                  )}
+                >
+                  <span className="text-lg">{option.flag}</span>
+                  <span className="font-medium">{option.label}</span>
+                  {settings.language === option.value && (
+                    <Check className="w-4 h-4 text-primary ml-auto" />
+                  )}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -157,47 +208,47 @@ export function Settings({
             Уведомления
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div className="flex items-center gap-3">
-              <Bell className="w-5 h-5 text-gray-500" />
+              <Bell className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Включить уведомления</p>
-                <p className="text-sm text-gray-500">Показывать уведомления о событиях</p>
+                <p className="font-medium text-foreground">Включить уведомления</p>
+                <p className="text-sm text-muted-foreground">Показывать уведомления о событиях</p>
               </div>
             </div>
             <button
               onClick={() => updateSetting('notifications', !settings.notifications)}
               className={cn(
-                "w-12 h-6 rounded-full transition-colors",
-                settings.notifications ? "bg-blue-500" : "bg-gray-300"
+                "relative w-12 h-6 rounded-full transition-all duration-200",
+                settings.notifications ? "bg-primary" : "bg-muted-foreground/30"
               )}
             >
               <div className={cn(
-                "w-4 h-4 bg-white rounded-full transition-transform",
-                settings.notifications ? "translate-x-6" : "translate-x-1"
+                "absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-200 shadow-sm",
+                settings.notifications ? "translate-x-6" : "translate-x-0.5"
               )} />
             </button>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div className="flex items-center gap-3">
-              <Volume2 className="w-5 h-5 text-gray-500" />
+              <Volume2 className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Звуковые уведомления</p>
-                <p className="text-sm text-gray-500">Воспроизводить звук при уведомлениях</p>
+                <p className="font-medium text-foreground">Звуковые уведомления</p>
+                <p className="text-sm text-muted-foreground">Воспроизводить звук при уведомлениях</p>
               </div>
             </div>
             <button
               onClick={() => updateSetting('sound', !settings.sound)}
               className={cn(
-                "w-12 h-6 rounded-full transition-colors",
-                settings.sound ? "bg-blue-500" : "bg-gray-300"
+                "relative w-12 h-6 rounded-full transition-all duration-200",
+                settings.sound ? "bg-primary" : "bg-muted-foreground/30"
               )}
             >
               <div className={cn(
-                "w-4 h-4 bg-white rounded-full transition-transform",
-                settings.sound ? "translate-x-6" : "translate-x-1"
+                "absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-200 shadow-sm",
+                settings.sound ? "translate-x-6" : "translate-x-0.5"
               )} />
             </button>
           </div>
@@ -212,40 +263,45 @@ export function Settings({
             Автообновление
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div className="flex items-center gap-3">
-              <RefreshCw className="w-5 h-5 text-gray-500" />
+              <Clock className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Автоматическое обновление</p>
-                <p className="text-sm text-gray-500">Обновлять данные автоматически</p>
+                <p className="font-medium text-foreground">Автоматическое обновление</p>
+                <p className="text-sm text-muted-foreground">Обновлять данные автоматически</p>
               </div>
             </div>
             <button
               onClick={() => updateSetting('autoRefresh', !settings.autoRefresh)}
               className={cn(
-                "w-12 h-6 rounded-full transition-colors",
-                settings.autoRefresh ? "bg-blue-500" : "bg-gray-300"
+                "relative w-12 h-6 rounded-full transition-all duration-200",
+                settings.autoRefresh ? "bg-primary" : "bg-muted-foreground/30"
               )}
             >
               <div className={cn(
-                "w-4 h-4 bg-white rounded-full transition-transform",
-                settings.autoRefresh ? "translate-x-6" : "translate-x-1"
+                "absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-200 shadow-sm",
+                settings.autoRefresh ? "translate-x-6" : "translate-x-0.5"
               )} />
             </button>
           </div>
 
           {settings.autoRefresh && (
-            <div>
-              <label className="text-sm font-medium mb-2 block">Интервал обновления (секунды)</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Интервал обновления (секунды)
+              </label>
               <Input
                 type="number"
-                min="5"
+                min="10"
                 max="300"
                 value={settings.refreshInterval}
                 onChange={(e) => updateSetting('refreshInterval', parseInt(e.target.value) || 30)}
-                className="w-32"
+                className="w-full"
               />
+              <p className="text-xs text-muted-foreground">
+                Минимум 10 секунд, максимум 5 минут
+              </p>
             </div>
           )}
         </CardContent>
@@ -293,24 +349,29 @@ export function Settings({
         </CardContent>
       </Card>
 
-      {/* Кнопки действий */}
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={loadSettings}>
-          Сбросить
-        </Button>
-        <Button 
-          onClick={saveSettings} 
+      {/* Кнопка сохранения */}
+      <div className="flex justify-end">
+        <Button
+          onClick={saveSettings}
           disabled={loading}
-          className="flex items-center gap-2"
+          className="min-w-[120px]"
         >
           {loading ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Сохранение...
+            </>
           ) : saved ? (
-            <Save className="w-4 h-4" />
+            <>
+              <Check className="w-4 h-4 mr-2" />
+              Сохранено!
+            </>
           ) : (
-            <Save className="w-4 h-4" />
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Сохранить
+            </>
           )}
-          {loading ? 'Сохранение...' : saved ? 'Сохранено!' : 'Сохранить'}
         </Button>
       </div>
     </div>

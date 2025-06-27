@@ -4,48 +4,101 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* 🎨 ПРОФЕССИОНАЛЬНАЯ ЦВЕТОВАЯ ПАЛИТРА */
+    /* Основана на принципах Material Design 3 и современных UI систем */
+    
+    /* Основные цвета - нейтральные и профессиональные */
+    --background: 0 0% 100%;           /* Чистый белый */
+    --foreground: 240 10% 3.9%;        /* Почти черный для максимального контраста */
+    --card: 0 0% 100%;                 /* Белые карточки */
+    --card-foreground: 240 10% 3.9%;   /* Темный текст на карточках */
+    
+    /* Поповеры и модальные окна */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --popover-foreground: 240 10% 3.9%;
+    
+    /* Основной акцент - профессиональный синий */
+    --primary: 221 83% 53%;            /* Google Blue - проверенный и надежный */
+    --primary-foreground: 0 0% 100%;   /* Белый текст на синем */
+    
+    /* Вторичные элементы - мягкие серые */
+    --secondary: 240 4.8% 95.9%;       /* Светло-серый фон */
+    --secondary-foreground: 240 5.9% 10%; /* Темно-серый текст */
+    
+    /* Приглушенные элементы */
+    --muted: 240 4.8% 95.9%;           /* Светло-серый фон */
+    --muted-foreground: 240 3.8% 46.1%; /* Средне-серый текст */
+    
+    /* Акцентные элементы */
+    --accent: 240 4.8% 95.9%;          /* Светло-серый */
+    --accent-foreground: 240 5.9% 10%; /* Темно-серый */
+    
+    /* Деструктивные действия - красный */
+    --destructive: 0 84% 60%;          /* Яркий красный для предупреждений */
+    --destructive-foreground: 0 0% 100%; /* Белый текст */
+    
+    /* Границы и поля ввода */
+    --border: 240 5.9% 90%;            /* Светло-серые границы */
+    --input: 240 5.9% 90%;             /* Светло-серые поля ввода */
+    --ring: 221 83% 53%;               /* Синий для фокуса */
+    
+    /* Дополнительные цвета для статусов */
+    --success: 142 76% 36%;            /* Зеленый для успеха */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;             /* Оранжевый для предупреждений */
+    --warning-foreground: 0 0% 100%;
+    --info: 221 83% 53%;               /* Синий для информации */
+    --info-foreground: 0 0% 100%;
+    
+    /* Радиус скругления */
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
+    /* 🌙 ТЕМНАЯ ТЕМА - ПРОФЕССИОНАЛЬНАЯ */
+    /* Основана на принципах GitHub Dark и VS Code Dark */
+    
+    --background: 240 10% 3.9%;        /* Темно-серый фон */
+    --foreground: 0 0% 98%;            /* Почти белый текст */
+    --card: 240 10% 3.9%;              /* Темные карточки */
+    --card-foreground: 0 0% 98%;       /* Светлый текст на карточках */
+    
+    /* Поповеры */
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Основной акцент - яркий синий для темной темы */
+    --primary: 217 91% 60%;            /* Яркий синий */
+    --primary-foreground: 240 10% 3.9%; /* Темный текст на синем */
+    
+    /* Вторичные элементы */
+    --secondary: 240 3.7% 15.9%;       /* Темно-серый */
+    --secondary-foreground: 0 0% 98%;  /* Светлый текст */
+    
+    /* Приглушенные элементы */
+    --muted: 240 3.7% 15.9%;           /* Темно-серый */
+    --muted-foreground: 240 5% 64.9%;  /* Средне-серый текст */
+    
+    /* Акцентные элементы */
+    --accent: 240 3.7% 15.9%;          /* Темно-серый */
+    --accent-foreground: 0 0% 98%;     /* Светлый текст */
+    
+    /* Деструктивные действия */
+    --destructive: 0 63% 31%;          /* Темно-красный */
+    --destructive-foreground: 0 0% 98%; /* Светлый текст */
+    
+    /* Границы и поля ввода */
+    --border: 240 3.7% 15.9%;          /* Темно-серые границы */
+    --input: 240 3.7% 15.9%;           /* Темно-серые поля ввода */
+    --ring: 217 91% 60%;               /* Яркий синий для фокуса */
+    
+    /* Дополнительные цвета для статусов */
+    --success: 142 76% 36%;            /* Зеленый для успеха */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;             /* Оранжевый для предупреждений */
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;               /* Синий для информации */
+    --info-foreground: 0 0% 100%;
   }
 }
 
@@ -57,6 +110,10 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Улучшенная типографика */
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -75,17 +132,19 @@
 
 /* ===== КОМПОНЕНТЫ ===== */
 
-/* Кнопки */
+/* Кнопки - улучшенная доступность */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all 0.2s ease-in-out;
   cursor: pointer;
   border: 1px solid transparent;
   user-select: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .btn:focus-visible {
@@ -95,25 +154,35 @@
 
 .btn:disabled {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-primary {
   background-color: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
 }
 
 .btn-primary:hover {
   background-color: hsl(var(--primary) / 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-secondary {
   background-color: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
 }
 
 .btn-secondary:hover {
   background-color: hsl(var(--secondary) / 0.8);
+  border-color: hsl(var(--border) / 0.8);
 }
 
 .btn-ghost {
@@ -144,13 +213,18 @@
   font-size: 1rem;
 }
 
-/* Карточки */
+/* Карточки - улучшенные тени */
 .card {
   background-color: hsl(var(--card));
   color: hsl(var(--card-foreground));
   border-radius: var(--radius);
   border: 1px solid hsl(var(--border));
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 .card-header {
@@ -163,6 +237,7 @@
   font-weight: 600;
   line-height: 1.75rem;
   letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
 }
 
 .card-content {
@@ -174,9 +249,9 @@
   border-top: 1px solid hsl(var(--border));
 }
 
-/* Формы */
+/* Формы - улучшенная доступность */
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-label {
@@ -185,6 +260,7 @@
   color: hsl(var(--foreground));
   margin-bottom: 0.5rem;
   display: block;
+  line-height: 1.4;
 }
 
 .form-input {
@@ -196,63 +272,72 @@
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-size: 0.875rem;
-  transition: border-color 0.2s;
+  transition: all 0.2s ease-in-out;
+  line-height: 1.4;
 }
 
 .form-input:focus {
   outline: none;
   border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.1);
 }
 
 .form-input::placeholder {
   color: hsl(var(--muted-foreground));
+  opacity: 0.7;
 }
 
-/* Статус индикаторы */
+/* Статусные индикаторы */
 .status-indicator {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.75rem;
-  border-radius: var(--radius);
-  font-size: 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .status-success {
-  background-color: hsl(142.1 76.2% 36.3% / 0.1);
-  color: hsl(142.1 76.2% 36.3%);
+  background-color: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success) / 0.2);
 }
 
 .status-error {
   background-color: hsl(var(--destructive) / 0.1);
   color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.2);
 }
 
 .status-warning {
-  background-color: hsl(48 96% 53% / 0.1);
-  color: hsl(48 96% 53%);
+  background-color: hsl(var(--warning) / 0.1);
+  color: hsl(var(--warning));
+  border: 1px solid hsl(var(--warning) / 0.2);
 }
 
 .status-loading {
-  background-color: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--info) / 0.1);
+  color: hsl(var(--info));
+  border: 1px solid hsl(var(--info) / 0.2);
 }
 
-/* Прогресс */
+/* Прогресс-бары */
 .progress-container {
   width: 100%;
   height: 0.5rem;
   background-color: hsl(var(--muted));
-  border-radius: var(--radius);
+  border-radius: 9999px;
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
   background-color: hsl(var(--primary));
-  transition: width 0.3s ease;
+  border-radius: 9999px;
+  transition: width 0.3s ease-in-out;
 }
 
 /* Уведомления */
@@ -260,7 +345,7 @@
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 50;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -272,8 +357,8 @@
   color: hsl(var(--card-foreground));
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   padding: 1rem;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
   animation: slideIn 0.3s ease-out;
 }
 
@@ -295,43 +380,44 @@
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   padding: 0.25rem;
-  border-radius: var(--radius);
-  transition: background-color 0.2s;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
 }
 
 .notification-close:hover {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .notification-message {
   font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 /* Модальные окна */
 .modal-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: rgb(0 0 0 / 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .modal {
   background-color: hsl(var(--card));
   color: hsl(var(--card-foreground));
   border-radius: var(--radius);
-  border: 1px solid hsl(var(--border));
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  max-width: 32rem;
-  width: 100%;
-  max-height: calc(100vh - 2rem);
-  overflow: hidden;
+  box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
   animation: modalSlideIn 0.3s ease-out;
 }
 
@@ -344,9 +430,9 @@
 }
 
 .modal-title {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  line-height: 1.75rem;
+  color: hsl(var(--foreground));
 }
 
 .modal-close {
@@ -354,18 +440,18 @@
   border: none;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: var(--radius);
-  transition: background-color 0.2s;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
 }
 
 .modal-close:hover {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
 }
 
 .modal-body {
   padding: 1.5rem;
-  overflow-y: auto;
 }
 
 .modal-footer {
@@ -376,25 +462,23 @@
   justify-content: flex-end;
 }
 
-/* ===== LAYOUT ===== */
-
+/* Основной контейнер приложения */
 .app-container {
   min-height: 100vh;
   display: flex;
   background-color: hsl(var(--background));
 }
 
+/* Боковая панель */
 .sidebar {
-  width: 16rem;
+  width: 280px;
   background-color: hsl(var(--card));
   border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
   position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 40;
+  height: 100vh;
+  z-index: 100;
 }
 
 .sidebar-header {
@@ -408,33 +492,31 @@
   overflow-y: auto;
 }
 
+/* Основной контент */
 .main-content {
   flex: 1;
-  margin-left: 16rem;
+  margin-left: 280px;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
 .content-header {
-  background-color: hsl(var(--card));
-  border-bottom: 1px solid hsl(var(--border));
   padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 10;
 }
 
 .content-body {
   flex: 1;
   padding: 1.5rem;
+  background-color: hsl(var(--background));
 }
 
-/* ===== УТИЛИТЫ ===== */
-
+/* Текстовые утилиты */
 .text-muted {
   color: hsl(var(--muted-foreground));
 }
@@ -443,24 +525,26 @@
   color: hsl(var(--accent-foreground));
 }
 
+/* Бейджи */
 .badge {
   display: inline-flex;
   align-items: center;
-  border-radius: var(--radius);
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
-  padding: 0.125rem 0.5rem;
-  background-color: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .badge-primary {
-  background-color: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.2);
 }
 
-/* ===== АНИМАЦИИ ===== */
-
+/* Анимации */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -475,7 +559,7 @@
 @keyframes modalSlideIn {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(-1rem);
+    transform: scale(0.95) translateY(-10px);
   }
   to {
     opacity: 1;
@@ -492,12 +576,11 @@
   }
 }
 
-/* ===== АДАПТИВНОСТЬ ===== */
-
+/* Адаптивность */
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease-in-out;
   }
   
   .sidebar.open {
@@ -510,32 +593,13 @@
   
   .modal {
     margin: 1rem;
-    max-width: none;
+    max-width: calc(100vw - 2rem);
   }
 }
 
-/* ===== ТЕМНАЯ ТЕМА ===== */
-
+/* Автоматическое переключение темы */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: var(--background-dark);
-    --foreground: var(--foreground-dark);
-    --card: var(--card-dark);
-    --card-foreground: var(--card-foreground-dark);
-    --popover: var(--popover-dark);
-    --popover-foreground: var(--popover-foreground-dark);
-    --primary: var(--primary-dark);
-    --primary-foreground: var(--primary-foreground-dark);
-    --secondary: var(--secondary-dark);
-    --secondary-foreground: var(--secondary-foreground-dark);
-    --muted: var(--muted-dark);
-    --muted-foreground: var(--muted-foreground-dark);
-    --accent: var(--accent-dark);
-    --accent-foreground: var(--accent-foreground-dark);
-    --destructive: var(--destructive-dark);
-    --destructive-foreground: var(--destructive-foreground-dark);
-    --border: var(--border-dark);
-    --input: var(--input-dark);
-    --ring: var(--ring-dark);
+    /* Автоматическое переключение на темную тему */
   }
 } 
