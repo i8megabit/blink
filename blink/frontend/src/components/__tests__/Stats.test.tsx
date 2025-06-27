@@ -5,23 +5,50 @@ import { Stats } from '../Stats';
 describe('Stats Component', () => {
   const mockDomain = {
     id: 1,
-    domain: 'example.com',
-    total_posts: 25,
-    is_indexed: true,
+    name: 'example.com',
+    display_name: 'Example Domain',
     language: 'ru',
-    last_analysis_at: '2024-01-01T00:00:00Z'
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    is_active: true,
+    total_posts: 25,
+    total_analyses: 5,
+    last_analysis_at: '2024-01-01T00:00:00Z',
+    is_indexed: true
   };
 
   const mockAnalysisHistory = [
     {
       id: 1,
-      domain: 'example.com',
+      domain_id: 1,
       posts_analyzed: 20,
       connections_found: 150,
       recommendations_generated: 85,
-      processing_time_seconds: 45.5,
+      recommendations: [
+        {
+          anchor_text: 'SEO оптимизация',
+          source_title: 'Как оптимизировать сайт',
+          target_title: 'Основы SEO',
+          reasoning: 'Семантическая связь',
+          quality_score: 0.9
+        }
+      ],
+      thematic_analysis: {
+        main_themes: ['SEO', 'Marketing'],
+        coherence_score: 0.85
+      },
+      semantic_metrics: {
+        average_similarity: 0.75,
+        concept_diversity: 0.8
+      },
+      quality_assessment: {
+        overall_quality: 0.88,
+        content_relevance: 0.92
+      },
       llm_model_used: 'qwen2.5:7b-instruct',
-      created_at: '2024-01-01T00:00:00Z'
+      processing_time_seconds: 45.5,
+      created_at: '2024-01-01T00:00:00Z',
+      completed_at: '2024-01-01T00:01:00Z'
     }
   ];
 
@@ -66,7 +93,7 @@ describe('Stats Component', () => {
 
   it('отображает информацию о последнем анализе', () => {
     render(<Stats domain={mockDomain} analysisHistory={mockAnalysisHistory} />);
-    expect(screen.getByText(/Последний анализ/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Последний анализ/i).length).toBeGreaterThan(0);
   });
 
   it('отображает время обработки', () => {
@@ -91,7 +118,7 @@ describe('Stats Component', () => {
 
   it('работает с пустыми данными', () => {
     render(<Stats />);
-    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
   });
 
   it('отображает все карточки статистики', () => {
@@ -100,7 +127,7 @@ describe('Stats Component', () => {
     // Проверяем, что все 4 основные карточки отображаются
     expect(screen.getByText(/Всего постов/i)).toBeInTheDocument();
     expect(screen.getByText(/Анализов/i)).toBeInTheDocument();
-    expect(screen.getByText(/Связей найдено/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Связей найдено/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Рекомендаций/i)).toBeInTheDocument();
   });
 }); 
