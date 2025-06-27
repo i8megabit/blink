@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import Integer, Text, JSON, select, DateTime, ARRAY, Float, String, Index, ForeignKey
+from sqlalchemy import Integer, Text, JSON, select, DateTime, ARRAY, Float, String, Index, ForeignKey, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 from datetime import datetime
@@ -265,7 +265,7 @@ class ArticleEmbedding(Base):
 
 
 class SemanticConnection(Base):
-    """Модель семантических связей между статьями."""
+    """Модель семантических связей между статьями с накоплением знаний."""
     
     __tablename__ = "semantic_connections"
     
@@ -273,22 +273,168 @@ class SemanticConnection(Base):
     source_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
     target_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
     
-    # Типы связей
-    connection_type: Mapped[str] = mapped_column(String(50))  # 'semantic', 'topical', 'hierarchical'
+    # Типы связей с расширенной классификацией
+    connection_type: Mapped[str] = mapped_column(String(50))  # 'semantic', 'topical', 'hierarchical', 'sequential', 'complementary'
     strength: Mapped[float] = mapped_column(Float)  # сила связи (0.0 - 1.0)
     confidence: Mapped[float] = mapped_column(Float)  # уверенность в связи
+    
+    # Накопительные метрики
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)  # сколько раз связь была рекомендована
+    success_rate: Mapped[float] = mapped_column(Float, default=0.0)  # успешность внедрения
+    evolution_score: Mapped[float] = mapped_column(Float, default=0.0)  # эволюция связи со временем
     
     # Контекст для LLM
     connection_context: Mapped[str] = mapped_column(Text, nullable=True)  # объяснение связи
     suggested_anchor: Mapped[str] = mapped_column(String(200), nullable=True)  # предлагаемый анкор
+    alternative_anchors: Mapped[list[str]] = mapped_column(JSON, default=list)  # альтернативные анкоры
     bidirectional: Mapped[bool] = mapped_column(default=False)  # двунаправленная связь
+    
+    # Семантические теги для группировки
+    semantic_tags: Mapped[list[str]] = mapped_column(JSON, default=list)  # семантические теги
+    theme_intersection: Mapped[str] = mapped_column(String(200), nullable=True)  # пересечение тем
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    validated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    last_recommended_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    __table_args__ = (
+        Index("idx_semantic_connections_strength", "strength"),
+        Index("idx_semantic_connections_usage", "usage_count", "success_rate"),
+        Index("idx_semantic_connections_evolution", "evolution_score"),
+    )
+
+
+class LinkRecommendation(Base):
+    """Модель накопленных рекомендаций с дедупликацией и эволюцией."""
+    
+    __tablename__ = "link_recommendations"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    source_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
+    target_post_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordpress_posts.id"), index=True)
+    
+    # Рекомендация
+    anchor_text: Mapped[str] = mapped_column(String(300))
+    reasoning: Mapped[str] = mapped_column(Text)
+    quality_score: Mapped[float] = mapped_column(Float, default=0.0)  # качество рекомендации
+    
+    # Накопительная аналитика
+    generation_count: Mapped[int] = mapped_column(Integer, default=1)  # сколько раз генерировалась
+    improvement_iterations: Mapped[int] = mapped_column(Integer, default=0)  # итерации улучшения
+    status: Mapped[str] = mapped_column(String(50), default='active')  # active, deprecated, improved
+    
+    # Связь с семантической моделью
+    semantic_connection_id: Mapped[int] = mapped_column(Integer, ForeignKey("semantic_connections.id"), nullable=True)
+    
+    # Эволюция рекомендации
+    previous_version_id: Mapped[int] = mapped_column(Integer, ForeignKey("link_recommendations.id"), nullable=True)
+    improvement_reason: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain")
+    source_post: Mapped["WordPressPost"] = relationship("WordPressPost", foreign_keys=[source_post_id])
+    target_post: Mapped["WordPressPost"] = relationship("WordPressPost", foreign_keys=[target_post_id])
+    semantic_connection: Mapped["SemanticConnection"] = relationship("SemanticConnection")
+    previous_version: Mapped["LinkRecommendation"] = relationship("LinkRecommendation", remote_side=[id])
+    
+    __table_args__ = (
+        Index("idx_link_recommendations_quality", "quality_score"),
+        Index("idx_link_recommendations_status", "status"),
+        Index("idx_link_recommendations_generation", "generation_count"),
+        # Уникальность по связке источник-цель в рамках домена
+        Index("idx_link_recommendations_unique", "domain_id", "source_post_id", "target_post_id"),
+    )
+
+
+class ThematicClusterAnalysis(Base):
+    """Модель анализа тематических кластеров и их эволюции."""
+    
+    __tablename__ = "thematic_cluster_analysis"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    
+    # Кластер
+    cluster_name: Mapped[str] = mapped_column(String(200))
+    cluster_keywords: Mapped[list[str]] = mapped_column(JSON)
+    cluster_description: Mapped[str] = mapped_column(Text)
+    
+    # Статьи в кластере
+    article_ids: Mapped[list[int]] = mapped_column(JSON)  # ID статей в кластере
+    article_count: Mapped[int] = mapped_column(Integer)
+    
+    # Семантические метрики
+    coherence_score: Mapped[float] = mapped_column(Float)  # связность кластера
+    diversity_score: Mapped[float] = mapped_column(Float)  # разнообразие контента
+    linkability_potential: Mapped[float] = mapped_column(Float)  # потенциал для линковки
+    
+    # Связи с другими кластерами
+    related_clusters: Mapped[dict] = mapped_column(JSON, default=dict)  # связанные кластеры и их веса
+    cross_cluster_opportunities: Mapped[list[dict]] = mapped_column(JSON, default=list)  # возможности межкластерных связей
+    
+    # Эволюция кластера
+    evolution_stage: Mapped[str] = mapped_column(String(50), default='emerging')  # emerging, mature, declining
+    growth_trend: Mapped[float] = mapped_column(Float, default=0.0)  # тренд роста
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain")
+    
+    __table_args__ = (
+        Index("idx_thematic_cluster_coherence", "coherence_score"),
+        Index("idx_thematic_cluster_linkability", "linkability_potential"),
+        Index("idx_thematic_cluster_evolution", "evolution_stage", "growth_trend"),
+    )
+
+
+class CumulativeInsight(Base):
+    """Модель накопленных инсайтов для глубокого анализа."""
+    
+    __tablename__ = "cumulative_insights"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_id: Mapped[int] = mapped_column(Integer, ForeignKey("domains.id"), index=True)
+    
+    # Тип инсайта
+    insight_type: Mapped[str] = mapped_column(String(100))  # 'pattern', 'gap', 'opportunity', 'trend'
+    insight_category: Mapped[str] = mapped_column(String(100))  # 'semantic', 'structural', 'thematic'
+    
+    # Содержание инсайта
+    title: Mapped[str] = mapped_column(String(300))
+    description: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[dict] = mapped_column(JSON)  # подтверждающие данные
+    
+    # Метрики важности
+    impact_score: Mapped[float] = mapped_column(Float)  # важность инсайта
+    confidence_level: Mapped[float] = mapped_column(Float)  # уверенность в инсайте
+    actionability: Mapped[float] = mapped_column(Float)  # применимость
+    
+    # Связанные сущности
+    related_posts: Mapped[list[int]] = mapped_column(JSON, default=list)
+    related_clusters: Mapped[list[int]] = mapped_column(JSON, default=list)
+    related_connections: Mapped[list[int]] = mapped_column(JSON, default=list)
+    
+    # Статус и применение
+    status: Mapped[str] = mapped_column(String(50), default='discovered')  # discovered, validated, applied
+    applied_count: Mapped[int] = mapped_column(Integer, default=0)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     validated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     
+    # Отношения
+    domain_ref: Mapped["Domain"] = relationship("Domain")
+    
     __table_args__ = (
-        Index("idx_semantic_connections_strength", "strength"),
-        Index("idx_semantic_connections_source_type", "source_post_id", "connection_type"),
+        Index("idx_cumulative_insights_impact", "impact_score"),
+        Index("idx_cumulative_insights_type", "insight_type", "insight_category"),
+        Index("idx_cumulative_insights_status", "status"),
     )
 
 
@@ -711,8 +857,277 @@ class AdvancedRAGManager:
             return []
 
 
-# Глобальный продвинутый RAG-менеджер
+class CumulativeIntelligenceManager:
+    """Менеджер кумулятивного интеллекта для глубокого анализа связей."""
+    
+    def __init__(self):
+        self.connection_cache = {}
+        self.cluster_cache = {}
+        self.insight_cache = {}
+    
+    async def analyze_existing_connections(self, domain: str, session: AsyncSession) -> dict:
+        """Анализирует существующие связи и рекомендации."""
+        domain_result = await session.execute(
+            select(Domain).where(Domain.name == domain)
+        )
+        domain_obj = domain_result.scalar_one_or_none()
+        if not domain_obj:
+            return {"existing_connections": 0, "existing_recommendations": 0}
+        
+        # Получаем существующие семантические связи
+        connections_result = await session.execute(
+            select(SemanticConnection)
+            .join(WordPressPost, SemanticConnection.source_post_id == WordPressPost.id)
+            .where(WordPressPost.domain_id == domain_obj.id)
+        )
+        existing_connections = connections_result.scalars().all()
+        
+        # Получаем существующие рекомендации
+        recommendations_result = await session.execute(
+            select(LinkRecommendation)
+            .where(LinkRecommendation.domain_id == domain_obj.id)
+            .where(LinkRecommendation.status == 'active')
+        )
+        existing_recommendations = recommendations_result.scalars().all()
+        
+        return {
+            "existing_connections": len(existing_connections),
+            "existing_recommendations": len(existing_recommendations),
+            "connections": existing_connections,
+            "recommendations": existing_recommendations,
+            "domain_id": domain_obj.id
+        }
+    
+    async def discover_thematic_clusters(self, domain_id: int, posts: list, session: AsyncSession) -> list:
+        """Обнаруживает и анализирует тематические кластеры."""
+        from sklearn.cluster import KMeans
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        import numpy as np
+        
+        if len(posts) < 3:
+            return []
+        
+        # Создаем TF-IDF векторы для кластеризации
+        texts = [f"{post['title']} {post.get('content', '')[:500]}" for post in posts]
+        vectorizer = TfidfVectorizer(
+            max_features=100,
+            ngram_range=(1, 2),
+            stop_words=list(RUSSIAN_STOP_WORDS)
+        )
+        
+        try:
+            tfidf_matrix = vectorizer.fit_transform(texts)
+            
+            # Определяем оптимальное количество кластеров
+            n_clusters = min(max(2, len(posts) // 5), 8)
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            cluster_labels = kmeans.fit_predict(tfidf_matrix)
+            
+            # Анализируем каждый кластер
+            clusters = []
+            feature_names = vectorizer.get_feature_names_out()
+            
+            for cluster_id in range(n_clusters):
+                cluster_posts = [posts[i] for i, label in enumerate(cluster_labels) if label == cluster_id]
+                if len(cluster_posts) < 2:
+                    continue
+                
+                # Получаем центроид кластера для ключевых слов
+                cluster_center = kmeans.cluster_centers_[cluster_id]
+                top_features_idx = cluster_center.argsort()[-10:][::-1]
+                cluster_keywords = [feature_names[i] for i in top_features_idx]
+                
+                # Вычисляем метрики кластера
+                coherence_score = float(np.mean([cluster_center[i] for i in top_features_idx[:5]]))
+                diversity_score = float(len(set(cluster_keywords)) / len(cluster_keywords))
+                linkability_potential = coherence_score * diversity_score * len(cluster_posts) / len(posts)
+                
+                cluster_analysis = ThematicClusterAnalysis(
+                    domain_id=domain_id,
+                    cluster_name=f"Кластер {cluster_id + 1}: {', '.join(cluster_keywords[:3])}",
+                    cluster_keywords=cluster_keywords,
+                    cluster_description=f"Тематический кластер из {len(cluster_posts)} статей",
+                    article_ids=[post.get('id', 0) for post in cluster_posts],
+                    article_count=len(cluster_posts),
+                    coherence_score=coherence_score,
+                    diversity_score=diversity_score,
+                    linkability_potential=linkability_potential,
+                    evolution_stage='emerging'
+                )
+                
+                session.add(cluster_analysis)
+                clusters.append({
+                    'analysis': cluster_analysis,
+                    'posts': cluster_posts,
+                    'keywords': cluster_keywords
+                })
+            
+            await session.commit()
+            return clusters
+            
+        except Exception as e:
+            print(f"❌ Ошибка кластеризации: {e}")
+            return []
+    
+    async def generate_cumulative_insights(self, domain_id: int, analysis_data: dict, session: AsyncSession):
+        """Генерирует накопленные инсайты на основе анализа."""
+        insights = []
+        
+        # Инсайт о плотности связей
+        if analysis_data['existing_connections'] > 0:
+            connection_density = analysis_data['existing_connections'] / max(analysis_data.get('total_posts', 1), 1)
+            
+            if connection_density < 0.1:
+                insight = CumulativeInsight(
+                    domain_id=domain_id,
+                    insight_type='gap',
+                    insight_category='structural',
+                    title='Низкая плотность внутренних связей',
+                    description=f'Домен имеет только {analysis_data["existing_connections"]} связей между статьями. Рекомендуется увеличить внутреннюю перелинковку.',
+                    evidence={'connection_density': connection_density, 'total_connections': analysis_data['existing_connections']},
+                    impact_score=0.8,
+                    confidence_level=0.9,
+                    actionability=0.9
+                )
+                session.add(insight)
+                insights.append(insight)
+        
+        # Инсайт о тематическом разнообразии
+        clusters = analysis_data.get('clusters', [])
+        if len(clusters) > 1:
+            avg_linkability = sum(c['analysis'].linkability_potential for c in clusters) / len(clusters)
+            
+            if avg_linkability > 0.3:
+                insight = CumulativeInsight(
+                    domain_id=domain_id,
+                    insight_type='opportunity',
+                    insight_category='thematic',
+                    title='Высокий потенциал межтематических связей',
+                    description=f'Обнаружено {len(clusters)} тематических кластеров с высоким потенциалом перелинковки.',
+                    evidence={'clusters_count': len(clusters), 'avg_linkability': avg_linkability},
+                    impact_score=0.7,
+                    confidence_level=0.8,
+                    actionability=0.8
+                )
+                session.add(insight)
+                insights.append(insight)
+        
+        await session.commit()
+        return insights
+    
+    async def deduplicate_and_evolve_recommendations(
+        self, 
+        new_recommendations: list, 
+        domain_id: int, 
+        session: AsyncSession
+    ) -> list:
+        """Дедуплицирует и эволюционирует рекомендации."""
+        # Получаем существующие рекомендации
+        existing_result = await session.execute(
+            select(LinkRecommendation)
+            .where(LinkRecommendation.domain_id == domain_id)
+            .where(LinkRecommendation.status == 'active')
+        )
+        existing_recommendations = {
+            (rec.source_post_id, rec.target_post_id): rec 
+            for rec in existing_result.scalars().all()
+        }
+        
+        evolved_recommendations = []
+        
+        for new_rec in new_recommendations:
+            # Пытаемся найти соответствующие посты в БД
+            source_result = await session.execute(
+                select(WordPressPost)
+                .where(WordPressPost.domain_id == domain_id)
+                .where(WordPressPost.link == new_rec['from'])
+            )
+            source_post = source_result.scalar_one_or_none()
+            
+            target_result = await session.execute(
+                select(WordPressPost)
+                .where(WordPressPost.domain_id == domain_id)
+                .where(WordPressPost.link == new_rec['to'])
+            )
+            target_post = target_result.scalar_one_or_none()
+            
+            if not source_post or not target_post:
+                continue
+            
+            key = (source_post.id, target_post.id)
+            
+            if key in existing_recommendations:
+                # Эволюционируем существующую рекомендацию
+                existing_rec = existing_recommendations[key]
+                
+                # Проверяем, улучшилась ли рекомендация
+                new_quality = self._calculate_quality_score(new_rec)
+                if new_quality > existing_rec.quality_score:
+                    # Создаем улучшенную версию
+                    improved_rec = LinkRecommendation(
+                        domain_id=domain_id,
+                        source_post_id=source_post.id,
+                        target_post_id=target_post.id,
+                        anchor_text=new_rec['anchor'],
+                        reasoning=new_rec['comment'],
+                        quality_score=new_quality,
+                        generation_count=existing_rec.generation_count + 1,
+                        improvement_iterations=existing_rec.improvement_iterations + 1,
+                        previous_version_id=existing_rec.id,
+                        improvement_reason=f"Улучшенное качество: {new_quality:.2f} > {existing_rec.quality_score:.2f}"
+                    )
+                    
+                    # Помечаем старую как улучшенную
+                    existing_rec.status = 'improved'
+                    
+                    session.add(improved_rec)
+                    evolved_recommendations.append(new_rec)
+                else:
+                    # Увеличиваем счетчик генерации
+                    existing_rec.generation_count += 1
+                    existing_rec.updated_at = datetime.utcnow()
+            else:
+                # Создаем новую рекомендацию
+                quality_score = self._calculate_quality_score(new_rec)
+                link_rec = LinkRecommendation(
+                    domain_id=domain_id,
+                    source_post_id=source_post.id,
+                    target_post_id=target_post.id,
+                    anchor_text=new_rec['anchor'],
+                    reasoning=new_rec['comment'],
+                    quality_score=quality_score
+                )
+                
+                session.add(link_rec)
+                evolved_recommendations.append(new_rec)
+        
+        await session.commit()
+        return evolved_recommendations
+    
+    def _calculate_quality_score(self, recommendation: dict) -> float:
+        """Вычисляет оценку качества рекомендации."""
+        score = 0.0
+        
+        # Оценка анкора
+        anchor = recommendation.get('anchor', '')
+        if len(anchor) > 5:
+            score += 0.3
+        if any(word in anchor.lower() for word in ['подробный', 'полный', 'детальный', 'руководство']):
+            score += 0.2
+        
+        # Оценка обоснования
+        comment = recommendation.get('comment', '')
+        if len(comment) > 20:
+            score += 0.3
+        if len(comment) > 50:
+            score += 0.2
+        
+        return min(score, 1.0)
+
+
+# Глобальные менеджеры
 rag_manager = AdvancedRAGManager()
+cumulative_intelligence = CumulativeIntelligenceManager()
 
 
 async def generate_links(text: str) -> list[str]:
@@ -737,20 +1152,21 @@ async def generate_links(text: str) -> list[str]:
     return links[:5]
 
 
-async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
-    """Загружает статьи WordPress и сохраняет в улучшенной БД с семантическим анализом."""
-    print(f"🌐 Загружаю посты с сайта {domain}")
+async def fetch_and_store_wp_posts(domain: str, client_id: Optional[str] = None) -> tuple[list[dict[str, str]], dict]:
+    """Загружает статьи WordPress с умной дельта-индексацией."""
+    print(f"🧠 Умная индексация домена {domain}")
+    
+    if client_id:
+        await websocket_manager.send_step(client_id, "Проверка изменений", 1, 5, "Анализ существующих данных...")
     
     # Получаем или создаем домен
     async with AsyncSessionLocal() as session:
-        # Ищем существующий домен
         result = await session.execute(
             select(Domain).where(Domain.name == domain)
         )
         domain_obj = result.scalar_one_or_none()
         
         if not domain_obj:
-            # Создаем новый домен
             domain_obj = Domain(
                 name=domain,
                 display_name=domain,
@@ -762,13 +1178,17 @@ async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
             await session.refresh(domain_obj)
             print(f"✅ Создан новый домен: {domain}")
         
-        # Очищаем старые посты этого домена
-        await session.execute(
+        # Загружаем существующие посты для сравнения
+        existing_posts_result = await session.execute(
             select(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
         )
-        await session.commit()
+        existing_posts = {post.wp_post_id: post for post in existing_posts_result.scalars().all()}
+        print(f"📊 Найдено {len(existing_posts)} существующих постов в БД")
     
-    url = f"https://{domain}/wp-json/wp/v2/posts?per_page=50"  # Ограничиваем до 50 для производительности
+    if client_id:
+        await websocket_manager.send_step(client_id, "Загрузка с WordPress", 2, 5, "Получение актуальных данных...")
+    
+    url = f"https://{domain}/wp-json/wp/v2/posts?per_page=50"
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.get(url)
     if response.status_code >= 400:
@@ -777,13 +1197,29 @@ async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
     if not isinstance(data, list):
         raise HTTPException(status_code=400, detail="Некорректный ответ WordPress")
     
+    if client_id:
+        await websocket_manager.send_step(client_id, "Анализ изменений", 3, 5, f"Обработка {len(data)} статей...")
+    
+    # Статистика дельта-индексации
+    delta_stats = {
+        'new_posts': 0,
+        'updated_posts': 0,
+        'unchanged_posts': 0,
+        'removed_posts': 0,
+        'total_posts': len(data)
+    }
+    
     posts = []
-    seen_urls = set()  # Для дедупликации по URL
-    seen_titles = set()  # Для дедупликации по заголовкам
+    processed_wp_ids = set()
+    seen_urls = set()
+    seen_titles = set()
     
     async with AsyncSessionLocal() as session:
         for item in data:
             try:
+                wp_post_id = item["id"]
+                processed_wp_ids.add(wp_post_id)
+                
                 # Извлекаем содержимое
                 content = item.get("content", {}).get("rendered", "")
                 excerpt = item.get("excerpt", {}).get("rendered", "")
@@ -812,56 +1248,123 @@ async def fetch_and_store_wp_posts(domain: str) -> list[dict[str, str]]:
                     continue
                 seen_titles.add(title_normalized)
                 
-                # Создаем семантически обогащенный пост
-                wp_post = WordPressPost(
-                    domain_id=domain_obj.id,
-                    wp_post_id=item["id"],
-                    title=title,
-                    content=clean_content,
-                    excerpt=clean_excerpt,
-                    link=post_link,
-                    published_at=datetime.fromisoformat(item.get("date", datetime.now().isoformat()).replace('Z', '+00:00')) if item.get("date") else None,
-                    last_analyzed_at=datetime.utcnow()
-                )
-                session.add(wp_post)
+                # Проверяем, нужно ли обновлять пост
+                existing_post = existing_posts.get(wp_post_id)
+                post_modified = datetime.fromisoformat(item.get("modified", datetime.now().isoformat()).replace('Z', '+00:00'))
                 
-                # Для RAG берем больше контекста
+                if existing_post:
+                    # Проверяем, изменился ли пост
+                    if (existing_post.title == title and 
+                        existing_post.content == clean_content and
+                        existing_post.link == post_link):
+                        # Пост не изменился
+                        delta_stats['unchanged_posts'] += 1
+                        print(f"⚡ Пост не изменился: {title}")
+                        
+                        # Добавляем в результат без пересохранения
+                        posts.append({
+                            "title": title, 
+                            "link": post_link,
+                            "content": clean_content[:800].strip()
+                        })
+                        continue
+                    else:
+                        # Пост изменился - обновляем
+                        existing_post.title = title
+                        existing_post.content = clean_content
+                        existing_post.excerpt = clean_excerpt
+                        existing_post.link = post_link
+                        existing_post.updated_at = datetime.utcnow()
+                        existing_post.last_analyzed_at = None  # Сброс для переиндексации
+                        
+                        delta_stats['updated_posts'] += 1
+                        print(f"🔄 Обновлен пост: {title}")
+                else:
+                    # Новый пост - создаем
+                    wp_post = WordPressPost(
+                        domain_id=domain_obj.id,
+                        wp_post_id=wp_post_id,
+                        title=title,
+                        content=clean_content,
+                        excerpt=clean_excerpt,
+                        link=post_link,
+                        published_at=datetime.fromisoformat(item.get("date", datetime.now().isoformat()).replace('Z', '+00:00')) if item.get("date") else None,
+                        last_analyzed_at=None  # Новый пост требует анализа
+                    )
+                    session.add(wp_post)
+                    
+                    delta_stats['new_posts'] += 1
+                    print(f"➕ Добавлен новый пост: {title}")
+                
+                # Добавляем в результат
                 posts.append({
                     "title": title, 
                     "link": post_link,
-                    "content": clean_content[:800].strip()  # Первые 800 символов
+                    "content": clean_content[:800].strip()
                 })
-                
-                print(f"💾 Сохранен уникальный пост: {title}")
                 
             except Exception as exc:
                 print(f"❌ Ошибка обработки поста {item.get('id', 'unknown')}: {exc}")
                 continue
         
+        # Удаляем посты, которых больше нет на сайте
+        for wp_post_id, existing_post in existing_posts.items():
+            if wp_post_id not in processed_wp_ids:
+                await session.delete(existing_post)
+                delta_stats['removed_posts'] += 1
+                print(f"🗑️ Удален пост: {existing_post.title}")
+        
+        # Подсчитываем актуальное количество постов в БД
+        posts_count_result = await session.execute(
+            select(func.count(WordPressPost.id))
+            .where(WordPressPost.domain_id == domain_obj.id)
+        )
+        actual_posts_count = posts_count_result.scalar()
+        
+        # Обновляем статистику домена
+        domain_obj.total_posts = actual_posts_count
+        domain_obj.updated_at = datetime.utcnow()
+        
+        print(f"📊 Обновлена статистика домена: {actual_posts_count} постов в БД")
+        
         await session.commit()
-        print(f"✅ Сохранено {len(posts)} уникальных постов из домена {domain}")
+        
+        if client_id:
+            await websocket_manager.send_step(client_id, "Финализация", 4, 5, "Сохранение изменений...")
+            
+        print(f"🧠 Умная индексация завершена:")
+        print(f"   ➕ Новые посты: {delta_stats['new_posts']}")
+        print(f"   🔄 Обновленные: {delta_stats['updated_posts']}")
+        print(f"   ⚡ Без изменений: {delta_stats['unchanged_posts']}")
+        print(f"   🗑️ Удаленные: {delta_stats['removed_posts']}")
+        print(f"   📊 Всего постов: {len(posts)}")
+        
+        if client_id:
+            await websocket_manager.send_step(client_id, "Индексация завершена", 5, 5, 
+                f"Новых: {delta_stats['new_posts']}, Обновлено: {delta_stats['updated_posts']}, Удалено: {delta_stats['removed_posts']}")
     
-    return posts
+    return posts, delta_stats
 
 
 async def generate_comprehensive_domain_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
-    """Генерирует исчерпывающие рекомендации через полную индексацию домена."""
-    print(f"🔍 Запуск полной индексации домена {domain} (client: {client_id})")
+    """Генерирует кумулятивные рекомендации с накоплением знаний."""
+    print(f"🧠 Запуск кумулятивного анализа домена {domain} (client: {client_id})")
     
     analysis_start_time = datetime.now()
     all_recommendations = []
     
     try:
-        # Шаг 1: Загружаем ВСЕ статьи домена с полным контекстом
+        # Шаг 1: Анализ существующих связей и накопленных знаний
         if client_id:
-            await websocket_manager.send_step(client_id, "Полная индексация", 1, 9, "Загрузка всех статей домена...")
+            await websocket_manager.send_step(client_id, "Анализ накопленных знаний", 1, 12, "Изучение существующих связей...")
         
         async with AsyncSessionLocal() as session:
-            domain_result = await session.execute(
-                select(Domain).where(Domain.name == domain)
-            )
-            domain_obj = domain_result.scalar_one_or_none()
+            # Анализируем существующие связи
+            existing_analysis = await cumulative_intelligence.analyze_existing_connections(domain, session)
+            print(f"🔗 Найдено {existing_analysis['existing_connections']} существующих связей")
+            print(f"📋 Найдено {existing_analysis['existing_recommendations']} активных рекомендаций")
             
+            domain_obj = await session.get(Domain, existing_analysis['domain_id'])
             if not domain_obj:
                 error_msg = f"❌ Домен {domain} не найден в БД"
                 print(error_msg)
@@ -869,27 +1372,26 @@ async def generate_comprehensive_domain_recommendations(domain: str, client_id: 
                     await websocket_manager.send_error(client_id, error_msg)
                 return [], 0.0
             
-            # Получаем ВСЕ посты с полной семантической информацией
+            # Получаем ВСЕ посты с семантической информацией
             result = await session.execute(
                 select(WordPressPost)
                 .where(WordPressPost.domain_id == domain_obj.id)
                 .order_by(WordPressPost.linkability_score.desc())
-                # НЕ ограничиваем - берем все!
             )
             all_posts = result.scalars().all()
         
         if not all_posts:
-            error_msg = "❌ Нет статей для полной индексации"
+            error_msg = "❌ Нет статей для кумулятивного анализа"
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg)
             return [], 0.0
         
-        print(f"📊 Полная индексация: {len(all_posts)} статей из БД")
+        print(f"📊 Кумулятивный анализ: {len(all_posts)} статей из БД")
         
-        # Шаг 2: Создаем полный датасет статей
+        # Шаг 2: Тематическая кластеризация
         if client_id:
-            await websocket_manager.send_step(client_id, "Подготовка датасета", 2, 9, f"Обработка {len(all_posts)} статей...")
+            await websocket_manager.send_step(client_id, "Тематическая кластеризация", 2, 12, f"Анализ {len(all_posts)} статей по темам...")
         
         full_dataset = []
         for post in all_posts:
@@ -906,101 +1408,126 @@ async def generate_comprehensive_domain_recommendations(domain: str, client_id: 
                 "semantic_richness": post.semantic_richness or 0.5
             })
         
-        # Шаг 3: Создаем семантическую базу знаний для всего домена
+        async with AsyncSessionLocal() as session:
+            # Обнаруживаем тематические кластеры
+            clusters = await cumulative_intelligence.discover_thematic_clusters(
+                domain_obj.id, full_dataset, session
+            )
+            print(f"🎯 Обнаружено {len(clusters)} тематических кластеров")
+            
+            existing_analysis['clusters'] = clusters
+            existing_analysis['total_posts'] = len(all_posts)
+        
+        # Шаг 3: Генерация кумулятивных инсайтов
         if client_id:
-            await websocket_manager.send_step(client_id, "Семантический анализ", 3, 9, "Создание полной семантической модели...")
+            await websocket_manager.send_step(client_id, "Генерация инсайтов", 3, 12, "Анализ возможностей улучшения...")
+        
+        async with AsyncSessionLocal() as session:
+            insights = await cumulative_intelligence.generate_cumulative_insights(
+                domain_obj.id, existing_analysis, session
+            )
+            print(f"💡 Сгенерировано {len(insights)} кумулятивных инсайтов")
+        
+        # Шаг 4: Создаем семантическую базу знаний
+        if client_id:
+            await websocket_manager.send_step(client_id, "Семантический анализ", 4, 12, "Создание семантической модели...")
         
         success = await rag_manager.create_semantic_knowledge_base(domain, full_dataset, client_id)
         if not success:
-            error_msg = "❌ Не удалось создать полную семантическую базу знаний"
+            error_msg = "❌ Не удалось создать семантическую базу знаний"
             print(error_msg)
             if client_id:
                 await websocket_manager.send_error(client_id, error_msg)
             return [], 0.0
         
-        # Шаг 4: Батчинг статей для глубокого анализа
+        # Шаг 5: Контекстно-осведомленный батчинг
         if client_id:
-            await websocket_manager.send_step(client_id, "Батчинг статей", 4, 9, "Разбивка на группы для анализа...")
+            await websocket_manager.send_step(client_id, "Умный батчинг", 5, 12, "Группировка по кластерам...")
         
-        batch_size = 4  # Уменьшаем размер батча для стабильности
-        batches = []
-        for i in range(0, len(full_dataset), batch_size):
-            batch = full_dataset[i:i+batch_size]
-            batches.append(batch)
+        # Группируем статьи по кластерам для более осознанного анализа
+        cluster_batches = []
+        for cluster in clusters:
+            cluster_posts = cluster['posts']
+            if len(cluster_posts) >= 2:
+                cluster_batches.append({
+                    'posts': cluster_posts,
+                    'cluster_info': cluster['analysis'],
+                    'keywords': cluster['keywords']
+                })
         
-        print(f"📦 Создано {len(batches)} батчей по {batch_size} статей")
+        # Добавляем ограниченное количество межкластерных батчей (максимум 5)
+        if len(clusters) > 1:
+            cross_cluster_count = 0
+            max_cross_clusters = 5  # Ограничиваем для стабильности
+            
+            for i, cluster1 in enumerate(clusters):
+                if cross_cluster_count >= max_cross_clusters:
+                    break
+                for cluster2 in clusters[i+1:]:
+                    if cross_cluster_count >= max_cross_clusters:
+                        break
+                    # Микс статей из разных кластеров
+                    mixed_posts = cluster1['posts'][:2] + cluster2['posts'][:2]
+                    cluster_batches.append({
+                        'posts': mixed_posts,
+                        'cluster_info': None,  # межкластерный анализ
+                        'keywords': cluster1['keywords'] + cluster2['keywords'],
+                        'cross_cluster': True
+                    })
+                    cross_cluster_count += 1
         
-        # Шаг 5-7: Обрабатываем каждый батч через Ollama с повторными попытками
-        for batch_idx, batch in enumerate(batches, 1):
+        print(f"🧠 Создано {len(cluster_batches)} кластерных батчей")
+        
+        # Шаг 6-9: Обрабатываем кластерные батчи
+        for batch_idx, batch_info in enumerate(cluster_batches, 1):
             if client_id:
+                batch_type = "Межкластерный" if batch_info.get('cross_cluster') else "Кластерный"
                 await websocket_manager.send_step(
                     client_id, 
-                    f"Анализ батча {batch_idx}/{len(batches)}", 
-                    4 + batch_idx, 
-                    9, 
-                    f"Анализ {len(batch)} статей (попытка 1/3)..."
+                    f"{batch_type} анализ {batch_idx}/{len(cluster_batches)}", 
+                    5 + batch_idx, 
+                    12, 
+                    f"Анализ связей в контексте тем..."
                 )
             
-            # Обрабатываем батч с повторными попытками
-            batch_recommendations = []
-            max_retries = 3
-            
-            for attempt in range(max_retries):
-                try:
-                    batch_recommendations = await process_batch_with_ollama(
-                        domain, batch, full_dataset, batch_idx, len(batches), client_id
-                    )
-                    
-                    if batch_recommendations:  # Успешно получили рекомендации
-                        break
-                    else:
-                        print(f"⚠️ Батч {batch_idx}: пустой результат, попытка {attempt + 1}/{max_retries}")
-                        
-                except Exception as e:
-                    print(f"❌ Батч {batch_idx}: ошибка в попытке {attempt + 1}/{max_retries}: {e}")
-                    
-                    if attempt < max_retries - 1:  # Не последняя попытка
-                        if client_id:
-                            await websocket_manager.send_step(
-                                client_id, 
-                                f"Повтор батча {batch_idx}/{len(batches)}", 
-                                4 + batch_idx, 
-                                9, 
-                                f"Повтор после ошибки (попытка {attempt + 2}/3)..."
-                            )
-                        await asyncio.sleep(10)  # Пауза перед повтором
-                    else:
-                        # Последняя попытка неудачна - продолжаем с пустым результатом
-                        print(f"❌ Батч {batch_idx}: все попытки неудачны, пропускаем")
-                        if client_id:
-                            await websocket_manager.send_progress(client_id, {
-                                "type": "warning",
-                                "message": f"Батч {batch_idx} пропущен",
-                                "details": f"Не удалось обработать после {max_retries} попыток"
-                            })
+            batch_recommendations = await process_cumulative_batch_with_ollama(
+                domain, batch_info, existing_analysis, batch_idx, len(cluster_batches), client_id
+            )
             
             all_recommendations.extend(batch_recommendations)
-            print(f"✅ Батч {batch_idx}: получено {len(batch_recommendations)} рекомендаций")
+            print(f"✅ Кластерный батч {batch_idx}: получено {len(batch_recommendations)} рекомендаций")
         
-        # Шаг 8: Дедупликация и ранжирование
+        # Шаг 10: Кумулятивная дедупликация и эволюция
         if client_id:
-            await websocket_manager.send_step(client_id, "Финальная обработка", 8, 9, "Дедупликация и ранжирование...")
+            await websocket_manager.send_step(client_id, "Кумулятивная обработка", 10, 12, "Эволюция рекомендаций...")
         
-        final_recommendations = deduplicate_and_rank_recommendations(all_recommendations, domain)
+        async with AsyncSessionLocal() as session:
+            evolved_recommendations = await cumulative_intelligence.deduplicate_and_evolve_recommendations(
+                all_recommendations, domain_obj.id, session
+            )
+            print(f"🧬 Эволюционировано {len(evolved_recommendations)} рекомендаций")
         
-        # Шаг 9: Финализация
+        # Шаг 11: Финальное ранжирование с учетом накопленных знаний
+        if client_id:
+            await websocket_manager.send_step(client_id, "Финальное ранжирование", 11, 12, "Приоритизация по важности...")
+        
+        final_recommendations = rank_recommendations_with_cumulative_intelligence(
+            evolved_recommendations, existing_analysis, insights
+        )
+        
+        # Шаг 12: Финализация кумулятивного анализа
         total_analysis_time = (datetime.now() - analysis_start_time).total_seconds()
         
         if client_id:
             await websocket_manager.send_step(
                 client_id, 
-                "Завершение индексации", 
-                9, 
-                9, 
-                f"Готово! {len(final_recommendations)} уникальных рекомендаций"
+                "Завершение кумулятивного анализа", 
+                12, 
+                12, 
+                f"Готово! {len(final_recommendations)} эволюционированных рекомендаций"
             )
         
-        print(f"🎯 Полная индексация завершена: {len(final_recommendations)} рекомендаций за {total_analysis_time:.1f}с")
+        print(f"🧠 Кумулятивный анализ завершен: {len(final_recommendations)} рекомендаций за {total_analysis_time:.1f}с")
         return final_recommendations, total_analysis_time
         
     except Exception as e:
@@ -1135,8 +1662,182 @@ async def process_batch_with_ollama(
         return []
 
 
+async def process_cumulative_batch_with_ollama(
+    domain: str, 
+    batch_info: dict, 
+    existing_analysis: dict, 
+    batch_idx: int, 
+    total_batches: int,
+    client_id: Optional[str] = None
+) -> List[Dict]:
+    """Обрабатывает кумулятивный батч с учетом накопленных знаний."""
+    
+    posts = batch_info['posts']
+    keywords = batch_info.get('keywords', [])
+    is_cross_cluster = batch_info.get('cross_cluster', False)
+    
+    # Создаем контекст с учетом накопленных знаний
+    batch_context = f"""КУМУЛЯТИВНЫЙ АНАЛИЗ ДОМЕНА {domain}
+
+КОНТЕКСТ НАКОПЛЕННЫХ ЗНАНИЙ:
+• Существующих связей: {existing_analysis['existing_connections']}
+• Активных рекомендаций: {existing_analysis['existing_recommendations']}
+• Тематических кластеров: {len(existing_analysis.get('clusters', []))}
+
+СТАТЬИ ДЛЯ АНАЛИЗА ({len(posts)}):
+"""
+    
+    for i, post in enumerate(posts, 1):
+        post_concepts = ', '.join(post.get('key_concepts', [])[:3])
+        batch_context += f"""
+{i}. {post['title']}
+   URL: {post['link']}
+   Концепции: {post_concepts}
+   Тип: {post.get('content_type', 'article')}
+   Связность: {post.get('linkability_score', 0.5):.2f}
+   Контент: {post.get('content', '')[:150]}...
+
+"""
+    
+    if is_cross_cluster:
+        batch_context += f"""
+🔗 МЕЖКЛАСТЕРНЫЙ АНАЛИЗ
+Ключевые темы пересечения: {', '.join(keywords[:8])}
+ЗАДАЧА: Найти глубокие семантические связи между разными тематическими областями
+"""
+    else:
+        batch_context += f"""
+🎯 ВНУТРИКЛАСТЕРНЫЙ АНАЛИЗ  
+Тематические ключевые слова: {', '.join(keywords[:6])}
+ЗАДАЧА: Найти логичные связи внутри тематического кластера
+"""
+    
+    # Умный промпт с учетом кумулятивного контекста
+    cumulative_prompt = f"""{batch_context}
+
+ПРИНЦИПЫ КУМУЛЯТИВНОГО АНАЛИЗА:
+✅ Избегать дублирования уже существующих {existing_analysis['existing_recommendations']} рекомендаций
+✅ Создавать НОВЫЕ связи, дополняющие существующую структуру
+✅ Учитывать семантические пересечения между кластерами
+✅ Приоритизировать глубокие, осмысленные связи
+
+КРИТЕРИИ КАЧЕСТВА:
+• Семантическая логичность
+• Дополнительная ценность для читателя
+• Уникальность относительно существующих связей
+• SEO-эффективность
+
+ФОРМАТ: ИСТОЧНИК -> ЦЕЛЬ | анкор | глубокое_обоснование
+
+ОТВЕТ:"""
+    
+    try:
+        if client_id:
+            await websocket_manager.send_ollama_info(client_id, {
+                "status": "processing_cumulative_batch",
+                "batch": f"{batch_idx}/{total_batches}",
+                "batch_type": "межкластерный" if is_cross_cluster else "внутрикластерный",
+                "articles_count": len(posts),
+                "context_size": len(cumulative_prompt),
+                "existing_connections": existing_analysis['existing_connections']
+            })
+        
+        print(f"🧠 Кумулятивный анализ батча {batch_idx} ({'межкластерный' if is_cross_cluster else 'внутрикластерный'})")
+        
+        start_time = datetime.now()
+        async with httpx.AsyncClient(timeout=240.0) as client:
+            response = await client.post(
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": cumulative_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.4,    # Чуть выше для креативности
+                        "num_ctx": 4096,       
+                        "num_predict": 600,    
+                        "top_p": 0.85,
+                        "top_k": 50,
+                        "repeat_penalty": 1.1,
+                        "num_thread": 6
+                    }
+                },
+                timeout=240
+            )
+        
+        request_time = (datetime.now() - start_time).total_seconds()
+        
+        if response.status_code != 200:
+            print(f"❌ Ollama ошибка для кумулятивного батча {batch_idx}: код {response.status_code}")
+            return []
+        
+        data = response.json()
+        content = data.get("response", "")
+        
+        print(f"📝 Кумулятивный батч {batch_idx}: получен ответ {len(content)} символов за {request_time:.1f}с")
+        
+        # Парсим рекомендации
+        batch_recommendations = parse_ollama_recommendations(content, domain, posts)
+        
+        return batch_recommendations
+        
+    except Exception as e:
+        print(f"❌ Ошибка кумулятивного анализа батча {batch_idx}: {e}")
+        return []
+
+
+def rank_recommendations_with_cumulative_intelligence(
+    recommendations: List[Dict], 
+    existing_analysis: dict, 
+    insights: List
+) -> List[Dict]:
+    """Ранжирует рекомендации с учетом кумулятивного интеллекта."""
+    
+    def cumulative_quality_score(rec):
+        score = 0.0
+        
+        # Базовые метрики качества
+        anchor = rec.get('anchor', '')
+        comment = rec.get('comment', '')
+        
+        # Длина и качество анкора
+        if len(anchor) > 5:
+            score += 0.2
+        if len(anchor) > 15:
+            score += 0.1
+        
+        # Качественные слова в анкоре
+        quality_words = ['подробный', 'полный', 'детальный', 'руководство', 'инструкция', 'обзор', 'гайд', 'анализ']
+        anchor_quality = sum(1 for word in quality_words if word in anchor.lower()) * 0.15
+        score += anchor_quality
+        
+        # Глубина обоснования
+        if len(comment) > 30:
+            score += 0.2
+        if len(comment) > 60:
+            score += 0.1
+        
+        # Бонус за семантические ключевые слова в обосновании
+        semantic_words = ['семантически', 'тематически', 'логически', 'дополняет', 'углубляет', 'расширяет']
+        semantic_bonus = sum(1 for word in semantic_words if word in comment.lower()) * 0.1
+        score += semantic_bonus
+        
+        # Бонус за новизну (отсутствие в существующих рекомендациях)
+        # Это приблизительная оценка, так как точное сравнение требует доступа к БД
+        score += 0.1  # предполагаем, что все рекомендации новые после дедупликации
+        
+        return min(score, 1.0)
+    
+    # Сортируем по кумулятивному качеству
+    ranked_recommendations = sorted(recommendations, key=cumulative_quality_score, reverse=True)
+    
+    print(f"🧠 Кумулятивное ранжирование: приоритизировано {len(ranked_recommendations)} рекомендаций")
+    
+    return ranked_recommendations[:30]  # Топ-30 самых ценных
+
+
 def deduplicate_and_rank_recommendations(recommendations: List[Dict], domain: str) -> List[Dict]:
-    """Дедуплицирует и ранжирует финальные рекомендации."""
+    """Дедуплицирует и ранжирует финальные рекомендации (устаревшая функция)."""
     
     # Дедупликация по паре источник->цель
     seen_pairs = set()
@@ -1400,7 +2101,7 @@ URL: {article['link']}
 
 
 def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -> List[Dict]:
-    """Парсит рекомендации из ответа Ollama с проверкой домена."""
+    """Парсит рекомендации из ответа Ollama с проверкой домена - улучшенная версия."""
     recommendations = []
     
     # Создаем множество валидных URL для домена
@@ -1411,8 +2112,6 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
             valid_urls.add(url)
     
     print(f"🔍 ОТЛАДКА: Валидные URL для домена {domain}: {len(valid_urls)}")
-    for i, url in enumerate(valid_urls, 1):
-        print(f"   {i}. {url[:80]}...")
     
     lines = text.splitlines()
     print(f"🔍 ОТЛАДКА: Обрабатываю {len(lines)} строк ответа")
@@ -1421,26 +2120,68 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
         line = line.strip()
         print(f"   Строка {i}: {line[:100]}...")
         
-        if '->' in line and '|' in line:
-            print(f"      ✓ Найден паттерн -> и | в строке {i}")
+        # Поддерживаем разные форматы ответов от Ollama
+        if ('**Источник:**' in line and '**Цель:**' in line) or ('->' in line and '|' in line):
+            print(f"      ✓ Найден паттерн рекомендации в строке {i}")
             try:
-                parts = line.split('|', 2)
-                print(f"      ✓ Разделено на {len(parts)} частей")
+                source = ""
+                target = ""
+                anchor = ""
+                comment = ""
                 
-                if len(parts) < 3:
-                    print(f"      ❌ Недостаточно частей: {len(parts)}")
-                    continue
+                # Формат 1: **Источник:** URL **Цель:** URL | анкор | комментарий
+                if '**Источник:**' in line and '**Цель:**' in line:
+                    # Извлекаем источник
+                    source_match = line.split('**Источник:**')[1].split('**Цель:**')[0].strip()
+                    # Извлекаем URL из скобок или берем как есть
+                    if '(' in source_match and ')' in source_match:
+                        source = source_match.split('(')[1].split(')')[0].strip()
+                    else:
+                        source = source_match.strip()
+                    
+                    # Извлекаем цель и анкор
+                    target_part = line.split('**Цель:**')[1]
+                    if '|' in target_part:
+                        target_and_anchor = target_part.split('|')
+                        target_raw = target_and_anchor[0].strip()
+                        
+                        # Извлекаем URL цели
+                        if '(' in target_raw and ')' in target_raw:
+                            target = target_raw.split('(')[1].split(')')[0].strip()
+                        else:
+                            target = target_raw.strip()
+                        
+                        # Анкор и комментарий
+                        if len(target_and_anchor) >= 2:
+                            anchor = target_and_anchor[1].strip().strip('"')
+                        if len(target_and_anchor) >= 3:
+                            comment = target_and_anchor[2].strip()
+                    
+                # Формат 2: URL -> URL | анкор | комментарий (старый формат)
+                elif '->' in line and '|' in line:
+                    parts = line.split('|', 2)
+                    if len(parts) >= 3:
+                        link_part = parts[0].strip()
+                        anchor = parts[1].strip().strip('"')
+                        comment = parts[2].strip()
+                        
+                        if '->' in link_part:
+                            source_target = link_part.split('->', 1)
+                            if len(source_target) == 2:
+                                source = source_target[0].strip()
+                                target = source_target[1].strip()
                 
-                link_part = parts[0].strip()
-                anchor = parts[1].strip()
-                comment = parts[2].strip()
-                
-                print(f"      - Ссылочная часть: {link_part}")
+                print(f"      - Источник: {source[:60]}...")
+                print(f"      - Цель: {target[:60]}...")
                 print(f"      - Анкор: {anchor}")
                 print(f"      - Комментарий: {comment[:50]}...")
                 
-                # Проверка качества анкора для внутренних ссылок
-                if len(anchor) < 3 or len(comment) < 10:
+                # Проверка качества данных
+                if not source or not target or not anchor:
+                    print(f"      ❌ Неполные данные")
+                    continue
+                
+                if len(anchor) < 3 or len(comment) < 5:
                     print(f"      ❌ Качество: анкор {len(anchor)} символов, комментарий {len(comment)} символов")
                     continue
                 
@@ -1454,42 +2195,30 @@ def parse_ollama_recommendations(text: str, domain: str, articles: List[Dict]) -
                     print(f"      ❌ Неподходящий анкор для внутренней ссылки: {anchor}")
                     continue
                 
-                if '->' in link_part:
-                    source_target = link_part.split('->', 1)
-                    if len(source_target) == 2:
-                        source = source_target[0].strip()
-                        target = source_target[1].strip()
-                        
-                        print(f"      - Источник: {source[:60]}...")
-                        print(f"      - Цель: {target[:60]}...")
-                    else:
-                        print(f"      ❌ Не удалось разделить на источник->цель")
-                        continue
+                # Проверяем валидность URL
+                source_valid = domain.lower() in source.lower() and source != target
+                target_valid = domain.lower() in target.lower()
+                
+                print(f"      - Источник валиден: {source_valid}")
+                print(f"      - Цель валидна: {target_valid}")
+                
+                if source_valid and target_valid:
+                    recommendations.append({
+                        "from": source,
+                        "to": target,
+                        "anchor": anchor,
+                        "comment": comment
+                    })
+                    print(f"      ✅ ПРИНЯТА рекомендация #{len(recommendations)}")
+                else:
+                    print(f"      ❌ Отклонена: невалидные URL или домен")
                     
-                    # Более гибкая проверка URL - проверяем содержание домена, а не точное совпадение
-                    source_valid = any(domain.lower() in source.lower() for _ in [1]) and source != target
-                    target_valid = any(domain.lower() in target.lower() for _ in [1])
-                    
-                    print(f"      - Источник валиден: {source_valid}")
-                    print(f"      - Цель валидна: {target_valid}")
-                    
-                    if source_valid and target_valid:
-                        recommendations.append({
-                            "from": source,
-                            "to": target,
-                            "anchor": anchor,
-                            "comment": comment
-                        })
-                        print(f"      ✅ ПРИНЯТА рекомендация #{len(recommendations)}")
-                    else:
-                        print(f"      ❌ Отклонена: невалидные URL или домен")
-                        
             except Exception as e:
                 print(f"      ❌ Ошибка парсинга строки {i}: {e}")
                 continue
         else:
             if line and not line.startswith('#') and len(line) > 10:
-                print(f"      - Пропускаю строку без паттерна: {line[:50]}...")
+                print(f"      - Пропускаю строку: {line[:50]}...")
     
     print(f"📊 ФИНАЛ: Найдено {len(recommendations)} валидных рекомендаций")
     return recommendations
@@ -1537,88 +2266,104 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         websocket_manager.disconnect(client_id)
 
 
-@app.post("/api/v1/wp_recommend")
-async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
-    """RAG-анализ WordPress сайта с векторной базой данных."""
+@app.post("/api/v1/wp_index")
+async def wp_index_domain(req: WPRequest) -> dict[str, object]:
+    """Умная индексация домена с отслеживанием изменений."""
     try:
-        # Определяем тип анализа
-        analysis_type = "Полная индексация домена" if req.comprehensive else "Стандартный RAG-анализ"
-        steps_count = 9 if req.comprehensive else 3
-        
         if req.client_id:
             await websocket_manager.send_step(
                 req.client_id, 
-                "Начало анализа", 
+                "Начало индексации", 
                 0, 
-                steps_count, 
-                f"Инициализация: {analysis_type}"
+                5, 
+                f"Умная индексация домена {req.domain}"
             )
         
-        # Этап 1: Загружаем и сохраняем посты
+        # Выполняем умную индексацию
+        posts, delta_stats = await fetch_and_store_wp_posts(req.domain, req.client_id)
+        
+        # Создаем семантическую базу знаний
+        success = await rag_manager.create_semantic_knowledge_base(req.domain, posts, req.client_id)
+        
         if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 1, steps_count, "Получение статей с сайта...")
+            await websocket_manager.send_progress(req.client_id, {
+                "type": "complete",
+                "message": "Индексация завершена успешно!",
+                "delta_stats": delta_stats,
+                "posts_count": len(posts),
+                "indexed": success,
+                "timestamp": datetime.now().isoformat()
+            })
         
-        posts = await fetch_and_store_wp_posts(req.domain)
+        return {
+            "success": True,
+            "domain": req.domain,
+            "posts_count": len(posts),
+            "delta_stats": delta_stats,
+            "indexed": success
+        }
         
-        # Этап 2: Выбираем тип анализа
-        if req.comprehensive:
-            # Полная индексация домена
-            if req.client_id:
-                await websocket_manager.send_step(req.client_id, "Полная индексация", 2, steps_count, "Запуск исчерпывающего анализа...")
-            
-            rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
-        else:
-            # Стандартный RAG-анализ
-            if req.client_id:
-                await websocket_manager.send_step(req.client_id, "RAG анализ", 2, steps_count, "Запуск стандартного анализа...")
-            
-            rag_result = await generate_rag_recommendations(req.domain, req.client_id)
+    except Exception as e:
+        error_msg = f"Ошибка индексации: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        if req.client_id:
+            await websocket_manager.send_error(req.client_id, "Критическая ошибка индексации", error_msg)
+        
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/api/v1/wp_generate_recommendations")  
+async def wp_generate_recommendations(req: WPRequest) -> dict[str, list[dict[str, str]]]:
+    """Генерация рекомендаций для уже проиндексированного домена."""
+    try:
+        if req.client_id:
+            await websocket_manager.send_step(
+                req.client_id, 
+                "Генерация рекомендаций", 
+                0, 
+                9, 
+                f"Анализ домена {req.domain} для создания рекомендаций"
+            )
+        
+        # Генерируем рекомендации через полную индексацию
+        rag_result = await generate_comprehensive_domain_recommendations(req.domain, req.client_id)
         
         if isinstance(rag_result, tuple) and len(rag_result) == 2:
             recs, total_analysis_time = rag_result
         else:
-            # Fallback если что-то пошло не так
             recs = rag_result if isinstance(rag_result, list) else []
             total_analysis_time = 0.0
         
-        # Финальный этап: Сохраняем историю
-        if req.client_id:
-            await websocket_manager.send_step(req.client_id, "Сохранение", steps_count, steps_count, "Сохранение результатов...")
-        
+        # Сохраняем историю рекомендаций
         async with AsyncSessionLocal() as session:
-            # Получаем домен для связи
             domain_result = await session.execute(
                 select(Domain).where(Domain.name == req.domain)
             )
             domain_obj = domain_result.scalar_one_or_none()
             
             if domain_obj:
-                # Обновляем статистику домена
                 domain_obj.total_analyses += 1
                 domain_obj.last_analysis_at = datetime.utcnow()
                 
-                # Создаем семантически обогащенную историю
                 analysis = AnalysisHistory(
                     domain_id=domain_obj.id,
-                    posts_analyzed=len(posts),
+                    posts_analyzed=domain_obj.total_posts,
                     connections_found=len(recs),
                     recommendations_generated=len(recs),
                     recommendations=recs,
                     thematic_analysis={
-                        "domains_analyzed": 1,
-                        "avg_posts_per_domain": len(posts),
-                        "content_types_found": ["article", "guide", "review"],
-                        "avg_linkability_score": 0.6
+                        "analysis_type": "recommendations_generation",
+                        "domain_indexed": True,
+                        "smart_delta_indexing": True
                     },
                     semantic_metrics={
-                        "total_concepts_extracted": len(posts) * 5,
-                        "avg_semantic_richness": 0.7,
-                        "connections_strength_avg": 0.8
+                        "recommendations_generated": len(recs),
+                        "processing_time": total_analysis_time
                     },
                     quality_assessment={
-                        "recommendations_quality": "high",
-                        "semantic_coherence": 0.85,
-                        "llm_confidence": 0.9
+                        "methodology": "comprehensive_analysis",
+                        "completeness": "exhaustive"
                     },
                     llm_model_used=OLLAMA_MODEL,
                     processing_time_seconds=total_analysis_time,
@@ -1626,26 +2371,23 @@ async def wp_recommend(req: WPRequest) -> dict[str, list[dict[str, str]]]:
                 )
                 session.add(analysis)
                 await session.commit()
-            else:
-                print(f"⚠️ Домен {req.domain} не найден при сохранении истории")
         
         if req.client_id:
             await websocket_manager.send_progress(req.client_id, {
                 "type": "complete",
-                "message": "Анализ завершен успешно!",
+                "message": "Рекомендации сгенерированы!",
                 "recommendations_count": len(recs),
-                "posts_count": len(posts),
                 "timestamp": datetime.now().isoformat()
             })
         
         return {"recommendations": recs}
         
     except Exception as e:
-        error_msg = f"Ошибка анализа WordPress: {str(e)}"
+        error_msg = f"Ошибка генерации рекомендаций: {str(e)}"
         print(f"❌ {error_msg}")
         
         if req.client_id:
-            await websocket_manager.send_error(req.client_id, "Критическая ошибка", error_msg)
+            await websocket_manager.send_error(req.client_id, "Критическая ошибка генерации", error_msg)
         
         raise HTTPException(status_code=500, detail=error_msg)
 
@@ -1686,7 +2428,11 @@ async def wp_comprehensive_analysis(req: WPRequest) -> dict[str, list[dict[str, 
             if req.client_id:
                 await websocket_manager.send_step(req.client_id, "Загрузка WordPress", 2, 10, "Получение статей с сайта...")
             
-            posts = await fetch_and_store_wp_posts(req.domain)
+            posts_data = await fetch_and_store_wp_posts(req.domain, req.client_id)
+            if isinstance(posts_data, tuple):
+                posts, delta_stats = posts_data
+            else:
+                posts = posts_data
             posts_count = len(posts)
         else:
             if req.client_id:
@@ -1774,6 +2520,138 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/v1/ollama_status")
+async def ollama_status() -> dict[str, object]:
+    """Проверка статуса подключения к Ollama и загруженных моделей."""
+    try:
+        print(f"🔍 Проверка статуса Ollama: {OLLAMA_URL}")
+        
+        status_info = {
+            "ollama_url": OLLAMA_URL,
+            "model_name": OLLAMA_MODEL,
+            "server_available": False,
+            "model_loaded": False,
+            "model_info": None,
+            "error": None,
+            "ready_for_work": False,
+            "last_check": datetime.now().isoformat()
+        }
+        
+        # Проверяем доступность сервера Ollama
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                # Проверяем общий статус сервера
+                health_response = await client.get(f"{OLLAMA_URL.replace('/api/generate', '')}/api/tags")
+                
+                if health_response.status_code == 200:
+                    status_info["server_available"] = True
+                    models_data = health_response.json()
+                    available_models = [model["name"] for model in models_data.get("models", [])]
+                    status_info["available_models"] = available_models
+                    
+                    print(f"✅ Ollama сервер доступен. Доступные модели: {available_models}")
+                    
+                    # Проверяем, загружена ли нужная модель
+                    if OLLAMA_MODEL in available_models:
+                        status_info["model_loaded"] = True
+                        
+                        # Получаем детальную информацию о модели
+                        try:
+                            model_info_response = await client.post(
+                                f"{OLLAMA_URL.replace('/api/generate', '')}/api/show",
+                                json={"name": OLLAMA_MODEL}
+                            )
+                            if model_info_response.status_code == 200:
+                                model_details = model_info_response.json()
+                                status_info["model_info"] = {
+                                    "name": model_details.get("modelfile", "").split("\n")[0] if model_details.get("modelfile") else OLLAMA_MODEL,
+                                    "size": model_details.get("size", "неизвестно"),
+                                    "modified_at": model_details.get("modified_at", ""),
+                                    "parameters": model_details.get("parameters", {}),
+                                    "template": model_details.get("template", "")[:100] + "..." if model_details.get("template") else ""
+                                }
+                        except Exception as model_info_error:
+                            print(f"⚠️ Не удалось получить детали модели: {model_info_error}")
+                            status_info["model_info"] = {"error": str(model_info_error)}
+                        
+                        # Проверяем работоспособность модели простым запросом
+                        try:
+                            test_response = await client.post(
+                                OLLAMA_URL,
+                                json={
+                                    "model": OLLAMA_MODEL,
+                                    "prompt": "Тест",
+                                    "stream": False,
+                                    "options": {"num_predict": 1}
+                                },
+                                timeout=15.0
+                            )
+                            
+                            if test_response.status_code == 200:
+                                status_info["ready_for_work"] = True
+                                test_data = test_response.json()
+                                status_info["test_response_time"] = test_data.get("total_duration", 0) / 1000000  # наносекунды в миллисекунды
+                                print(f"✅ Модель {OLLAMA_MODEL} работает корректно")
+                            else:
+                                status_info["error"] = f"Тестовый запрос к модели вернул код {test_response.status_code}"
+                                print(f"❌ Тестовый запрос неуспешен: {test_response.status_code}")
+                                
+                        except Exception as test_error:
+                            status_info["error"] = f"Ошибка тестирования модели: {str(test_error)}"
+                            print(f"❌ Ошибка тестирования модели: {test_error}")
+                    else:
+                        status_info["error"] = f"Модель {OLLAMA_MODEL} не найдена среди доступных: {available_models}"
+                        print(f"❌ Модель {OLLAMA_MODEL} не загружена")
+                        
+                        # Предлагаем команду для загрузки модели
+                        status_info["suggested_command"] = f"ollama pull {OLLAMA_MODEL}"
+                        
+                else:
+                    status_info["error"] = f"Ollama сервер недоступен (код {health_response.status_code})"
+                    print(f"❌ Ollama сервер недоступен: {health_response.status_code}")
+                    
+            except httpx.TimeoutException:
+                status_info["error"] = "Таймаут подключения к Ollama серверу"
+                print("❌ Таймаут подключения к Ollama")
+            except httpx.ConnectError:
+                status_info["error"] = "Не удается подключиться к Ollama серверу. Проверьте, что контейнер ollama запущен"
+                print("❌ Ошибка подключения к Ollama")
+            except Exception as connection_error:
+                status_info["error"] = f"Ошибка подключения к Ollama: {str(connection_error)}"
+                print(f"❌ Ошибка подключения: {connection_error}")
+        
+        # Формируем человекочитаемый статус
+        if status_info["ready_for_work"]:
+            status_info["status"] = "ready"
+            status_info["message"] = f"✅ Ollama готов к работе с моделью {OLLAMA_MODEL}"
+        elif status_info["model_loaded"]:
+            status_info["status"] = "model_loaded_but_not_ready"
+            status_info["message"] = f"⚠️ Модель {OLLAMA_MODEL} загружена, но не отвечает на запросы"
+        elif status_info["server_available"]:
+            status_info["status"] = "server_available_model_missing"
+            status_info["message"] = f"⚠️ Ollama сервер доступен, но модель {OLLAMA_MODEL} не загружена"
+        else:
+            status_info["status"] = "server_unavailable"
+            status_info["message"] = "❌ Ollama сервер недоступен"
+        
+        return status_info
+        
+    except Exception as e:
+        error_msg = f"Критическая ошибка проверки Ollama: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            "ollama_url": OLLAMA_URL,
+            "model_name": OLLAMA_MODEL,
+            "server_available": False,
+            "model_loaded": False,
+            "ready_for_work": False,
+            "status": "error",
+            "message": "❌ Критическая ошибка проверки статуса",
+            "error": error_msg,
+            "last_check": datetime.now().isoformat()
+        }
+
+
 @app.get("/api/v1/recommendations")
 async def list_recommendations() -> list[dict[str, object]]:
     """Возвращает все сохраненные рекомендации."""
@@ -1785,6 +2663,84 @@ async def list_recommendations() -> list[dict[str, object]]:
             {"id": rec.id, "text": rec.text, "links": rec.links}
             for rec in result.scalars()
         ]
+    return items
+
+
+@app.get("/api/v1/domains")
+async def list_domains() -> list[dict[str, object]]:
+    """Возвращает список доменов с кумулятивной информацией."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Domain).order_by(Domain.updated_at.desc())
+        )
+        items = []
+        for domain in result.scalars().all():
+            # Принудительно обновляем счетчик постов для актуальности
+            actual_posts_count_result = await session.execute(
+                select(func.count(WordPressPost.id))
+                .where(WordPressPost.domain_id == domain.id)
+            )
+            actual_posts_count = actual_posts_count_result.scalar()
+            
+            # Обновляем если есть расхождение
+            if domain.total_posts != actual_posts_count:
+                domain.total_posts = actual_posts_count
+                await session.commit()
+                # Принудительно обновляем объект в сессии
+                await session.refresh(domain)
+            
+            # Получаем последний анализ рекомендаций
+            latest_analysis_result = await session.execute(
+                select(AnalysisHistory)
+                .where(AnalysisHistory.domain_id == domain.id)
+                .order_by(AnalysisHistory.created_at.desc())
+                .limit(1)
+            )
+            latest_analysis = latest_analysis_result.scalar_one_or_none()
+            
+            # Получаем кумулятивную статистику
+            active_recommendations_result = await session.execute(
+                select(LinkRecommendation)
+                .where(LinkRecommendation.domain_id == domain.id)
+                .where(LinkRecommendation.status == 'active')
+            )
+            active_recommendations_count = len(active_recommendations_result.scalars().all())
+            
+            # Получаем количество инсайтов
+            insights_result = await session.execute(
+                select(CumulativeInsight)
+                .where(CumulativeInsight.domain_id == domain.id)
+                .where(CumulativeInsight.status == 'discovered')
+            )
+            insights_count = len(insights_result.scalars().all())
+            
+            # Получаем количество кластеров
+            clusters_result = await session.execute(
+                select(ThematicClusterAnalysis)
+                .where(ThematicClusterAnalysis.domain_id == domain.id)
+            )
+            clusters_count = len(clusters_result.scalars().all())
+            
+            items.append({
+                "id": domain.id,
+                "name": domain.name,
+                "display_name": domain.display_name,
+                "description": domain.description,
+                "total_posts": domain.total_posts,
+                "total_analyses": domain.total_analyses,
+                "last_analysis_at": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None,
+                "created_at": domain.created_at.isoformat(),
+                "updated_at": domain.updated_at.isoformat(),
+                "is_indexed": domain.total_posts > 0,
+                "latest_recommendations": latest_analysis.recommendations if latest_analysis else [],
+                "latest_recommendations_count": len(latest_analysis.recommendations) if latest_analysis else 0,
+                "latest_recommendations_date": latest_analysis.created_at.isoformat() if latest_analysis else None,
+                # Кумулятивные метрики
+                "cumulative_recommendations": active_recommendations_count,
+                "cumulative_insights": insights_count,
+                "thematic_clusters": clusters_count,
+                "intelligence_level": min(1.0, (active_recommendations_count * 0.1 + insights_count * 0.2 + clusters_count * 0.15))
+            })
     return items
 
 
@@ -1860,6 +2816,87 @@ async def get_analysis_details(analysis_id: int) -> dict[str, object]:
         }
 
 
+@app.get("/api/v1/cumulative_insights/{domain_id}")
+async def get_cumulative_insights(domain_id: int) -> list[dict[str, object]]:
+    """Возвращает кумулятивные инсайты для домена."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CumulativeInsight)
+            .where(CumulativeInsight.domain_id == domain_id)
+            .order_by(CumulativeInsight.impact_score.desc())
+        )
+        insights = []
+        for insight in result.scalars().all():
+            insights.append({
+                "id": insight.id,
+                "type": insight.insight_type,
+                "category": insight.insight_category,
+                "title": insight.title,
+                "description": insight.description,
+                "evidence": insight.evidence,
+                "impact_score": insight.impact_score,
+                "confidence_level": insight.confidence_level,
+                "actionability": insight.actionability,
+                "status": insight.status,
+                "applied_count": insight.applied_count,
+                "created_at": insight.created_at.isoformat()
+            })
+    return insights
+
+
+@app.get("/api/v1/thematic_clusters/{domain_id}")
+async def get_thematic_clusters(domain_id: int) -> list[dict[str, object]]:
+    """Возвращает тематические кластеры для домена."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ThematicClusterAnalysis)
+            .where(ThematicClusterAnalysis.domain_id == domain_id)
+            .order_by(ThematicClusterAnalysis.linkability_potential.desc())
+        )
+        clusters = []
+        for cluster in result.scalars().all():
+            clusters.append({
+                "id": cluster.id,
+                "name": cluster.cluster_name,
+                "description": cluster.cluster_description,
+                "keywords": cluster.cluster_keywords,
+                "article_count": cluster.article_count,
+                "coherence_score": cluster.coherence_score,
+                "diversity_score": cluster.diversity_score,
+                "linkability_potential": cluster.linkability_potential,
+                "evolution_stage": cluster.evolution_stage,
+                "growth_trend": cluster.growth_trend,
+                "created_at": cluster.created_at.isoformat()
+            })
+    return clusters
+
+
+@app.get("/api/v1/cumulative_recommendations/{domain_id}")
+async def get_cumulative_recommendations(domain_id: int) -> list[dict[str, object]]:
+    """Возвращает накопленные рекомендации для домена."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(LinkRecommendation)
+            .where(LinkRecommendation.domain_id == domain_id)
+            .where(LinkRecommendation.status == 'active')
+            .order_by(LinkRecommendation.quality_score.desc())
+        )
+        recommendations = []
+        for rec in result.scalars().all():
+            recommendations.append({
+                "id": rec.id,
+                "anchor_text": rec.anchor_text,
+                "reasoning": rec.reasoning,
+                "quality_score": rec.quality_score,
+                "generation_count": rec.generation_count,
+                "improvement_iterations": rec.improvement_iterations,
+                "status": rec.status,
+                "created_at": rec.created_at.isoformat(),
+                "updated_at": rec.updated_at.isoformat()
+            })
+    return recommendations
+
+
 @app.delete("/api/v1/clear_data")
 async def clear_all_data() -> dict[str, str]:
     """Очистка всех данных в базе данных (только для разработки)."""
@@ -1867,13 +2904,23 @@ async def clear_all_data() -> dict[str, str]:
         from sqlalchemy import text
         
         async with AsyncSessionLocal() as session:
-            # Используем raw SQL для очистки - более надежно
+            # Очищаем новые кумулятивные таблицы
+            await session.execute(text("DELETE FROM cumulative_insights"))
+            await session.execute(text("DELETE FROM thematic_cluster_analysis"))
+            await session.execute(text("DELETE FROM link_recommendations"))
+            await session.execute(text("DELETE FROM semantic_connections"))
+            
+            # Очищаем существующие таблицы
             await session.execute(text("DELETE FROM analysis_history"))
             await session.execute(text("DELETE FROM article_embeddings")) 
             await session.execute(text("DELETE FROM wordpress_posts"))
             await session.execute(text("DELETE FROM recommendations"))
             
             # Сброс последовательностей (автоинкремент)
+            await session.execute(text("ALTER SEQUENCE cumulative_insights_id_seq RESTART WITH 1"))
+            await session.execute(text("ALTER SEQUENCE thematic_cluster_analysis_id_seq RESTART WITH 1"))
+            await session.execute(text("ALTER SEQUENCE link_recommendations_id_seq RESTART WITH 1"))
+            await session.execute(text("ALTER SEQUENCE semantic_connections_id_seq RESTART WITH 1"))
             await session.execute(text("ALTER SEQUENCE analysis_history_id_seq RESTART WITH 1"))
             await session.execute(text("ALTER SEQUENCE article_embeddings_id_seq RESTART WITH 1"))
             await session.execute(text("ALTER SEQUENCE wordpress_posts_id_seq RESTART WITH 1"))
@@ -1890,14 +2937,17 @@ async def clear_all_data() -> dict[str, str]:
                     chroma_client.delete_collection(name=collection.name)
                     print(f"🗑️ Удалена ChromaDB коллекция: {collection.name}")
                 
-                # Очищаем кеш RAG менеджера
+                # Очищаем кеши менеджеров
                 rag_manager.domain_collections.clear()
-                print("🗑️ Очищен кеш RAG менеджера")
+                cumulative_intelligence.connection_cache.clear()
+                cumulative_intelligence.cluster_cache.clear()
+                cumulative_intelligence.insight_cache.clear()
+                print("🗑️ Очищены кеши менеджеров")
         except Exception as chroma_error:
             print(f"⚠️ Ошибка очистки ChromaDB: {chroma_error}")
         
-        print("🧹 Все данные успешно очищены")
-        return {"status": "ok", "message": "Все данные очищены"}
+        print("🧹 Все данные и кумулятивные знания очищены")
+        return {"status": "ok", "message": "Все данные и кумулятивные знания очищены"}
         
     except Exception as e:
         print(f"❌ Ошибка очистки данных: {e}")

@@ -11,10 +11,11 @@ services:
       - OLLAMA_URL=http://ollama:11434/api/generate
       - OLLAMA_MODEL=qwen2.5:7b
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 3
+      start_period: 40s
     depends_on:
       - db
       - ollama
