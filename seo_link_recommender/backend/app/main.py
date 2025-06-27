@@ -4734,9 +4734,49 @@ async def reset_semantic_network() -> dict[str, str]:
         
         return {
             "status": "success",
+            "message": "Семантическая сеть ИИ успешно сброшена",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Ошибка сброса семантической сети: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+
+@app.get("/api/v1/ai_insights/enhanced_analytics")  
+async def get_enhanced_analytics() -> dict[str, object]:
+    """Получение расширенной аналитики с numpy и корреляционным анализом."""
+    try:
+        if not thought_generator.thought_history:
+            return {
+                "status": "no_data",
+                "message": "Недостаточно данных для аналитики",
+                "total_thoughts": 0
+            }
+        
+        # Извлекаем данные для анализа
+        confidences = [t.confidence for t in thought_generator.thought_history]
+        semantic_weights = [t.semantic_weight for t in thought_generator.thought_history]
+        
+        # Корреляционный анализ с numpy
+        correlation = float(np.corrcoef(confidences, semantic_weights)[0, 1]) if len(confidences) > 1 else 0.0
+        
+        # Анализ производительности по этапам
+        stage_analysis = {}
+        for stage in ["analyzing", "connecting", "evaluating", "optimizing"]:
+            stage_thoughts = [t for t in thought_generator.thought_history if t.stage == stage]
+            if stage_thoughts:
+                stage_analysis[stage] = {
+                    "count": len(stage_thoughts),
+                    "avg_confidence": float(np.mean([t.confidence for t in stage_thoughts])),
+                    "avg_semantic_weight": float(np.mean([t.semantic_weight for t in stage_thoughts]))
+                }
+        
+        return {
+            "status": "success",
             "analytics": {
                 "correlation_analysis": {
-                    "confidence_weight_correlation": float(correlation),
+                    "confidence_weight_correlation": correlation,
                     "interpretation": "высокая" if abs(correlation) > 0.7 else "средняя" if abs(correlation) > 0.3 else "низкая"
                 },
                 "stage_performance": stage_analysis,
