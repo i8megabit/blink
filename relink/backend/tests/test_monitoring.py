@@ -1,313 +1,397 @@
 """
-Тесты для модуля мониторинга
+Тесты для модуля мониторинга reLink
 """
 
 import pytest
 import asyncio
+import time
 from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.monitoring import (
-    MonitoringService, StructuredFormatter, monitor_function,
-    monitor_database_operation, monitoring_middleware
+    logger,
+    metrics_collector,
+    performance_monitor,
+    get_metrics,
+    get_health_status,
+    monitor_operation,
+    MonitoringMiddleware,
+    MetricsCollector,
+    PerformanceMonitor,
+    monitor_database_operation,
+    monitor_cache_operation,
+    monitor_ollama_request
 )
-from app.validation import ValidationError
 
 
-class TestStructuredFormatter:
-    """Тесты для структурированного форматтера логов"""
-    
-    def test_format_basic_log(self):
-        """Тест базового форматирования лога"""
-        formatter = StructuredFormatter()
-        
-        # Создаем mock запись лога
-        log_record = Mock()
-        log_record.levelname = "INFO"
-        log_record.name = "test_logger"
-        log_record.getMessage.return_value = "Test message"
-        log_record.module = "test_module"
-        log_record.funcName = "test_function"
-        log_record.lineno = 42
-        log_record.exc_info = None
-        
-        result = formatter.format(log_record)
-        
-        # Проверяем, что результат - валидный JSON
-        import json
-        parsed = json.loads(result)
-        
-        assert parsed["level"] == "INFO"
-        assert parsed["logger"] == "test_logger"
-        assert parsed["message"] == "Test message"
-        assert parsed["module"] == "test_module"
-        assert parsed["function"] == "test_function"
-        assert parsed["line"] == 42
-        assert "timestamp" in parsed
-    
-    def test_format_log_with_extra_fields(self):
-        """Тест форматирования лога с дополнительными полями"""
-        formatter = StructuredFormatter()
-        
-        log_record = Mock()
-        log_record.levelname = "ERROR"
-        log_record.name = "test_logger"
-        log_record.getMessage.return_value = "Error message"
-        log_record.module = "test_module"
-        log_record.funcName = "test_function"
-        log_record.lineno = 42
-        log_record.exc_info = None
-        
-        # Добавляем дополнительные поля
-        log_record.user_id = 123
-        log_record.request_id = "req-456"
-        log_record.duration = 1.5
-        log_record.status_code = 500
-        
-        result = formatter.format(log_record)
-        parsed = json.loads(result)
-        
-        assert parsed["user_id"] == 123
-        assert parsed["request_id"] == "req-456"
-        assert parsed["duration"] == 1.5
-        assert parsed["status_code"] == 500
-
-
-class TestMonitoringService:
-    """Тесты для сервиса мониторинга"""
+class TestMonitoringMiddleware:
+    """Тесты для MonitoringMiddleware"""
     
     @pytest.fixture
-    def monitoring_service(self):
-        """Фикстура для сервиса мониторинга"""
-        return MonitoringService("test-service")
+    def mock_app(self):
+        """Мок приложения"""
+        app = Mock()
+        app.return_value = None
+        return app
     
-    def test_initialization(self, monitoring_service):
-        """Тест инициализации сервиса мониторинга"""
-        assert monitoring_service.service_name == "test-service"
-        assert monitoring_service.logger is not None
-        assert monitoring_service.tracer is not None
-        assert monitoring_service.meter is not None
+    @pytest.fixture
+    def middleware(self, mock_app):
+        """Middleware для тестирования"""
+        return MonitoringMiddleware(mock_app)
     
-    def test_log_request(self, monitoring_service):
-        """Тест логирования HTTP запроса"""
-        # Создаем mock объекты
-        request = Mock()
-        request.method = "GET"
-        request.url.path = "/api/test"
-        request.headers.get.return_value = "req-123"
+    @pytest.mark.asyncio
+    async def test_middleware_http_request(self, middleware, mock_app):
+        """Тест обработки HTTP запроса"""
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [(b"user-agent", b"test-agent")]
+        }
         
-        response = Mock()
-        response.status_code = 200
+        receive = AsyncMock()
+        send = AsyncMock()
         
-        # Логируем запрос
-        monitoring_service.log_request(request, response, 0.5)
+        await middleware(scope, receive, send)
         
-        # Проверяем, что метрики обновлены
-        assert monitoring_service.http_requests_total._value.sum() == 1
-        assert monitoring_service.http_request_duration._sum.sum() == 0.5
+        # Проверяем, что приложение было вызвано
+        mock_app.assert_called_once_with(scope, receive, send)
     
-    def test_log_seo_analysis(self, monitoring_service):
-        """Тест логирования SEO анализа"""
-        monitoring_service.log_seo_analysis("example.com", "completed", 2.5)
+    @pytest.mark.asyncio
+    async def test_middleware_non_http_request(self, middleware, mock_app):
+        """Тест обработки не-HTTP запроса"""
+        scope = {"type": "websocket"}
         
-        # Проверяем, что метрика обновлена
-        assert monitoring_service.seo_analyses_total._value.sum() == 1
-    
-    def test_log_error(self, monitoring_service):
-        """Тест логирования ошибок"""
-        error = ValueError("Test error")
-        context = {"operation": "test", "user_id": 123}
+        receive = AsyncMock()
+        send = AsyncMock()
         
-        monitoring_service.log_error(error, context)
+        await middleware(scope, receive, send)
         
-        # Проверяем, что ошибка залогирована
-        # В реальном тесте здесь можно проверить логи
+        # Проверяем, что приложение было вызвано без изменений
+        mock_app.assert_called_once_with(scope, receive, send)
 
 
-@pytest.mark.asyncio
+class TestMetricsCollector:
+    """Тесты для MetricsCollector"""
+    
+    @pytest.fixture
+    def collector(self):
+        """Коллектор метрик для тестирования"""
+        return MetricsCollector("test-service")
+    
+    def test_collector_initialization(self, collector):
+        """Тест инициализации коллектора"""
+        assert collector.service_name == "test-service"
+        assert collector.start_time > 0
+    
+    @patch('app.monitoring.psutil')
+    def test_collect_system_metrics_success(self, mock_psutil, collector):
+        """Тест успешного сбора системных метрик"""
+        # Мокаем psutil
+        mock_memory = Mock()
+        mock_memory.total = 8589934592  # 8GB
+        mock_memory.available = 4294967296  # 4GB
+        mock_memory.used = 4294967296  # 4GB
+        mock_memory.free = 0
+        mock_memory.percent = 50.0
+        
+        mock_psutil.virtual_memory.return_value = mock_memory
+        mock_psutil.cpu_percent.return_value = 25.5
+        
+        # Вызываем метод
+        collector.collect_system_metrics()
+        
+        # Проверяем, что psutil был вызван
+        mock_psutil.virtual_memory.assert_called_once()
+        mock_psutil.cpu_percent.assert_called_once_with(interval=1)
+    
+    @patch('app.monitoring.psutil')
+    def test_collect_system_metrics_import_error(self, mock_psutil, collector):
+        """Тест сбора метрик при отсутствии psutil"""
+        # Симулируем ImportError
+        mock_psutil.side_effect = ImportError("psutil not available")
+        
+        # Вызываем метод - не должно вызывать исключение
+        collector.collect_system_metrics()
+
+
+class TestPerformanceMonitor:
+    """Тесты для PerformanceMonitor"""
+    
+    @pytest.fixture
+    def monitor(self):
+        """Монитор производительности для тестирования"""
+        return PerformanceMonitor()
+    
+    def test_start_timer(self, monitor):
+        """Тест запуска таймера"""
+        monitor.start_timer("test_operation")
+        
+        assert "test_operation" in monitor.metrics
+        assert "start" in monitor.metrics["test_operation"]
+        assert monitor.metrics["test_operation"]["start"] > 0
+    
+    def test_end_timer(self, monitor):
+        """Тест остановки таймера"""
+        monitor.start_timer("test_operation")
+        time.sleep(0.1)  # Небольшая задержка
+        
+        duration = monitor.end_timer("test_operation")
+        
+        assert duration > 0
+        assert "duration" in monitor.metrics["test_operation"]
+        assert monitor.metrics["test_operation"]["duration"] == duration
+    
+    def test_end_timer_nonexistent(self, monitor):
+        """Тест остановки несуществующего таймера"""
+        duration = monitor.end_timer("nonexistent")
+        assert duration == 0.0
+    
+    def test_get_metrics(self, monitor):
+        """Тест получения метрик"""
+        monitor.start_timer("test_operation")
+        monitor.end_timer("test_operation")
+        
+        metrics = monitor.get_metrics()
+        
+        assert "test_operation" in metrics
+        assert "start" in metrics["test_operation"]
+        assert "duration" in metrics["test_operation"]
+
+
 class TestMonitoringDecorators:
     """Тесты для декораторов мониторинга"""
     
-    @pytest.fixture
-    def monitoring_service(self):
-        """Фикстура для сервиса мониторинга"""
-        return MonitoringService("test-service")
-    
-    async def test_monitor_function_decorator(self, monitoring_service):
-        """Тест декоратора monitor_function"""
-        
-        @monitor_function("test_operation")
-        async def test_function():
-            await asyncio.sleep(0.1)
+    @pytest.mark.asyncio
+    async def test_monitor_database_operation_success(self):
+        """Тест декоратора мониторинга БД - успешный случай"""
+        @monitor_database_operation("SELECT", "users")
+        async def test_db_operation():
             return "success"
         
-        result = await test_function()
-        assert result == "success"
-        
-        # Проверяем, что операция залогирована
-        # В реальном тесте здесь можно проверить логи
-    
-    async def test_monitor_function_with_error(self, monitoring_service):
-        """Тест декоратора monitor_function с ошибкой"""
-        
-        @monitor_function("test_operation")
-        async def test_function_with_error():
-            raise ValueError("Test error")
-        
-        with pytest.raises(ValueError):
-            await test_function_with_error()
-        
-        # Проверяем, что ошибка залогирована
-        # В реальном тесте здесь можно проверить логи
-    
-    async def test_monitor_database_operation(self, monitoring_service):
-        """Тест декоратора monitor_database_operation"""
-        
-        @monitor_database_operation("select")
-        async def test_db_operation():
-            await asyncio.sleep(0.1)
-            return {"result": "data"}
-        
         result = await test_db_operation()
-        assert result == {"result": "data"}
+        assert result == "success"
+    
+    @pytest.mark.asyncio
+    async def test_monitor_database_operation_error(self):
+        """Тест декоратора мониторинга БД - ошибка"""
+        @monitor_database_operation("SELECT", "users")
+        async def test_db_operation():
+            raise Exception("Database error")
         
-        # Проверяем, что операция БД залогирована
-        # В реальном тесте здесь можно проверить логи
+        with pytest.raises(Exception, match="Database error"):
+            await test_db_operation()
+    
+    @pytest.mark.asyncio
+    async def test_monitor_cache_operation_success(self):
+        """Тест декоратора мониторинга кэша - успешный случай"""
+        @monitor_cache_operation("GET", "redis")
+        async def test_cache_operation():
+            return "cached_data"
+        
+        result = await test_cache_operation()
+        assert result == "cached_data"
+    
+    @pytest.mark.asyncio
+    async def test_monitor_ollama_request_success(self):
+        """Тест декоратора мониторинга Ollama - успешный случай"""
+        @monitor_ollama_request("qwen2.5:7b", "generate")
+        async def test_ollama_request():
+            return "generated_text"
+        
+        result = await test_ollama_request()
+        assert result == "generated_text"
 
 
-@pytest.mark.asyncio
-class TestMonitoringMiddleware:
-    """Тесты для middleware мониторинга"""
+class TestMonitoringFunctions:
+    """Тесты для функций мониторинга"""
     
-    async def test_monitoring_middleware_success(self):
-        """Тест middleware для успешного запроса"""
-        # Создаем mock объекты
-        request = Mock()
-        request.method = "GET"
-        request.url.path = "/api/test"
-        request.headers = {}
-        
-        response = Mock()
-        response.status_code = 200
-        response.headers = {}
-        
-        async def mock_call_next(req):
-            return response
-        
-        # Выполняем middleware
-        result = await monitoring_middleware(request, mock_call_next)
-        
-        assert result == response
-        assert "X-Request-ID" in result.headers
-        assert "X-Response-Time" in result.headers
+    def test_get_metrics(self):
+        """Тест получения метрик"""
+        metrics = get_metrics()
+        assert isinstance(metrics, bytes)
+        assert len(metrics) > 0
     
-    async def test_monitoring_middleware_with_error(self):
-        """Тест middleware с ошибкой"""
-        request = Mock()
-        request.method = "POST"
-        request.url.path = "/api/test"
-        request.headers = {}
+    def test_get_health_status(self):
+        """Тест получения статуса здоровья"""
+        health = get_health_status()
         
-        async def mock_call_next_with_error(req):
-            raise ValueError("Test error")
+        assert isinstance(health, dict)
+        assert "status" in health
+        assert "timestamp" in health
+        assert "version" in health
+        assert "environment" in health
+        assert health["status"] == "healthy"
+    
+    @pytest.mark.asyncio
+    async def test_monitor_operation_success(self):
+        """Тест контекстного менеджера мониторинга - успешный случай"""
+        operation_called = False
         
-        # Проверяем, что ошибка пробрасывается
-        with pytest.raises(ValueError):
-            await monitoring_middleware(request, mock_call_next_with_error)
+        async with monitor_operation("test_operation", test_param="value"):
+            operation_called = True
+        
+        assert operation_called
+    
+    @pytest.mark.asyncio
+    async def test_monitor_operation_error(self):
+        """Тест контекстного менеджера мониторинга - ошибка"""
+        with pytest.raises(Exception, match="Test error"):
+            async with monitor_operation("test_operation"):
+                raise Exception("Test error")
+
+
+class TestLogger:
+    """Тесты для логгера"""
+    
+    def test_logger_initialization(self):
+        """Тест инициализации логгера"""
+        assert logger is not None
+        assert hasattr(logger, 'info')
+        assert hasattr(logger, 'error')
+        assert hasattr(logger, 'debug')
+        assert hasattr(logger, 'warning')
+    
+    def test_logger_info(self):
+        """Тест логирования info сообщения"""
+        # Просто проверяем, что не вызывает исключений
+        logger.info("Test info message", test_param="value")
+    
+    def test_logger_error(self):
+        """Тест логирования error сообщения"""
+        # Просто проверяем, что не вызывает исключений
+        logger.error("Test error message", error_type="test", details="test details")
 
 
 class TestMonitoringIntegration:
     """Интеграционные тесты мониторинга"""
     
-    @pytest.mark.asyncio
-    async def test_full_monitoring_flow(self):
-        """Тест полного цикла мониторинга"""
-        monitoring_service = MonitoringService("test-service")
+    @pytest.fixture
+    def app(self):
+        """FastAPI приложение для тестирования"""
+        app = FastAPI()
         
-        # Симулируем HTTP запрос
-        request = Mock()
-        request.method = "POST"
-        request.url.path = "/api/seo/analyze"
-        request.headers.get.return_value = "req-456"
+        @app.get("/test")
+        async def test_endpoint():
+            return {"message": "test"}
         
-        response = Mock()
-        response.status_code = 201
+        return app
+    
+    @pytest.fixture
+    def client(self, app):
+        """Тестовый клиент"""
+        return TestClient(app)
+    
+    def test_metrics_endpoint_integration(self, client):
+        """Интеграционный тест endpoint метрик"""
+        # Создаем простое приложение с мониторингом
+        app = FastAPI()
         
-        # Логируем запрос
-        monitoring_service.log_request(request, response, 1.2)
+        @app.get("/metrics")
+        async def metrics():
+            return get_metrics()
         
-        # Логируем SEO анализ
-        monitoring_service.log_seo_analysis("example.com", "completed", 2.5)
+        test_client = TestClient(app)
+        response = test_client.get("/metrics")
         
-        # Проверяем метрики
-        assert monitoring_service.http_requests_total._value.sum() == 1
-        assert monitoring_service.http_request_duration._sum.sum() == 1.2
-        assert monitoring_service.seo_analyses_total._value.sum() == 1
+        assert response.status_code == 200
+        assert len(response.content) > 0
+    
+    def test_health_endpoint_integration(self, client):
+        """Интеграционный тест endpoint здоровья"""
+        app = FastAPI()
+        
+        @app.get("/health")
+        async def health():
+            return get_health_status()
+        
+        test_client = TestClient(app)
+        response = test_client.get("/health")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert "timestamp" in data
+
+
+# Тесты производительности
+class TestMonitoringPerformance:
+    """Тесты производительности мониторинга"""
     
     @pytest.mark.asyncio
-    async def test_trace_operation_context_manager(self):
-        """Тест контекстного менеджера для трассировки"""
-        monitoring_service = MonitoringService("test-service")
+    async def test_monitor_operation_performance(self):
+        """Тест производительности контекстного менеджера"""
+        start_time = time.time()
         
-        async with monitoring_service.trace_operation("test_operation") as span:
-            span.set_attribute("test.attribute", "test_value")
-            await asyncio.sleep(0.1)
+        async with monitor_operation("performance_test"):
+            await asyncio.sleep(0.01)  # Имитируем работу
         
-        # Проверяем, что span создан и закрыт
-        # В реальном тесте здесь можно проверить трассировку
-
-
-# Тесты для метрик
-class TestMetrics:
-    """Тесты для метрик Prometheus"""
+        duration = time.time() - start_time
+        assert duration < 0.1  # Должно быть быстро
     
-    def test_metrics_generation(self):
-        """Тест генерации метрик"""
-        monitoring_service = MonitoringService("test-service")
+    def test_metrics_collection_performance(self):
+        """Тест производительности сбора метрик"""
+        collector = MetricsCollector("performance_test")
         
-        # Обновляем некоторые метрики
-        monitoring_service.update_active_users(10)
-        monitoring_service.update_database_connections(5)
+        start_time = time.time()
+        for _ in range(100):
+            collector.collect_system_metrics()
+        duration = time.time() - start_time
         
-        # Получаем метрики
-        metrics = monitoring_service.get_metrics()
+        # Сбор метрик должен быть быстрым
+        assert duration < 1.0
+    
+    def test_performance_monitor_memory_usage(self):
+        """Тест использования памяти монитором производительности"""
+        monitor = PerformanceMonitor()
         
-        # Проверяем, что метрики содержат ожидаемые данные
-        assert "active_users" in metrics
-        assert "database_connections" in metrics
-        assert "http_requests_total" in metrics
+        # Добавляем много таймеров
+        for i in range(1000):
+            monitor.start_timer(f"timer_{i}")
+            monitor.end_timer(f"timer_{i}")
+        
+        # Проверяем, что память не растет бесконечно
+        metrics = monitor.get_metrics()
+        assert len(metrics) == 1000
 
 
-# Тесты для обработки ошибок
-class TestErrorHandling:
-    """Тесты для обработки ошибок"""
+# Тесты устойчивости к ошибкам
+class TestMonitoringErrorHandling:
+    """Тесты обработки ошибок в мониторинге"""
     
-    def test_validation_error_handling(self):
-        """Тест обработки ошибок валидации"""
-        from app.validation import ValidationErrorHandler
+    @pytest.mark.asyncio
+    async def test_monitor_operation_with_exception(self):
+        """Тест обработки исключений в контекстном менеджере"""
+        exception_raised = False
         
-        # Создаем mock ошибку валидации
-        error = ValidationError(errors=[
-            {
-                "loc": ("field",),
-                "msg": "Field is required",
-                "type": "value_error.missing"
-            }
-        ], model=Mock())
+        try:
+            async with monitor_operation("error_test"):
+                raise ValueError("Test exception")
+        except ValueError:
+            exception_raised = True
         
-        response = ValidationErrorHandler.handle_validation_error(error)
-        
-        assert response.status_code == 422
-        assert "validation_error" in response.body.decode()
+        assert exception_raised
     
-    def test_http_error_handling(self):
-        """Тест обработки HTTP ошибок"""
-        from app.validation import ValidationErrorHandler
-        from fastapi import HTTPException
+    def test_metrics_collector_with_psutil_error(self):
+        """Тест обработки ошибок psutil"""
+        collector = MetricsCollector("error_test")
         
-        error = HTTPException(status_code=404, detail="Not found")
+        # Должно работать без psutil
+        with patch('app.monitoring.psutil', side_effect=ImportError):
+            collector.collect_system_metrics()  # Не должно вызывать исключение
+    
+    def test_performance_monitor_edge_cases(self):
+        """Тест граничных случаев монитора производительности"""
+        monitor = PerformanceMonitor()
         
-        response = ValidationErrorHandler.handle_http_error(error)
+        # Тест с пустым именем таймера
+        monitor.start_timer("")
+        duration = monitor.end_timer("")
+        assert duration >= 0
         
-        assert response.status_code == 404
-        assert "http_error" in response.body.decode() 
+        # Тест с очень длинным именем
+        long_name = "a" * 1000
+        monitor.start_timer(long_name)
+        duration = monitor.end_timer(long_name)
+        assert duration >= 0 

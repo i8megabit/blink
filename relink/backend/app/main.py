@@ -1,4 +1,4 @@
-"""FastAPI-приложение для генерации внутренних ссылок."""
+"""FastAPI-приложение для генерации внутренних ссылок reLink."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 # Импортируем новые модули
 from .config import settings, get_settings
 from .exceptions import (
-    BlinkBaseException, ErrorHandler, ErrorResponse,
+    RelinkBaseException, ErrorHandler, ErrorResponse,
     ValidationException, AuthenticationException, AuthorizationException,
     NotFoundException, DatabaseException, OllamaException,
     raise_not_found, raise_validation_error, raise_authentication_error,
@@ -47,12 +47,18 @@ from .middleware import (
     ErrorHandlerMiddleware, RequestLoggingMiddleware, RateLimitMiddleware,
     SecurityMiddleware, PerformanceMiddleware, setup_error_handlers
 )
-from .monitoring import monitoring, monitoring_middleware, metrics_endpoint, health_check
-from .cache import cache_service, cache_middleware, cache_stats, cache_clear
+from .monitoring import (
+    logger, metrics_collector, performance_monitor, 
+    get_metrics, get_health_status, monitor_operation
+)
+from .cache import (
+    cache_manager, cache_result, invalidate_cache,
+    SEOCache, UserCache
+)
 from .validation import (
-    ValidationErrorHandler, DomainAnalysisRequest, SEOAnalysisResult,
-    UserRegistrationRequest, UserLoginRequest, UserProfileUpdateRequest,
-    AnalysisHistoryRequest, ExportRequest, Validators, ValidationUtils
+    UserRegistrationModel, UserLoginModel, DomainAnalysisModel,
+    SEORecommendationModel, ExportModel, PaginationModel,
+    validate_request, validate_response, validate_and_clean_data
 )
 from .auth import (
     get_current_user, create_access_token, get_password_hash, verify_password,
@@ -127,22 +133,22 @@ class WebSocketManager:
         """Подключение нового клиента."""
         await websocket.accept()
         self.active_connections[client_id] = websocket
-        monitoring.logger.info(f"WebSocket подключен: {client_id}")
+        logger.info(f"WebSocket подключен: {client_id}")
 
     def disconnect(self, client_id: str) -> None:
         """Отключение клиента."""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-            monitoring.logger.info(f"WebSocket отключен: {client_id}")
+            logger.info(f"WebSocket отключен: {client_id}")
 
     async def send_progress(self, client_id: str, message: dict) -> None:
         """Отправка прогресса конкретному клиенту."""
         if client_id in self.active_connections:
             try:
                 await self.active_connections[client_id].send_json(message)
-                monitoring.logger.debug(f"Прогресс отправлен {client_id}: {message}")
+                logger.debug(f"Прогресс отправлен {client_id}: {message}")
             except Exception as e:
-                monitoring.log_error(e, {"client_id": client_id, "operation": "send_progress"})
+                logger.error(f"Error sending progress to {client_id}: {e}")
 
     async def send_error(self, client_id: str, error: str, details: str = "") -> None:
         """Отправка ошибки клиенту."""
@@ -184,9 +190,9 @@ class WebSocketManager:
                     "emoji": emoji,
                     "timestamp": datetime.now().isoformat()
                 })
-                monitoring.logger.debug(f"Мысль ИИ отправлена {client_id}: {thought[:50]}...")
+                logger.debug(f"Мысль ИИ отправлена {client_id}: {thought[:50]}...")
             except Exception as e:
-                monitoring.log_error(e, {"client_id": client_id, "operation": "send_ai_thinking"})
+                logger.error(f"Error sending AI thinking to {client_id}: {e}")
     
     async def send_enhanced_ai_thinking(self, client_id: str, ai_thought: AIThought) -> None:
         """Отправка расширенных мыслей ИИ с аналитикой."""
@@ -203,9 +209,9 @@ class WebSocketManager:
                     "reasoning_chain": ai_thought.reasoning_chain,
                     "timestamp": ai_thought.timestamp.isoformat()
                 })
-                monitoring.logger.debug(f"Расширенная мысль ИИ отправлена {client_id}: {ai_thought.stage}")
+                logger.debug(f"Расширенная мысль ИИ отправлена {client_id}: {ai_thought.thought_id}")
             except Exception as e:
-                monitoring.log_error(e, {"client_id": client_id, "operation": "send_enhanced_ai_thinking"})
+                logger.error(f"Error sending enhanced AI thinking to {client_id}: {e}")
 
 
 # Глобальные переменные
