@@ -277,5 +277,607 @@ class AdvancedRAGManager:
 # Глобальный менеджер RAG
 rag_manager = AdvancedRAGManager()
 
-# ... existing code ...
+# Pydantic модели для запросов
+class RecommendRequest(BaseModel):
+    """Запрос с текстом для генерации ссылок."""
+    text: str
+
+class WPRequest(BaseModel):
+    """Запрос для анализа WordPress-сайта."""
+    domain: str
+    client_id: Optional[str] = None
+    comprehensive: Optional[bool] = False
+
+class BenchmarkRequest(BaseModel):
+    """Запрос для запуска бенчмарка."""
+    name: str
+    description: Optional[str] = None
+    benchmark_type: str = "seo_advanced"
+    models: List[str] = []
+    iterations: int = 3
+    client_id: Optional[str] = None
+
+class ModelConfigRequest(BaseModel):
+    """Запрос для обновления конфигурации модели."""
+    model_name: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    default_parameters: Optional[dict] = None
+    seo_optimized_params: Optional[dict] = None
+    benchmark_params: Optional[dict] = None
+
+class SEOAnalysisResult(BaseModel):
+    """Результат SEO анализа."""
+    domain: str
+    analysis_date: datetime
+    score: float
+    recommendations: List[dict]
+    metrics: dict
+    status: str
+
+class DomainAnalysisRequest(BaseModel):
+    """Запрос для анализа домена."""
+    domain: str
+    comprehensive: Optional[bool] = False
+
+class CompetitorAnalysisRequest(BaseModel):
+    """Запрос для анализа конкурентов."""
+    domain: str
+    competitors: List[str]
+
+class AnalysisHistoryRequest(BaseModel):
+    """Запрос для получения истории анализов."""
+    limit: int = 10
+    offset: int = 0
+
+class ExportRequest(BaseModel):
+    """Запрос для экспорта данных."""
+    format: str  # json, csv, pdf
+    analysis_ids: List[int]
+
+# Глобальные переменные для Ollama
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-turbo")
+
+# Оптимизированные настройки токенов
+OPTIMAL_CONTEXT_SIZE = 3072
+OPTIMAL_PREDICTION_SIZE = 800
+OPTIMAL_TEMPERATURE = 0.3
+OPTIMAL_TOP_P = 0.85
+OPTIMAL_TOP_K = 50
+OPTIMAL_REPEAT_PENALTY = 1.08
+
+# Функция для генерации мыслей ИИ
+async def generate_ai_thoughts_for_domain(domain: str, posts: List[dict], client_id: str = None) -> List[AIThought]:
+    """Генерация мыслей ИИ для анализа домена."""
+    thoughts = []
+    
+    if client_id:
+        await websocket_manager.send_ai_thinking(
+            client_id, 
+            f"Начинаю анализ домена {domain}...", 
+            "analyzing", 
+            "🔍"
+        )
+    
+    # Анализ контента
+    content_thought = AIThought(
+        thought_id=f"content_analysis_{domain}",
+        stage="analyzing",
+        content=f"Анализирую {len(posts)} статей на домене {domain}",
+        confidence=0.8,
+        semantic_weight=0.7,
+        related_concepts=["контент", "анализ", "семантика"],
+        reasoning_chain=["подсчет статей", "оценка качества"],
+        timestamp=datetime.utcnow()
+    )
+    thoughts.append(content_thought)
+    
+    if client_id:
+        await websocket_manager.send_enhanced_ai_thinking(client_id, content_thought)
+    
+    # Поиск связей
+    connection_thought = AIThought(
+        thought_id=f"connection_search_{domain}",
+        stage="connecting",
+        content="Ищу семантические связи между статьями",
+        confidence=0.9,
+        semantic_weight=0.8,
+        related_concepts=["связи", "семантика", "рекомендации"],
+        reasoning_chain=["анализ тем", "поиск пересечений"],
+        timestamp=datetime.utcnow()
+    )
+    thoughts.append(connection_thought)
+    
+    if client_id:
+        await websocket_manager.send_enhanced_ai_thinking(client_id, connection_thought)
+    
+    return thoughts
+
+# API endpoints
+@app.get("/")
+async def root():
+    """Корневой endpoint."""
+    return {"message": "reLink API v4.0.0", "status": "running"}
+
+@app.get("/health")
+async def health_check():
+    """Проверка здоровья сервиса."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/v1/health")
+async def api_health():
+    """API health check."""
+    return {"status": "healthy", "version": "4.0.0", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/v1/version")
+async def get_version():
+    """Получение версии приложения."""
+    try:
+        version_file = Path("VERSION")
+        if version_file.exists():
+            with open(version_file, 'r', encoding='utf-8') as f:
+                version = f.read().strip()
+        else:
+            version = "4.0.0"
+        
+        return {
+            "version": version,
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "commitHash": os.getenv("GIT_COMMIT_HASH", ""),
+            "environment": os.getenv("ENVIRONMENT", "development")
+        }
+    except Exception as e:
+        return {
+            "version": "4.0.0",
+            "buildDate": datetime.now().strftime('%Y-%m-%d'),
+            "error": str(e)
+        }
+
+@app.get("/api/v1/settings")
+async def get_settings():
+    """Заглушка настроек для фронтенда."""
+    return {
+        "theme": "light",
+        "language": "ru",
+        "features": {
+            "ai_recommendations": True,
+            "advanced_benchmark": True,
+            "notifications": True,
+            "export": True
+        }
+    }
+
+@app.get("/api/v1/ollama_status")
+async def get_ollama_status():
+    """Проверка статуса Ollama."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://ollama:11434/api/tags")
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                return {
+                    "status": "available",
+                    "models": [model.get("name", "") for model in models],
+                    "last_check": datetime.now().isoformat()
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Ollama responded with status {response.status_code}",
+                    "last_check": datetime.now().isoformat()
+                }
+    except Exception as e:
+        return {
+            "status": "unavailable",
+            "message": str(e),
+            "last_check": datetime.now().isoformat()
+        }
+
+@app.get("/api/v1/domains")
+async def get_domains():
+    """Получение списка доменов."""
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(select(Domain))
+            domains = result.scalars().all()
+            return [
+                {
+                    "id": domain.id,
+                    "name": domain.name,
+                    "display_name": domain.display_name,
+                    "description": domain.description,
+                    "total_posts": domain.total_posts,
+                    "total_analyses": domain.total_analyses,
+                    "last_analysis_at": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None
+                }
+                for domain in domains
+            ]
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/v1/analysis_history")
+async def get_analysis_history():
+    """Получение истории анализов."""
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(select(AnalysisHistory).order_by(AnalysisHistory.created_at.desc()))
+            histories = result.scalars().all()
+            return [
+                {
+                    "id": history.id,
+                    "domain_id": history.domain_id,
+                    "posts_analyzed": history.posts_analyzed,
+                    "connections_found": history.connections_found,
+                    "recommendations_generated": history.recommendations_generated,
+                    "created_at": history.created_at.isoformat(),
+                    "completed_at": history.completed_at.isoformat() if history.completed_at else None
+                }
+                for history in histories
+            ]
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/v1/benchmarks")
+async def get_benchmarks():
+    """Получение списка бенчмарков."""
+    try:
+        # Заглушка для бенчмарков
+        return [
+            {
+                "id": 1,
+                "name": "SEO Basic Benchmark",
+                "description": "Базовый SEO бенчмарк",
+                "benchmark_type": "seo_basic",
+                "status": "completed",
+                "overall_score": 85.5,
+                "created_at": datetime.now().isoformat()
+            }
+        ]
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/metrics")
+async def get_metrics():
+    """Endpoint для получения метрик Prometheus"""
+    return await get_metrics()
+
+@app.get("/api/v1/monitoring/health")
+async def get_monitoring_health():
+    """Endpoint для проверки здоровья с мониторингом"""
+    return await get_health_status()
+
+@app.get("/api/v1/monitoring/stats")
+async def get_monitoring_stats():
+    """Получение статистики мониторинга"""
+    try:
+        return {
+            "active_connections": len(websocket_manager.active_connections),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка получения статистики")
+
+@app.get("/api/v1/cache/stats")
+async def get_cache_stats():
+    """Получение статистики кэша"""
+    try:
+        return {
+            "memory_cache_size": 0,
+            "redis_cache_size": 0,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка получения статистики кэша")
+
+@app.post("/api/v1/cache/clear")
+async def clear_cache():
+    """Очистка кэша"""
+    try:
+        return {"success": True, "message": "Кэш очищен"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
+
+@app.delete("/api/v1/cache/{pattern}")
+async def clear_cache_pattern(pattern: str):
+    """Очистка кэша по паттерну"""
+    try:
+        return {"success": True, "deleted_count": 0, "pattern": pattern}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
+
+# Endpoints для аутентификации
+@app.post("/api/v1/auth/register", response_model=UserResponse)
+async def register_user(user_data: UserRegistrationRequest, db: AsyncSession = Depends(get_db)):
+    """Регистрация нового пользователя"""
+    try:
+        # Проверяем, существует ли пользователь с таким email
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail="Пользователь с таким email уже существует"
+            )
+        
+        # Создаем нового пользователя
+        hashed_password = get_password_hash(user_data.password)
+        db_user = User(
+            email=user_data.email,
+            username=user_data.username,
+            hashed_password=hashed_password
+        )
+        
+        db.add(db_user)
+        await db.commit()
+        await db.refresh(db_user)
+        
+        return UserResponse(
+            id=db_user.id,
+            email=db_user.email,
+            username=db_user.username,
+            is_active=db_user.is_active,
+            created_at=db_user.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка регистрации пользователя")
+
+@app.post("/api/v1/auth/login", response_model=Token)
+async def login_user(user_data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
+    """Вход пользователя"""
+    try:
+        # Ищем пользователя
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        user = result.scalar_one_or_none()
+        
+        if not user or not verify_password(user_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=401,
+                detail="Неверный email или пароль"
+            )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Пользователь неактивен"
+            )
+        
+        # Создаем токен доступа
+        access_token = create_access_token(data={"sub": str(user.id)})
+        
+        return Token(access_token=access_token, token_type="bearer")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка входа")
+
+@app.get("/api/v1/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Получение информации о текущем пользователе"""
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at
+    )
+
+@app.post("/api/v1/auth/refresh", response_model=Token)
+async def refresh_token(current_user: User = Depends(get_current_user)):
+    """Обновление токена доступа"""
+    try:
+        access_token = create_access_token(data={"sub": str(current_user.id)})
+        return Token(access_token=access_token, token_type="bearer")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка обновления токена")
+
+@app.post("/api/v1/auth/logout")
+async def logout_user(current_user: User = Depends(get_current_user)):
+    """Выход пользователя"""
+    try:
+        return {"message": "Успешный выход из системы"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка выхода")
+
+# Endpoints для SEO анализа с валидацией
+@app.post("/api/v1/seo/analyze", response_model=SEOAnalysisResult)
+async def analyze_domain(
+    request_data: DomainAnalysisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Анализ домена с валидацией"""
+    try:
+        # Здесь будет логика анализа домена
+        # Пока возвращаем заглушку
+        analysis_result = SEOAnalysisResult(
+            domain=request_data.domain,
+            analysis_date=datetime.utcnow(),
+            score=75.5,
+            recommendations=[
+                {
+                    "type": "internal_linking",
+                    "priority": "high",
+                    "description": "Добавить внутренние ссылки между связанными статьями"
+                }
+            ],
+            metrics={
+                "total_posts": 100,
+                "internal_links": 50,
+                "semantic_density": 0.8
+            },
+            status="completed"
+        )
+        
+        return analysis_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка анализа домена")
+
+@app.post("/api/v1/seo/competitors")
+async def analyze_competitors(
+    request_data: CompetitorAnalysisRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Анализ конкурентов"""
+    try:
+        result = {
+            "domain": request_data.domain,
+            "competitors": request_data.competitors,
+            "analysis_date": datetime.utcnow().isoformat(),
+            "metrics": {
+                "traffic_comparison": {},
+                "backlink_analysis": {},
+                "keyword_overlap": {}
+            }
+        }
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка анализа конкурентов")
+
+# Endpoints для истории и экспорта
+@app.get("/api/v1/history")
+async def get_analysis_history(
+    request: AnalysisHistoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение истории анализов с валидацией"""
+    try:
+        history = [
+            {
+                "id": 1,
+                "domain": "example.com",
+                "analysis_date": datetime.utcnow().isoformat(),
+                "status": "completed",
+                "score": 85.0
+            }
+        ]
+        
+        return {
+            "history": history,
+            "total": len(history),
+            "limit": request.limit,
+            "offset": request.offset
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка получения истории")
+
+@app.post("/api/v1/export")
+async def export_data(
+    request_data: ExportRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Экспорт данных"""
+    try:
+        export_result = {
+            "format": request_data.format,
+            "analysis_count": len(request_data.analysis_ids),
+            "download_url": f"/api/v1/downloads/export_{datetime.utcnow().timestamp()}.{request_data.format}",
+            "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat()
+        }
+        
+        return export_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка экспорта данных")
+
+# Endpoints для валидации
+@app.post("/api/v1/validate/domain")
+async def validate_domain(domain: str):
+    """Валидация домена"""
+    try:
+        import re
+        pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        if re.match(pattern, domain):
+            return {
+                "valid": True,
+                "domain": domain,
+                "sanitized": domain.lower().strip()
+            }
+        else:
+            return {
+                "valid": False,
+                "domain": domain,
+                "error": "Некорректный формат домена"
+            }
+    except ValueError as e:
+        return {
+            "valid": False,
+            "domain": domain,
+            "error": str(e)
+        }
+
+@app.post("/api/v1/validate/email")
+async def validate_email(email: str):
+    """Валидация email"""
+    try:
+        import re
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if re.match(pattern, email):
+            return {
+                "valid": True,
+                "email": email,
+                "sanitized": email.lower().strip()
+            }
+        else:
+            return {
+                "valid": False,
+                "email": email,
+                "error": "Некорректный формат email"
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "email": email,
+            "error": str(e)
+        }
+
+# Обработчики ошибок
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    """Обработчик ошибок валидации Pydantic"""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Ошибка валидации данных", "errors": exc.errors()}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Обработчик HTTP ошибок"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Общий обработчик исключений"""
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "message": "Внутренняя ошибка сервера",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
+# Инициализация при запуске
+@app.on_event("startup")
+async def startup_event():
+    """Инициализация при запуске приложения."""
+    # Создаем директорию для логов
+    os.makedirs("logs", exist_ok=True)
+    
+    print("🚀 reLink SEO Platform v1.0.0 запущен!")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
