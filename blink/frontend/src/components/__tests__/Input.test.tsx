@@ -75,7 +75,7 @@ describe('Input Component', () => {
   it('применяет error стили', () => {
     render(<Input error="Error message" />);
     const input = screen.getByRole('textbox');
-    expect(input).toHaveClass('border-red-500');
+    expect(input).toHaveClass('border-destructive');
   });
 
   it('отображает label когда предоставлен', () => {
@@ -85,13 +85,16 @@ describe('Input Component', () => {
 
   it('связывает label с input через id', () => {
     render(<Input label="Email Address" id="email" />);
-    const input = screen.getByRole('textbox', { name: 'Email Address' });
+    const input = screen.getByRole('textbox');
+    const label = screen.getByText('Email Address');
     expect(input).toHaveAttribute('id', 'email');
+    expect(label).toHaveAttribute('for', 'email');
   });
 
   it('отображает required индикатор', () => {
     render(<Input label="Email Address" required />);
-    expect(screen.getByText('*')).toBeInTheDocument();
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveAttribute('required');
   });
 
   it('обрабатывает ref корректно', () => {

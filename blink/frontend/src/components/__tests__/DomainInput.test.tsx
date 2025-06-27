@@ -61,8 +61,18 @@ describe('DomainInput Component', () => {
   it('показывает ошибку для неправильного формата домена', async () => {
     render(<DomainInput onAnalyze={mockOnAnalyze} />);
     
-    const input = screen.getByPlaceholderText(/example\.com/i);
-    await user.type(input, 'invalid-domain');
+    const input = screen.getByPlaceholderText('example.com');
+    
+    // Сначала вводим валидный домен, чтобы кнопка стала активной
+    await user.type(input, 'example.com');
+    
+    // Затем заменяем на невалидный с пробелами и специальными символами
+    await user.clear(input);
+    await user.type(input, 'invalid domain with spaces!');
+    
+    // Ошибка валидации появляется только при отправке формы
+    const submitButton = screen.getByRole('button', { name: /начать анализ/i });
+    await user.click(submitButton);
     
     // Должна появиться ошибка валидации
     expect(screen.getByText(/некорректный формат домена/i)).toBeInTheDocument();
@@ -135,7 +145,8 @@ describe('DomainInput Component', () => {
     render(<DomainInput onAnalyze={mockOnAnalyze} />);
     
     expect(screen.getByText(/введите домен без http:\/\/ или https:\/\//i)).toBeInTheDocument();
-    expect(screen.getByText(/полный анализ/i)).toBeInTheDocument();
+    // Используем getAllByText для элементов с одинаковым текстом
+    expect(screen.getAllByText(/полный анализ/i)).toHaveLength(2);
     expect(screen.getByText(/базовый анализ/i)).toBeInTheDocument();
   });
 

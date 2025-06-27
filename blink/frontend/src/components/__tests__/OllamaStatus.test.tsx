@@ -73,7 +73,7 @@ describe('OllamaStatus Component', () => {
 
   it('обрабатывает обновление статуса', async () => {
     const mockOnRefresh = vi.fn();
-    render(<OllamaStatus status={mockStatus} onRefresh={mockOnRefresh} />);
+    render(<OllamaStatus status={mockUnavailableStatus} onRefresh={mockOnRefresh} />);
     
     const refreshButton = screen.getByRole('button', { name: /обновить статус/i });
     await user.click(refreshButton);

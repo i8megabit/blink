@@ -123,6 +123,8 @@ describe('Button Component', () => {
     render(<Button icon={<Icon />} loading>Loading</Button>);
     
     expect(screen.queryByTestId('icon')).not.toBeInTheDocument();
-    expect(screen.getByRole('button')).toHaveClass('animate-spin');
+    expect(screen.getByRole('button')).toBeDisabled();
+    const svg = screen.getByRole('button').querySelector('svg');
+    expect(svg).toHaveClass('animate-spin');
   });
 }); 

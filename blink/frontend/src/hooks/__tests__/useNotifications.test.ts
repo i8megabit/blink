@@ -38,15 +38,18 @@ describe('useNotifications Hook', () => {
 
   it('удаляет уведомление по ID', () => {
     const { result } = renderHook(() => useNotifications());
-    let notificationId: number = 0;
+    
     act(() => {
-      result.current.addNotification('info', 'Тестовое сообщение');
-      notificationId = result.current.notifications[0]?.id || 0;
+      result.current.addNotification('success', 'Test message');
     });
+    
     expect(result.current.notifications).toHaveLength(1);
+    const notificationId = result.current.notifications[0].id;
+    
     act(() => {
       result.current.removeNotification(notificationId);
     });
+    
     expect(result.current.notifications).toHaveLength(0);
   });
 
@@ -77,61 +80,66 @@ describe('useNotifications Hook', () => {
 
   it('приостанавливает автоудаление уведомления', () => {
     const { result } = renderHook(() => useNotifications());
-    let notificationId: number = 0;
+    
     act(() => {
-      result.current.addNotification('warning', 'Уведомление');
-      notificationId = result.current.notifications[0]?.id || 0;
+      result.current.addNotification('success', 'Test message');
     });
-    expect(result.current.notifications).toHaveLength(1);
+    
+    const notificationId = result.current.notifications[0].id;
+    
     act(() => {
       result.current.pauseNotification(notificationId);
     });
+    
+    // Продвигаем время на 20 секунд - уведомление должно остаться
     act(() => {
       vi.advanceTimersByTime(20000);
     });
+    
     expect(result.current.notifications).toHaveLength(1);
   });
 
   it('возобновляет автоудаление уведомления', () => {
     const { result } = renderHook(() => useNotifications());
-    let notificationId: number = 0;
+    
     act(() => {
-      result.current.addNotification('info', 'Уведомление');
-      notificationId = result.current.notifications[0]?.id || 0;
+      result.current.addNotification('success', 'Test message');
     });
+    
+    const notificationId = result.current.notifications[0].id;
+    
     act(() => {
       result.current.pauseNotification(notificationId);
       result.current.resumeNotification(notificationId);
     });
+    
+    // Продвигаем время на 10 секунд - уведомление должно удалиться
     act(() => {
       vi.advanceTimersByTime(10000);
     });
+    
     expect(result.current.notifications).toHaveLength(0);
   });
 
   it('показывает детали уведомления', () => {
     const { result } = renderHook(() => useNotifications());
+    
     act(() => {
-      result.current.addNotification('error', 'Ошибка', 'Детали ошибки');
+      result.current.addNotification('success', 'Test message', 'Test details');
     });
+    
     const notification = result.current.notifications[0];
-    expect(notification).toBeDefined();
+    
     act(() => {
       result.current.showNotificationDetails(notification);
     });
-    expect(result.current.selectedNotification).toEqual(notification);
-  });
-
-  it('скрывает детали уведомления', () => {
-    const { result } = renderHook(() => useNotifications());
-    act(() => {
-      result.current.addNotification('info', 'Информация');
-      result.current.showNotificationDetails(result.current.notifications[0]);
-    });
-    expect(result.current.selectedNotification).toBeDefined();
+    
+    expect(result.current.selectedNotification).toBe(notification);
+    
     act(() => {
       result.current.hideNotificationDetails();
     });
+    
     expect(result.current.selectedNotification).toBeNull();
   });
 

@@ -24,7 +24,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-2">
         {label && (
-          <label className="text-sm font-medium text-foreground">
+          <label htmlFor={props.id} className="text-sm font-medium text-foreground">
             {label}
           </label>
         )}
