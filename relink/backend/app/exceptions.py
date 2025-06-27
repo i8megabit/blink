@@ -13,8 +13,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-class BlinkBaseException(Exception):
-    """Базовое исключение для приложения Blink"""
+class RelinkBaseException(Exception):
+    """Базовое исключение для приложения reLink"""
     
     def __init__(
         self,
@@ -31,19 +31,20 @@ class BlinkBaseException(Exception):
         super().__init__(self.message)
 
 
-class ValidationException(BlinkBaseException):
+class ValidationException(RelinkBaseException):
     """Исключение для ошибок валидации"""
     
-    def __init__(self, message: str, field_errors: Dict[str, str] = None):
+    def __init__(self, message: str, field: str = None, value: Any = None):
+        details = {"field": field, "value": value} if field else {}
         super().__init__(
             message=message,
             error_code="VALIDATION_ERROR",
-            details={"field_errors": field_errors or {}},
+            details=details,
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
         )
 
 
-class AuthenticationException(BlinkBaseException):
+class AuthenticationException(RelinkBaseException):
     """Исключение для ошибок аутентификации"""
     
     def __init__(self, message: str = "Authentication failed"):
@@ -54,7 +55,7 @@ class AuthenticationException(BlinkBaseException):
         )
 
 
-class AuthorizationException(BlinkBaseException):
+class AuthorizationException(RelinkBaseException):
     """Исключение для ошибок авторизации"""
     
     def __init__(self, message: str = "Access denied"):
@@ -65,12 +66,12 @@ class AuthorizationException(BlinkBaseException):
         )
 
 
-class NotFoundException(BlinkBaseException):
+class NotFoundException(RelinkBaseException):
     """Исключение для ресурсов, которые не найдены"""
     
     def __init__(self, resource: str, resource_id: Any = None):
         message = f"{resource} not found"
-        if resource_id is not None:
+        if resource_id:
             message += f" with id: {resource_id}"
         
         super().__init__(
@@ -81,98 +82,107 @@ class NotFoundException(BlinkBaseException):
         )
 
 
-class DatabaseException(BlinkBaseException):
+class DatabaseException(RelinkBaseException):
     """Исключение для ошибок базы данных"""
     
     def __init__(self, message: str, operation: str = None, table: str = None):
+        details = {"operation": operation, "table": table} if operation else {}
         super().__init__(
             message=message,
             error_code="DATABASE_ERROR",
-            details={"operation": operation, "table": table},
+            details=details,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-class CacheException(BlinkBaseException):
+class CacheException(RelinkBaseException):
     """Исключение для ошибок кэширования"""
     
-    def __init__(self, message: str, cache_type: str = None):
+    def __init__(self, message: str, cache_type: str = None, key: str = None):
+        details = {"cache_type": cache_type, "key": key} if cache_type else {}
         super().__init__(
             message=message,
             error_code="CACHE_ERROR",
-            details={"cache_type": cache_type},
+            details=details,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-class OllamaException(BlinkBaseException):
+class OllamaException(RelinkBaseException):
     """Исключение для ошибок Ollama"""
     
     def __init__(self, message: str, model: str = None, operation: str = None):
+        details = {"model": model, "operation": operation} if model else {}
         super().__init__(
             message=message,
             error_code="OLLAMA_ERROR",
-            details={"model": model, "operation": operation},
+            details=details,
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
 
-class RateLimitException(BlinkBaseException):
+class RateLimitException(RelinkBaseException):
     """Исключение для превышения лимита запросов"""
     
-    def __init__(self, retry_after: int = 60):
+    def __init__(self, limit: int = None, window: int = None):
+        message = "Rate limit exceeded"
+        details = {"limit": limit, "window": window} if limit else {}
         super().__init__(
-            message="Rate limit exceeded",
+            message=message,
             error_code="RATE_LIMIT_EXCEEDED",
-            details={"retry_after": retry_after},
+            details=details,
             status_code=status.HTTP_429_TOO_MANY_REQUESTS
         )
 
 
-class FileProcessingException(BlinkBaseException):
+class FileProcessingException(RelinkBaseException):
     """Исключение для ошибок обработки файлов"""
     
-    def __init__(self, message: str, file_type: str = None, file_size: int = None):
+    def __init__(self, message: str, file_path: str = None, file_type: str = None):
+        details = {"file_path": file_path, "file_type": file_type} if file_path else {}
         super().__init__(
             message=message,
             error_code="FILE_PROCESSING_ERROR",
-            details={"file_type": file_type, "file_size": file_size},
+            details=details,
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
 
-class ExternalServiceException(BlinkBaseException):
+class ExternalServiceException(RelinkBaseException):
     """Исключение для ошибок внешних сервисов"""
     
-    def __init__(self, message: str, service: str = None, status_code: int = None):
+    def __init__(self, message: str, service: str = None, endpoint: str = None):
+        details = {"service": service, "endpoint": endpoint} if service else {}
         super().__init__(
             message=message,
             error_code="EXTERNAL_SERVICE_ERROR",
-            details={"service": service, "external_status_code": status_code},
+            details=details,
             status_code=status.HTTP_502_BAD_GATEWAY
         )
 
 
-class ConfigurationException(BlinkBaseException):
+class ConfigurationException(RelinkBaseException):
     """Исключение для ошибок конфигурации"""
     
     def __init__(self, message: str, config_key: str = None):
+        details = {"config_key": config_key} if config_key else {}
         super().__init__(
             message=message,
             error_code="CONFIGURATION_ERROR",
-            details={"config_key": config_key},
+            details=details,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-class BusinessLogicException(BlinkBaseException):
+class BusinessLogicException(RelinkBaseException):
     """Исключение для ошибок бизнес-логики"""
     
-    def __init__(self, message: str, business_rule: str = None):
+    def __init__(self, message: str, operation: str = None, context: Dict[str, Any] = None):
+        details = {"operation": operation, "context": context} if operation else {}
         super().__init__(
             message=message,
             error_code="BUSINESS_LOGIC_ERROR",
-            details={"business_rule": business_rule},
+            details=details,
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
@@ -181,77 +191,78 @@ class ErrorHandler:
     """Класс для централизованной обработки ошибок"""
     
     @staticmethod
-    def handle_validation_error(error: ValidationError) -> Dict[str, Any]:
-        """Обработка ошибок валидации Pydantic"""
-        field_errors = {}
-        for err in error.errors():
-            field = " -> ".join(str(loc) for loc in err["loc"])
-            field_errors[field] = err["msg"]
+    def handle_relink_exception(error: RelinkBaseException) -> Dict[str, Any]:
+        """Обработка кастомных исключений reLink"""
+        error_response = ErrorResponse(
+            message=error.message,
+            error_code=error.error_code,
+            status_code=error.status_code,
+            details=error.details
+        )
         
-        return {
-            "error": {
-                "code": "VALIDATION_ERROR",
-                "message": "Validation failed",
-                "details": {"field_errors": field_errors},
-                "timestamp": datetime.utcnow().isoformat()
+        # Логирование ошибки
+        logger.error(
+            f"reLink exception: {error.error_code} - {error.message}",
+            extra={
+                "error_code": error.error_code,
+                "status_code": error.status_code,
+                "details": error.details,
+                "traceback": traceback.format_exc()
             }
-        }
+        )
+        
+        return error_response.to_dict()
     
     @staticmethod
-    def handle_blink_exception(error: BlinkBaseException) -> Dict[str, Any]:
-        """Обработка кастомных исключений Blink"""
-        return {
-            "error": {
-                "code": error.error_code,
-                "message": error.message,
-                "details": error.details,
-                "timestamp": error.timestamp.isoformat()
-            }
-        }
+    def handle_validation_error(error: ValidationError) -> Dict[str, Any]:
+        """Обработка ошибок валидации Pydantic"""
+        error_details = []
+        for err in error.errors():
+            error_details.append({
+                "field": " -> ".join(str(loc) for loc in err["loc"]),
+                "message": err["msg"],
+                "type": err["type"]
+            })
+        
+        error_response = ErrorResponse(
+            message="Validation error",
+            error_code="VALIDATION_ERROR",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            details={"validation_errors": error_details}
+        )
+        
+        logger.warning(f"Validation error: {error_details}")
+        return error_response.to_dict()
     
     @staticmethod
     def handle_http_exception(error: HTTPException) -> Dict[str, Any]:
         """Обработка HTTP исключений FastAPI"""
-        return {
-            "error": {
-                "code": "HTTP_ERROR",
-                "message": error.detail,
-                "status_code": error.status_code,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        }
+        error_response = ErrorResponse(
+            message=error.detail,
+            error_code="HTTP_ERROR",
+            status_code=error.status_code
+        )
+        
+        logger.warning(f"HTTP exception: {error.status_code} - {error.detail}")
+        return error_response.to_dict()
     
     @staticmethod
     def handle_generic_exception(error: Exception) -> Dict[str, Any]:
         """Обработка общих исключений"""
-        # Логируем полную информацию об ошибке
-        logger.error(f"Unhandled exception: {error}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        error_response = ErrorResponse(
+            message="Internal server error",
+            error_code="INTERNAL_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            details={"exception_type": type(error).__name__}
+        )
         
-        return {
-            "error": {
-                "code": "INTERNAL_SERVER_ERROR",
-                "message": "An unexpected error occurred",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        }
-    
-    @staticmethod
-    def log_error(error: Exception, context: Dict[str, Any] = None):
-        """Логирование ошибки с контекстом"""
-        error_info = {
-            "error_type": type(error).__name__,
-            "error_message": str(error),
-            "traceback": traceback.format_exc(),
-            "context": context or {}
-        }
+        # Логирование с полным стеком
+        logger.error(
+            f"Unhandled exception: {type(error).__name__} - {str(error)}",
+            exc_info=True
+        )
         
-        if isinstance(error, BlinkBaseException):
-            logger.error(f"Blink exception: {error_info}")
-        elif isinstance(error, HTTPException):
-            logger.warning(f"HTTP exception: {error_info}")
-        else:
-            logger.error(f"Unexpected exception: {error_info}")
+        return error_response.to_dict()
 
 
 class ErrorResponse:
@@ -259,48 +270,50 @@ class ErrorResponse:
     
     def __init__(
         self,
-        code: str,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
-        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
+        error_code: str,
+        status_code: int,
+        details: Dict[str, Any] = None,
+        timestamp: str = None
     ):
-        self.code = code
         self.message = message
-        self.details = details or {}
+        self.error_code = error_code
         self.status_code = status_code
-        self.timestamp = datetime.utcnow()
+        self.details = details or {}
+        self.timestamp = timestamp or datetime.utcnow().isoformat()
     
     def to_dict(self) -> Dict[str, Any]:
         """Преобразование в словарь"""
         return {
             "error": {
-                "code": self.code,
                 "message": self.message,
+                "code": self.error_code,
+                "status_code": self.status_code,
                 "details": self.details,
-                "timestamp": self.timestamp.isoformat()
+                "timestamp": self.timestamp
             }
         }
     
     @classmethod
     def from_exception(cls, error: Exception) -> 'ErrorResponse':
         """Создание ответа из исключения"""
-        if isinstance(error, BlinkBaseException):
+        if isinstance(error, RelinkBaseException):
             return cls(
-                code=error.error_code,
                 message=error.message,
-                details=error.details,
-                status_code=error.status_code
+                error_code=error.error_code,
+                status_code=error.status_code,
+                details=error.details
             )
         elif isinstance(error, HTTPException):
             return cls(
-                code="HTTP_ERROR",
                 message=error.detail,
+                error_code="HTTP_ERROR",
                 status_code=error.status_code
             )
         else:
             return cls(
-                code="INTERNAL_SERVER_ERROR",
-                message="An unexpected error occurred",
+                message="Internal server error",
+                error_code="INTERNAL_ERROR",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -311,9 +324,9 @@ def raise_not_found(resource: str, resource_id: Any = None):
     raise NotFoundException(resource, resource_id)
 
 
-def raise_validation_error(message: str, field_errors: Dict[str, str] = None):
+def raise_validation_error(message: str, field: str = None, value: Any = None):
     """Создание исключения ValidationException"""
-    raise ValidationException(message, field_errors)
+    raise ValidationException(message, field, value)
 
 
 def raise_authentication_error(message: str = "Authentication failed"):
@@ -336,11 +349,51 @@ def raise_ollama_error(message: str, model: str = None, operation: str = None):
     raise OllamaException(message, model, operation)
 
 
-def raise_rate_limit_error(retry_after: int = 60):
+def raise_rate_limit_error(limit: int = None, window: int = None):
     """Создание исключения RateLimitException"""
-    raise RateLimitException(retry_after)
+    raise RateLimitException(limit, window)
 
 
-def raise_business_logic_error(message: str, business_rule: str = None):
+def raise_business_logic_error(message: str, operation: str = None, context: Dict[str, Any] = None):
     """Создание исключения BusinessLogicException"""
-    raise BusinessLogicException(message, business_rule) 
+    raise BusinessLogicException(message, operation, context)
+
+
+def setup_exception_handlers(app):
+    """Настройка обработчиков исключений для FastAPI приложения"""
+    
+    @app.exception_handler(RelinkBaseException)
+    async def relink_exception_handler(request, exc: RelinkBaseException):
+        """Обработчик кастомных исключений reLink"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ErrorHandler.handle_relink_exception(exc)
+        )
+    
+    @app.exception_handler(ValidationError)
+    async def validation_exception_handler(request, exc: ValidationError):
+        """Обработчик ошибок валидации"""
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=ErrorHandler.handle_validation_error(exc)
+        )
+    
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request, exc: HTTPException):
+        """Обработчик HTTP исключений"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ErrorHandler.handle_http_exception(exc)
+        )
+    
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request, exc: Exception):
+        """Обработчик общих исключений"""
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=ErrorHandler.handle_generic_exception(exc)
+        )
+
+
+# Экспорт для обратной совместимости
+BlinkBaseException = RelinkBaseException 
