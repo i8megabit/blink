@@ -39,9 +39,14 @@ global.WebSocket = vi.fn().mockImplementation(() => ({
 // Мокаем уведомления
 vi.mock('../../hooks/useNotifications', () => ({
   useNotifications: () => ({
-    showNotification: vi.fn(),
-    hideNotification: vi.fn(),
-    notifications: []
+    addNotification: vi.fn(),
+    removeNotification: vi.fn(),
+    notifications: [],
+    selectedNotification: null,
+    showNotificationDetails: vi.fn(),
+    hideNotificationDetails: vi.fn(),
+    pauseNotification: vi.fn(),
+    resumeNotification: vi.fn()
   })
 }));
 

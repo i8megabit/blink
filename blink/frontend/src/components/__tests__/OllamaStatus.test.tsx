@@ -95,7 +95,6 @@ describe('OllamaStatus Component', () => {
 
   it('применяет правильные CSS классы для статуса', () => {
     render(<OllamaStatus status={mockStatus} />);
-    
     const statusMessage = screen.getByText(/Готов к работе/i, { selector: 'p' });
     expect(statusMessage).toHaveClass('text-green-600');
   });
