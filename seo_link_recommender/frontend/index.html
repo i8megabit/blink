@@ -812,7 +812,7 @@
         switch (data.type) {
           case 'progress':
             // Минимизируем логи для производительности 
-            if (process?.env?.NODE_ENV !== 'production') {
+            if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'production') {
               addLog('info', `${data.step} (${data.current}/${data.total})`, data.details);
             }
             
@@ -848,7 +848,7 @@
               });
               
               // Минимизируем console.log для производительности
-              if (process?.env?.NODE_ENV !== 'production') {
+              if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'production') {
                 addLog('info', '🧠 Ollama отвечает на русском', 
                   `Модель ${data.info.model} сгенерировала ${data.info.total_length} символов`);
               }

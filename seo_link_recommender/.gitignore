@@ -1,0 +1,3 @@
+# Ollama models (большие файлы, хранятся локально)
+ollama_models/
+postgres_data/
