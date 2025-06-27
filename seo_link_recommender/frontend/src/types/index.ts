@@ -104,7 +104,7 @@ export interface AnalysisHistory {
   llm_context_size?: number
   processing_time_seconds?: number
   created_at: string
-  completed_at?: string
+  completed_at: string | null
 }
 
 export interface BenchmarkHistory {

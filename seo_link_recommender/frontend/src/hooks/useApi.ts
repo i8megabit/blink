@@ -33,7 +33,7 @@ export function useApi<T = any>(
 
       const response = await apiFunction(...args);
 
-      if (response.status === 'success' && response.data) {
+      if (response.success && response.data) {
         setData(response.data);
         setState('success');
         
@@ -95,7 +95,7 @@ export function useDomains() {
     const response = await fetch('/api/v1/domains');
     const data = await response.json();
     return {
-      status: response.ok ? 'success' : 'error',
+      success: response.ok,
       data: response.ok ? data.domains : undefined,
       error: response.ok ? undefined : data.error || 'Ошибка загрузки доменов'
     };
@@ -107,7 +107,7 @@ export function useOllamaStatus() {
     const response = await fetch('/api/v1/ollama_status');
     const data = await response.json();
     return {
-      status: response.ok ? 'success' : 'error',
+      success: response.ok,
       data: response.ok ? data : undefined,
       error: response.ok ? undefined : data.error || 'Ошибка проверки статуса Ollama'
     };
@@ -123,7 +123,7 @@ export function useAnalysisHistory(domain?: string) {
     const response = await fetch(url);
     const data = await response.json();
     return {
-      status: response.ok ? 'success' : 'error',
+      success: response.ok,
       data: response.ok ? data.history : undefined,
       error: response.ok ? undefined : data.error || 'Ошибка загрузки истории'
     };
@@ -135,7 +135,7 @@ export function useBenchmarkHistory() {
     const response = await fetch('/api/v1/benchmark_history');
     const data = await response.json();
     return {
-      status: response.ok ? 'success' : 'error',
+      success: response.ok,
       data: response.ok ? data.benchmarks : undefined,
       error: response.ok ? undefined : data.error || 'Ошибка загрузки истории бенчмарков'
     };

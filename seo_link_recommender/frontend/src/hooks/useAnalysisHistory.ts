@@ -42,7 +42,7 @@ export function useAnalysisHistory({
 
       const result: ApiResponse<AnalysisHistory[]> = await response.json()
 
-      if (result.status === 'success' && result.data) {
+      if (result.success && result.data) {
         setData(result.data)
       } else {
         throw new Error(result.error || 'Неизвестная ошибка')

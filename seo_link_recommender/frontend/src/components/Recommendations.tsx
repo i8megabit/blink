@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Recommendation } from '../types';
-import { cn } from '../lib/utils';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
+import { cn } from '../lib/utils';
 
 interface RecommendationsProps {
   recommendations: Recommendation[];
@@ -21,11 +21,13 @@ export function Recommendations({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopy = async (recommendation: Recommendation) => {
-    const text = `[${recommendation.anchor}](${recommendation.to})`;
+    const sourceUrl = recommendation.source_post?.link || '';
+    const targetUrl = recommendation.target_post?.link || '';
+    const text = `[${recommendation.anchor_text}](${targetUrl})`;
     
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedId(recommendation.from + recommendation.to);
+      setCopiedId(sourceUrl + targetUrl);
       
       setTimeout(() => {
         setCopiedId(null);
@@ -114,7 +116,9 @@ export function Recommendations({
 
       <div className="grid gap-4">
         {recommendations.map((recommendation, index) => {
-          const recommendationId = `${recommendation.from}-${recommendation.to}`;
+          const sourceUrl = recommendation.source_post?.link || '';
+          const targetUrl = recommendation.target_post?.link || '';
+          const recommendationId = `${sourceUrl}-${targetUrl}`;
           const isExpanded = expandedRecommendation === recommendationId;
           const isCopied = copiedId === recommendationId;
 
@@ -170,7 +174,7 @@ export function Recommendations({
                       Анкор:
                     </span>
                     <span className="text-sm bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                      {recommendation.anchor}
+                      {recommendation.anchor_text}
                     </span>
                   </div>
                   
@@ -178,20 +182,20 @@ export function Recommendations({
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Откуда:</span>
                       <div className="text-gray-700 dark:text-gray-300 font-mono text-xs break-all">
-                        {formatUrl(recommendation.from)}
+                        {formatUrl(sourceUrl)}
                       </div>
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Куда:</span>
                       <div className="text-gray-700 dark:text-gray-300 font-mono text-xs break-all">
-                        {formatUrl(recommendation.to)}
+                        {formatUrl(targetUrl)}
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Обоснование */}
-                {recommendation.comment && (
+                {recommendation.reasoning && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -211,11 +215,22 @@ export function Recommendations({
                     
                     {isExpanded && (
                       <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
-                        {recommendation.comment}
+                        {recommendation.reasoning}
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* Дополнительная информация */}
+                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center space-x-4">
+                    <span>Статус: {recommendation.status}</span>
+                    <span>Качество: {recommendation.quality_score?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <span>
+                    {new Date(recommendation.created_at).toLocaleDateString('ru-RU')}
+                  </span>
+                </div>
               </div>
             </Card>
           );
