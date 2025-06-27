@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react';
-import { AnalysisHistory as AnalysisHistoryType } from '../types';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
+import { History, Timer, CheckCircle, AlertCircle, Eye, Link } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { 
-  History,
-  Link,
-  Timer,
-  CheckCircle,
-  AlertCircle,
-  Eye
-} from 'lucide-react';
+import { AnalysisHistory as AnalysisHistoryType } from '../types';
+import { useAnalysisHistory } from '../hooks/useApi';
+
+// SEO-оптимизированные заголовки
+const COMPONENT_TITLE = 'История SEO анализов';
+const COMPONENT_DESCRIPTION = 'Просмотр результатов предыдущих SEO анализов доменов';
 
 interface AnalysisHistoryProps {
   className?: string;
@@ -24,31 +22,11 @@ export function AnalysisHistory({
   onViewAnalysis,
   onRerunAnalysis
 }: AnalysisHistoryProps) {
-  const [history, setHistory] = useState<AnalysisHistoryType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: history = [], loading, error, execute: loadHistory } = useAnalysisHistory();
 
   useEffect(() => {
     loadHistory();
-  }, []);
-
-  const loadHistory = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/v1/analysis_history');
-      if (response.ok) {
-        const data = await response.json();
-        setHistory(data.history || []);
-      } else {
-        throw new Error('Не удалось загрузить историю');
-      }
-    } catch (err) {
-      console.error('Ошибка загрузки истории:', err);
-      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [loadHistory]);
 
   const getStatusIcon = (completedAt: string | null) => {
     if (completedAt) {
@@ -74,16 +52,21 @@ export function AnalysisHistory({
     );
   };
 
+  // Общий компонент заголовка для SEO
+  const renderHeader = (count?: number) => (
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <History className="w-5 h-5" />
+        {count !== undefined ? `${COMPONENT_TITLE} (${count})` : COMPONENT_TITLE}
+      </CardTitle>
+    </CardHeader>
+  );
+
   if (loading) {
     return (
-      <div className={cn("space-y-4", className)}>
+      <section className={cn("space-y-4", className)} aria-label={COMPONENT_DESCRIPTION}>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="w-5 h-5" />
-              История анализов
-            </CardTitle>
-          </CardHeader>
+          {renderHeader()}
           <CardContent>
             <div className="space-y-3">
               {[...Array(5)].map((_, index) => (
@@ -94,20 +77,15 @@ export function AnalysisHistory({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
     );
   }
 
   if (error) {
     return (
-      <div className={cn("space-y-4", className)}>
+      <section className={cn("space-y-4", className)} aria-label={COMPONENT_DESCRIPTION}>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="w-5 h-5" />
-              История анализов
-            </CardTitle>
-          </CardHeader>
+          {renderHeader()}
           <CardContent>
             <div className="text-center py-8">
               <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
@@ -118,20 +96,15 @@ export function AnalysisHistory({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
     );
   }
 
   if (history.length === 0) {
     return (
-      <div className={cn("space-y-4", className)}>
+      <section className={cn("space-y-4", className)} aria-label={COMPONENT_DESCRIPTION}>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="w-5 h-5" />
-              История анализов
-            </CardTitle>
-          </CardHeader>
+          {renderHeader()}
           <CardContent>
             <div className="text-center py-8">
               <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -142,23 +115,18 @@ export function AnalysisHistory({
             </div>
           </CardContent>
         </Card>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <section className={cn("space-y-4", className)} aria-label={COMPONENT_DESCRIPTION}>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="w-5 h-5" />
-            История анализов ({history.length})
-          </CardTitle>
-        </CardHeader>
+        {renderHeader(history.length)}
         <CardContent>
           <div className="space-y-3">
-            {history.map((analysis) => (
-              <div
+            {history.map((analysis: AnalysisHistoryType) => (
+              <article
                 key={analysis.id}
                 className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
               >
@@ -204,7 +172,7 @@ export function AnalysisHistory({
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
                         <Timer className="w-4 h-4" />
-                        <span>
+                        <time dateTime={analysis.created_at}>
                           {new Date(analysis.created_at).toLocaleDateString('ru-RU', {
                             year: 'numeric',
                             month: 'short',
@@ -212,7 +180,7 @@ export function AnalysisHistory({
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
-                        </span>
+                        </time>
                       </div>
                       <div className="flex items-center gap-1">
                         <Link className="w-4 h-4" />
@@ -228,6 +196,7 @@ export function AnalysisHistory({
                         size="sm"
                         onClick={() => onViewAnalysis(analysis)}
                         className="flex items-center gap-1"
+                        aria-label={`Просмотреть анализ #${analysis.id}`}
                       >
                         <Eye className="w-4 h-4" />
                         Просмотр
@@ -239,6 +208,7 @@ export function AnalysisHistory({
                         size="sm"
                         onClick={() => onRerunAnalysis(analysis)}
                         className="flex items-center gap-1"
+                        aria-label={`Повторить анализ #${analysis.id}`}
                       >
                         <Timer className="w-4 h-4" />
                         Повторить
@@ -246,11 +216,11 @@ export function AnalysisHistory({
                     )}
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </CardContent>
       </Card>
-    </div>
+    </section>
   );
 } 

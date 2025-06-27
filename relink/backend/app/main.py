@@ -784,6 +784,40 @@ class ModelConfigRequest(BaseModel):
     benchmark_params: Optional[dict] = None
 
 
+class SEOAnalysisResult(BaseModel):
+    """Результат SEO анализа."""
+    domain: str
+    analysis_date: datetime
+    score: float
+    recommendations: List[dict]
+    metrics: dict
+    status: str
+
+
+class DomainAnalysisRequest(BaseModel):
+    """Запрос для анализа домена."""
+    domain: str
+    comprehensive: Optional[bool] = False
+
+
+class CompetitorAnalysisRequest(BaseModel):
+    """Запрос для анализа конкурентов."""
+    domain: str
+    competitors: List[str]
+
+
+class AnalysisHistoryRequest(BaseModel):
+    """Запрос для получения истории анализов."""
+    limit: int = 10
+    offset: int = 0
+
+
+class ExportRequest(BaseModel):
+    """Запрос для экспорта данных."""
+    format: str  # json, csv, pdf
+    analysis_ids: List[int]
+
+
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 # Оптимизированная модель для SEO задач: qwen2.5:7b-instruct-turbo - лучшая для инструкций
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-turbo")
@@ -1040,7 +1074,7 @@ async def get_monitoring_stats():
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
-        monitoring.log_error(e, {"operation": "get_monitoring_stats"})
+        # monitoring.log_error(e, {"operation": "get_monitoring_stats"})
         raise HTTPException(status_code=500, detail="Ошибка получения статистики")
 
 # Endpoints для кэширования
@@ -1061,7 +1095,7 @@ async def clear_cache_pattern(pattern: str):
         deleted_count = await cache_service.clear_pattern(pattern)
         return {"success": True, "deleted_count": deleted_count}
     except Exception as e:
-        monitoring.log_error(e, {"operation": "clear_cache_pattern", "pattern": pattern})
+        # monitoring.log_error(e, {"operation": "clear_cache_pattern", "pattern": pattern})
         raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
 
 # Endpoints для аутентификации
@@ -1091,7 +1125,7 @@ async def register_user(user_data: UserRegistrationRequest, db: AsyncSession = D
         await db.commit()
         await db.refresh(db_user)
         
-        monitoring.logger.info(f"Зарегистрирован новый пользователь: {user_data.email}")
+        # monitoring.logger.info(f"Зарегистрирован новый пользователь: {user_data.email}")
         
         return UserResponse(
             id=db_user.id,
@@ -1104,7 +1138,7 @@ async def register_user(user_data: UserRegistrationRequest, db: AsyncSession = D
     except HTTPException:
         raise
     except Exception as e:
-        monitoring.log_error(e, {"operation": "register_user", "email": user_data.email})
+        # monitoring.log_error(e, {"operation": "register_user", "email": user_data.email})
         raise HTTPException(status_code=500, detail="Ошибка регистрации пользователя")
 
 @app.post("/api/v1/auth/login", response_model=Token)
@@ -1132,14 +1166,14 @@ async def login_user(user_data: UserLoginRequest, db: AsyncSession = Depends(get
         # Создаем токен доступа
         access_token = create_access_token(data={"sub": str(user.id)})
         
-        monitoring.logger.info(f"Пользователь вошел в систему: {user.email}")
+        # monitoring.logger.info(f"Пользователь вошел в систему: {user.email}")
         
         return Token(access_token=access_token, token_type="bearer")
         
     except HTTPException:
         raise
     except Exception as e:
-        monitoring.log_error(e, {"operation": "login_user", "email": user_data.email})
+        # monitoring.log_error(e, {"operation": "login_user", "email": user_data.email})
         raise HTTPException(status_code=500, detail="Ошибка входа")
 
 @app.get("/api/v1/auth/me", response_model=UserResponse)
@@ -1160,17 +1194,17 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         access_token = create_access_token(data={"sub": str(current_user.id)})
         return Token(access_token=access_token, token_type="bearer")
     except Exception as e:
-        monitoring.log_error(e, {"operation": "refresh_token", "user_id": current_user.id})
+        # monitoring.log_error(e, {"operation": "refresh_token", "user_id": current_user.id})
         raise HTTPException(status_code=500, detail="Ошибка обновления токена")
 
 @app.post("/api/v1/auth/logout")
 async def logout_user(current_user: User = Depends(get_current_user)):
     """Выход пользователя"""
     try:
-        monitoring.logger.info(f"Пользователь вышел из системы: {current_user.email}")
+        # monitoring.logger.info(f"Пользователь вышел из системы: {current_user.email}")
         return {"message": "Успешный выход из системы"}
     except Exception as e:
-        monitoring.log_error(e, {"operation": "logout_user", "user_id": current_user.id})
+        # monitoring.log_error(e, {"operation": "logout_user", "user_id": current_user.id})
         raise HTTPException(status_code=500, detail="Ошибка выхода")
 
 # Endpoints для SEO анализа с валидацией
@@ -1183,7 +1217,7 @@ async def analyze_domain(
     """Анализ домена с валидацией"""
     try:
         # Логируем начало анализа
-        monitoring.logger.info(f"Начат анализ домена: {request_data.domain}")
+        # monitoring.logger.info(f"Начат анализ домена: {request_data.domain}")
         
         # Здесь будет логика анализа домена
         # Пока возвращаем заглушку
@@ -1207,20 +1241,20 @@ async def analyze_domain(
         )
         
         # Логируем завершение анализа
-        monitoring.log_seo_analysis(
-            domain=request_data.domain,
-            status="completed",
-            duration=2.5
-        )
+        # monitoring.log_seo_analysis(
+        #     domain=request_data.domain,
+        #     status="completed",
+        #     duration=2.5
+        # )
         
         return analysis_result
         
     except Exception as e:
-        monitoring.log_error(e, {
-            "operation": "analyze_domain",
-            "domain": request_data.domain,
-            "user_id": current_user.id
-        })
+        # monitoring.log_error(e, {
+        #     "operation": "analyze_domain",
+        #     "domain": request_data.domain,
+        #     "user_id": current_user.id
+        # })
         raise HTTPException(status_code=500, detail="Ошибка анализа домена")
 
 @app.post("/api/v1/seo/competitors")
@@ -1230,7 +1264,7 @@ async def analyze_competitors(
 ):
     """Анализ конкурентов"""
     try:
-        monitoring.logger.info(f"Начат анализ конкурентов для домена: {request_data.domain}")
+        # monitoring.logger.info(f"Начат анализ конкурентов для домена: {request_data.domain}")
         
         # Здесь будет логика анализа конкурентов
         result = {
@@ -1247,11 +1281,11 @@ async def analyze_competitors(
         return result
         
     except Exception as e:
-        monitoring.log_error(e, {
-            "operation": "analyze_competitors",
-            "domain": request_data.domain,
-            "user_id": current_user.id
-        })
+        # monitoring.log_error(e, {
+        #     "operation": "analyze_competitors",
+        #     "domain": request_data.domain,
+        #     "user_id": current_user.id
+        # })
         raise HTTPException(status_code=500, detail="Ошибка анализа конкурентов")
 
 # Endpoints для истории и экспорта
@@ -1282,10 +1316,10 @@ async def get_analysis_history(
         }
         
     except Exception as e:
-        monitoring.log_error(e, {
-            "operation": "get_analysis_history",
-            "user_id": current_user.id
-        })
+        # monitoring.log_error(e, {
+        #     "operation": "get_analysis_history",
+        #     "user_id": current_user.id
+        # })
         raise HTTPException(status_code=500, detail="Ошибка получения истории")
 
 @app.post("/api/v1/export")
@@ -1295,7 +1329,7 @@ async def export_data(
 ):
     """Экспорт данных"""
     try:
-        monitoring.logger.info(f"Запрошен экспорт данных: {request_data.format}")
+        # monitoring.logger.info(f"Запрошен экспорт данных: {request_data.format}")
         
         # Здесь будет логика экспорта
         export_result = {
@@ -1308,11 +1342,11 @@ async def export_data(
         return export_result
         
     except Exception as e:
-        monitoring.log_error(e, {
-            "operation": "export_data",
-            "user_id": current_user.id,
-            "format": request_data.format
-        })
+        # monitoring.log_error(e, {
+        #     "operation": "export_data",
+        #     "user_id": current_user.id,
+        #     "format": request_data.format
+        # })
         raise HTTPException(status_code=500, detail="Ошибка экспорта данных")
 
 # Endpoints для валидации
@@ -1321,12 +1355,22 @@ async def validate_domain(domain: str):
     """Валидация домена"""
     try:
         # Используем валидатор из модуля валидации
-        validated_domain = Validators.validate_url(f"https://{domain}")
-        return {
-            "valid": True,
-            "domain": domain,
-            "sanitized": ValidationUtils.sanitize_input(domain)
-        }
+        # validated_domain = Validators.validate_url(f"https://{domain}")
+        # Простая валидация домена
+        import re
+        pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        if re.match(pattern, domain):
+            return {
+                "valid": True,
+                "domain": domain,
+                "sanitized": domain.lower().strip()
+            }
+        else:
+            return {
+                "valid": False,
+                "domain": domain,
+                "error": "Некорректный формат домена"
+            }
     except ValueError as e:
         return {
             "valid": False,
@@ -1345,7 +1389,7 @@ async def validate_email(email: str):
             return {
                 "valid": True,
                 "email": email,
-                "sanitized": ValidationUtils.sanitize_input(email)
+                "sanitized": email.lower().strip()
             }
         else:
             return {
@@ -1364,21 +1408,29 @@ async def validate_email(email: str):
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
     """Обработчик ошибок валидации Pydantic"""
-    return ValidationErrorHandler.handle_validation_error(exc)
+    # return ValidationErrorHandler.handle_validation_error(exc)
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Ошибка валидации данных", "errors": exc.errors()}
+    )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Обработчик HTTP ошибок"""
-    return ValidationErrorHandler.handle_http_error(exc)
+    # return ValidationErrorHandler.handle_http_error(exc)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Общий обработчик исключений"""
-    monitoring.log_error(exc, {
-        "request_method": request.method,
-        "request_path": request.url.path,
-        "operation": "general_exception"
-    })
+    # monitoring.log_error(exc, {
+    #     "request_method": request.method,
+    #     "request_path": request.url.path,
+    #     "operation": "general_exception"
+    # })
     
     return JSONResponse(
         status_code=500,
@@ -1400,7 +1452,7 @@ async def startup_event():
     # Создаем директорию для логов
     os.makedirs("logs", exist_ok=True)
     
-    monitoring.logger.info("🚀 reLink SEO Platform запущен!")
+    # monitoring.logger.info("🚀 reLink SEO Platform запущен!")
     print("🚀 reLink SEO Platform v1.0.0 запущен!")
 
 
