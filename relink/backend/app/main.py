@@ -397,17 +397,17 @@ async def generate_ai_thoughts_for_domain(domain: str, posts: List[dict], client
 @app.get("/")
 async def root():
     """Корневой endpoint."""
-    return {"message": "reLink API v4.0.0", "status": "running"}
+    return {"message": "reLink SEO Platform v4.1.1.019 запущен!"}
 
 @app.get("/health")
 async def health_check():
     """Проверка здоровья сервиса."""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    return {"status": "healthy", "version": "4.1.1.019"}
 
 @app.get("/api/v1/health")
 async def api_health():
     """API health check."""
-    return {"status": "healthy", "version": "4.0.0", "timestamp": datetime.now().isoformat()}
+    return {"status": "healthy", "version": "4.1.1.019"}
 
 @app.get("/api/v1/version")
 async def get_version():
@@ -418,7 +418,7 @@ async def get_version():
             with open(version_file, 'r', encoding='utf-8') as f:
                 version = f.read().strip()
         else:
-            version = "4.0.0"
+            version = "4.1.1.019"
         
         return {
             "version": version,
@@ -428,7 +428,7 @@ async def get_version():
         }
     except Exception as e:
         return {
-            "version": "4.0.0",
+            "version": "4.1.1.019",
             "buildDate": datetime.now().strftime('%Y-%m-%d'),
             "error": str(e)
         }
@@ -444,7 +444,8 @@ async def get_settings():
             "advanced_benchmark": True,
             "notifications": True,
             "export": True
-        }
+        },
+        "version": "4.1.1.019"
     }
 
 @app.get("/api/v1/ollama_status")
