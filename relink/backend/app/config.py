@@ -5,7 +5,8 @@
 
 import os
 from typing import Optional, Dict, Any
-from pydantic import BaseSettings, validator, Field
+from pydantic_settings import BaseSettings
+from pydantic import validator, Field
 from functools import lru_cache
 import logging
 
