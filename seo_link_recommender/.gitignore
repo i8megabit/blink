@@ -1,3 +1,282 @@
-# Ollama models (большие файлы, хранятся локально)
-ollama_models/
+# ========================================
+# SEO Link Recommender - .gitignore
+# ========================================
+
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 🐍 Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 🐍 Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# 🐍 IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 🐍 OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 🐍 Logs
+*.log
+logs/
+log/
+
+# 🐍 Database
+*.db
+*.sqlite
+*.sqlite3
 postgres_data/
+
+# 🐍 Ollama Models (большие файлы)
+ollama_models/
+models/
+*.gguf
+*.bin
+
+# 🐍 ChromaDB
+chroma_db/
+chromadb/
+
+# 🐍 Docker
+.dockerignore
+
+# 🐍 Environment Variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 🐍 Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 🐍 Backup Files
+*.bak
+*.backup
+*.old
+
+# 🐍 Cache
+.cache/
+cache/
+
+# 🐍 Node.js (для frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# 🐍 Frontend Build
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
+
+# 🐍 Frontend Dependencies
+frontend/node_modules/
+
+# 🐍 Frontend Cache
+frontend/.cache/
+frontend/.parcel-cache/
+
+# 🐍 Frontend Environment
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 🐍 Frontend Testing
+frontend/coverage/
+frontend/.nyc_output/
+
+# 🐍 Frontend IDE
+frontend/.vscode/
+frontend/.idea/
+
+# 🐍 Frontend OS
+frontend/.DS_Store
+frontend/Thumbs.db
+
+# 🐍 Frontend Logs
+frontend/logs/
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# 🐍 Frontend Build Artifacts
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+
+# 🐍 Frontend Package Manager
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
+
+# 🐍 Frontend Testing
+frontend/coverage/
+frontend/.nyc_output/
+frontend/.jest/
+
+# 🐍 Frontend Development
+frontend/.eslintcache
+frontend/.stylelintcache
+
+# 🐍 Frontend Temporary
+frontend/.tmp/
+frontend/temp/
+
+# 🐍 Project Specific
+benchmark_results/
+test_results/
+analysis_cache/
+semantic_cache/
+vector_cache/
+
+# 🐍 Large Files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 🐍 Documentation Build
+docs/_build/
+docs/build/
+
+# 🐍 Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# 🐍 ML Models
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.onnx
+*.pt
+*.pth
+
+# 🐍 Data Files
+*.csv
+*.json
+*.xml
+*.yaml
+*.yml
+!config/*.yaml
+!config/*.yml
+!*.example.yaml
+!*.example.yml
+
+# 🐍 Secrets
+secrets/
+.secrets
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# 🐍 Backup and Archive
+backup/
+archive/
+*.backup
+*.bak
+*.old
+
+# 🐍 System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 🐍 Editor Files
+*~
+*.swp
+*.swo
+*#
+.#*
+\#*#
+.#*#
+
+# 🐍 Windows
+*.lnk
+
+# 🐍 Linux
+*~
+
+# 🐍 macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk

@@ -1,11 +1,239 @@
-__pycache__/
-*.pyc
-.venv/
-pytest_cache/
+# ========================================
+# Root .gitignore - SEO Link Recommender
+# ========================================
+
 *.mdc
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 🐍 Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 🐍 Testing
 .pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# 🐍 IDEs
 .vscode/
-.cursor/
-.vscode/settings.json
-package-lock.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 🐍 OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 🐍 Logs
+*.log
+logs/
+log/
+
+# 🐍 Database
+*.db
+*.sqlite
+*.sqlite3
+
+# 🐍 Node.js
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 🐍 Frontend Build
+dist/
+build/
+.next/
+out/
+
+# 🐍 Frontend Cache
+.cache/
+.parcel-cache/
+
+# 🐍 Frontend Environment
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 🐍 Frontend Testing
+coverage/
+.nyc_output/
+.jest/
+
+# 🐍 Frontend Development
+.eslintcache
+.stylelintcache
+
+# 🐍 Frontend Temporary
+.tmp/
+temp/
+
+# 🐍 Project Specific
+seo_link_recommender/ollama_models/
+seo_link_recommender/postgres_data/
+seo_link_recommender/chroma_db/
+seo_link_recommender/benchmark_results/
+seo_link_recommender/test_results/
+seo_link_recommender/analysis_cache/
+seo_link_recommender/semantic_cache/
+seo_link_recommender/vector_cache/
+
+# 🐍 Large Files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.gguf
+*.bin
+
+# 🐍 Documentation Build
+docs/_build/
+docs/build/
+
+# 🐍 Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# 🐍 ML Models
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.onnx
+*.pt
+*.pth
+
+# 🐍 Data Files
+*.csv
+*.json
+*.xml
+*.yaml
+*.yml
+!config/*.yaml
+!config/*.yml
+!*.example.yaml
+!*.example.yml
+
+# 🐍 Secrets
+secrets/
+.secrets
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# 🐍 Backup and Archive
+backup/
+archive/
+*.backup
+*.bak
+*.old
+
+# 🐍 System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 🐍 Editor Files
+*~
+*.swp
+*.swo
+*#
+.#*
+\#*#
+.#*#
+
+# 🐍 Windows
+*.lnk
+
+# 🐍 Linux
+*~
+
+# 🐍 macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# 🐍 Docker
+.dockerignore
+
+# 🐍 Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 🐍 Cache
+.cache/
+cache/
+
+# 🐍 Environment Variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
