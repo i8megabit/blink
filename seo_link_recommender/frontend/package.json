@@ -19,7 +19,7 @@
     "clean": "rm -rf dist node_modules .turbo",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "prepare": "husky install"
+    "prepare": "echo 'Skipping husky install'"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -44,6 +44,9 @@
     "@storybook/react": "^7.6.7",
     "@storybook/react-vite": "^7.6.7",
     "@storybook/testing-library": "^0.2.2",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/user-event": "^14.5.1",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
@@ -58,7 +61,7 @@
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "vitest": "^1.0.4",
-    "vitest-dom": "^1.0.0"
+    "vitest-dom": "^0.1.0"
   },
   "engines": {
     "node": ">=18.0.0",

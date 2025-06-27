@@ -31,7 +31,7 @@ export interface WordPressPost {
   updated_at: string
 }
 
-export interface LinkRecommendation {
+export interface Recommendation {
   from: string
   to: string
   anchor: string
@@ -61,25 +61,16 @@ export interface AIThought {
 }
 
 export interface OllamaStatus {
+  status: 'ready' | 'connecting' | 'error'
+  connection: string
+  models_count: number
+  available_models: string[]
+  timestamp: string
   ready_for_work: boolean
   server_available: boolean
   model_loaded: boolean
   message: string
-  status?: string
-  connection?: string
-  models_count?: number
-  available_models?: string[]
-  timestamp?: string
-  last_check?: string
-}
-
-export interface Notification {
-  id: string
-  type: 'success' | 'error' | 'warning' | 'info'
-  title: string
-  message: string
-  timestamp: string
-  duration?: number
+  last_check: string
 }
 
 export interface AnalysisHistory {
@@ -89,22 +80,22 @@ export interface AnalysisHistory {
   connections_found: number
   recommendations_generated: number
   llm_model_used: string
-  processing_time_seconds?: number
+  processing_time_seconds: number | null
   created_at: string
-  completed_at?: string
+  completed_at: string | null
 }
 
-export interface BenchmarkRun {
+export interface BenchmarkHistory {
   id: number
   name: string
   benchmark_type: string
   status: string
-  overall_score?: number
-  quality_score?: number
-  performance_score?: number
-  duration_seconds?: number
+  overall_score: number | null
+  quality_score: number | null
+  performance_score: number | null
+  duration_seconds: number | null
   created_at: string
-  completed_at?: string
+  completed_at: string | null
 }
 
 // ===== API ТИПЫ =====
@@ -119,7 +110,7 @@ export interface WPResponse {
   status: 'success' | 'error'
   domain: string
   posts_found: number
-  recommendations: LinkRecommendation[]
+  recommendations: Recommendation[]
   delta_stats?: {
     new_posts: number
     updated_posts: number
@@ -131,24 +122,30 @@ export interface WPResponse {
   error?: string
 }
 
+// ===== WebSocket ТИПЫ =====
+
+export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
+
 export interface WebSocketMessage {
-  type: 'progress' | 'ai_thinking' | 'enhanced_ai_thinking' | 'ollama' | 'error' | 'ping'
+  type: 'progress' | 'error' | 'ollama' | 'ai_thinking' | 'enhanced_ai_thinking' | 'ping'
   step?: string
   current?: number
   total?: number
   percentage?: number
   details?: string
+  message?: string
+  error?: string
+  info?: any
   thought?: string
   thinking_stage?: string
   emoji?: string
+  thought_id?: string
   stage?: string
   content?: string
   confidence?: number
   semantic_weight?: number
   related_concepts?: string[]
   reasoning_chain?: string[]
-  info?: any
-  message?: string
   timestamp: string
 }
 
@@ -167,14 +164,45 @@ export interface UserPreferences {
   language: string
 }
 
+export interface Notification {
+  id: string
+  type: 'success' | 'error' | 'warning' | 'info'
+  title: string
+  message: string
+  details?: string
+  timestamp: Date
+  duration?: number
+}
+
+export interface Modal {
+  id: string
+  title: string
+  content: React.ReactNode
+  size?: 'sm' | 'md' | 'lg' | 'xl'
+  onClose?: () => void
+}
+
+export interface AppState {
+  domains: Domain[]
+  currentDomain: Domain | null
+  ollamaStatus: OllamaStatus | null
+  analysisHistory: AnalysisHistory[]
+  benchmarkHistory: BenchmarkHistory[]
+  notifications: Notification[]
+  modals: Modal[]
+  isLoading: boolean
+  error: string | null
+}
+
 // ===== УТИЛИТАРНЫЕ ТИПЫ =====
 
 export type LoadingState = 'idle' | 'loading' | 'success' | 'error'
 
-export interface ApiResponse<T> {
+export interface ApiResponse<T = any> {
+  status: 'success' | 'error'
   data?: T
   error?: string
-  status: number
+  message?: string
 }
 
 export type SortDirection = 'asc' | 'desc'
@@ -188,4 +216,21 @@ export interface PaginationConfig {
   page: number
   limit: number
   total: number
+}
+
+// ===== ПАРАМЕТРЫ ЗАПРОСОВ =====
+
+export interface AnalysisRequest {
+  domain: string
+  comprehensive?: boolean
+  client_id?: string
+}
+
+export interface BenchmarkRequest {
+  name: string
+  description?: string
+  benchmark_type: string
+  models: string[]
+  iterations: number
+  client_id?: string
 } 
