@@ -7,14 +7,18 @@ WORKDIR /app
 # Копируем package файлы
 COPY package*.json ./
 
-# Устанавливаем зависимости с флагом для решения конфликтов
-RUN npm install --legacy-peer-deps
+# Устанавливаем yarn через corepack
+RUN corepack enable && corepack prepare yarn@stable --activate
+
+# Очищаем node_modules и lock-файлы, затем ставим зависимости через yarn
+RUN rm -rf node_modules package-lock.json yarn.lock && yarn install --ignore-engines
 
 # Копируем исходный код
 COPY . .
 
 # Собираем проект с Vite (без Babel!)
-RUN npm run build
+ENV ROLLUP_USE_NATIVE=false
+RUN yarn build
 
 # Production образ
 FROM nginx:alpine
