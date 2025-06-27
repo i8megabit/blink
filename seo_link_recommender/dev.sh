@@ -40,6 +40,16 @@ fi
 # Переходим в директорию проекта
 cd "$PROJECT_DIR"
 
+# Загружаем BuildKit конфигурацию (следование священным правилам Docker)
+if [ -f "docker-buildkit.env" ]; then
+    echo -e "${BLUE}🐳 Загружаем BuildKit конфигурацию...${NC}"
+    export $(cat docker-buildkit.env | grep -v '^#' | xargs)
+fi
+
+# Принудительно включаем BuildKit если не настроено
+export DOCKER_BUILDKIT=${DOCKER_BUILDKIT:-1}
+export COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD:-1}
+
 # Функция для красивого заголовка
 print_header() {
     echo -e "${BLUE}=================================${NC}"

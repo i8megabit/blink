@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      target: production  # Указываем production стадию
+      cache_from:
+        - backend:latest
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     ports:
       - "8000:8000"
     environment:
@@ -24,6 +29,11 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      target: production  # Указываем production стадию
+      cache_from:
+        - frontend:latest
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     ports:
       - "3000:80"
     depends_on:
