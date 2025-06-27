@@ -117,6 +117,21 @@ class WebSocketManager:
             "info": info,
             "timestamp": datetime.now().isoformat()
         })
+    
+    async def send_ai_thinking(self, client_id: str, thought: str, thinking_stage: str = "analyzing", emoji: str = "🤔"):
+        """Отправка 'мыслей' ИИ в реальном времени."""
+        if client_id in self.active_connections:
+            try:
+                await self.active_connections[client_id].send_json({
+                    "type": "ai_thinking",
+                    "thought": thought,
+                    "thinking_stage": thinking_stage,
+                    "emoji": emoji,
+                    "timestamp": datetime.now().isoformat()
+                })
+                print(f"🧠 Мысль ИИ отправлена {client_id}: {thought[:50]}...")
+            except Exception as e:
+                print(f"❌ Ошибка отправки мысли {client_id}: {e}")
 
 
 # Глобальный менеджер WebSocket
@@ -1440,6 +1455,12 @@ async def generate_comprehensive_domain_recommendations(domain: str, client_id: 
         # Шаг 4: Создаем семантическую базу знаний
         if client_id:
             await websocket_manager.send_step(client_id, "Семантический анализ", 4, 12, "Создание семантической модели...")
+            await websocket_manager.send_ai_thinking(
+                client_id, 
+                "Создаю векторные представления статей и выстраиваю семантические связи в многомерном пространстве...",
+                "vectorizing",
+                "🧮"
+            )
         
         success = await rag_manager.create_semantic_knowledge_base(domain, full_dataset, client_id)
         if not success:
@@ -1519,6 +1540,12 @@ async def generate_comprehensive_domain_recommendations(domain: str, client_id: 
         # Шаг 11: Финальное ранжирование с учетом накопленных знаний
         if client_id:
             await websocket_manager.send_step(client_id, "Финальное ранжирование", 11, 12, "Приоритизация по важности...")
+            await websocket_manager.send_ai_thinking(
+                client_id, 
+                "Применяю накопленные знания о успешных связях и ранжирую рекомендации по потенциальной ценности...",
+                "ranking",
+                "🎯"
+            )
         
         final_recommendations = rank_recommendations_with_cumulative_intelligence(
             evolved_recommendations, existing_analysis, insights
@@ -2046,9 +2073,27 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
         print("🤖 Отправляю улучшенный семантический запрос...")
         print(f"📝 Размер промпта: {len(qwen_optimized_prompt)} символов")
         
+        # Отправляем "мысли" перед началом анализа
+        if client_id:
+            await websocket_manager.send_ai_thinking(
+                client_id, 
+                "Изучаю структуру статей и ищу скрытые семантические связи между темами...",
+                "preprocessing",
+                "🔍"
+            )
+        
         # Оптимизированные настройки для качественной генерации
         start_time = datetime.now()
         async with httpx.AsyncClient(timeout=600.0) as client:
+            # Добавляем "мысли" во время обработки
+            if client_id:
+                await websocket_manager.send_ai_thinking(
+                    client_id, 
+                    "Анализирую контекст каждой статьи и определяю её роль в общей структуре сайта...",
+                    "analyzing",
+                    "🧠"
+                )
+            
             response = await client.post(
                 OLLAMA_URL,
                 json={
@@ -2115,6 +2160,14 @@ async def generate_rag_recommendations(domain: str, client_id: Optional[str] = N
                 "total_length": len(content),
                 "model": OLLAMA_MODEL
             })
+            
+            # Отправляем "мысли" о том, что обдумываем ответ
+            await websocket_manager.send_ai_thinking(
+                client_id, 
+                f"Получил развернутый ответ в {len(content)} символов. Анализирую и ищу лучшие рекомендации...",
+                "processing",
+                "💭"
+            )
         
         # Шаг 6: Обработка результатов
         if client_id:
@@ -3151,7 +3204,7 @@ async def generate_intelligent_semantic_recommendations(domain: str, client_id: 
         print(f"🧠 Запуск интеллектуального анализа для {domain}...")
         
         # Шаг 1: Получаем семантически обогащенные данные из БД
-        async with get_async_session() as session:
+        async with AsyncSessionLocal() as session:
             try:
                 domain_obj = await session.execute(
                     select(Domain).where(Domain.name == domain)
@@ -3555,220 +3608,3 @@ async def ensure_ollama_model_context(model_name: str, context_size: int = OPTIM
     except Exception as e:
         print(f"❌ Ошибка настройки контекста модели: {e}")
         return False
-
-
-async def generate_intelligent_semantic_recommendations(domain: str, client_id: Optional[str] = None) -> list[dict[str, str]]:
-    """Улучшенная генерация рекомендаций с использованием глубокого семантического анализа."""
-    
-    analysis_start_time = datetime.now()
-    
-    try:
-        if client_id:
-            await websocket_manager.send_step(client_id, "Начало умного анализа", 1, 8, "Инициализация семантического движка...")
-        
-        print(f"🧠 Запуск интеллектуального анализа для {domain}...")
-        
-        # Шаг 1: Получаем семантически обогащенные данные из БД
-        async with get_async_session() as session:
-            try:
-                domain_obj = await session.execute(
-                    select(Domain).where(Domain.name == domain)
-                )
-                domain_record = domain_obj.scalar_one_or_none()
-                
-                if not domain_record:
-                    error_msg = f"❌ Домен {domain} не найден в БД"
-                    if client_id:
-                        await websocket_manager.send_error(client_id, error_msg)
-                    return []
-                
-                # Получаем все посты с полными семантическими данными
-                result = await session.execute(
-                    select(WordPressPost)
-                    .where(WordPressPost.domain_id == domain_record.id)
-                    .where(WordPressPost.content.isnot(None))
-                    .order_by(WordPressPost.linkability_score.desc())
-                    .limit(50)  # Увеличиваем до 50 статей для лучшего покрытия
-                )
-                
-                all_posts = result.scalars().all()
-                
-                if not all_posts:
-                    error_msg = f"❌ Не найдено статей для домена {domain}"
-                    if client_id:
-                        await websocket_manager.send_error(client_id, error_msg)
-                    return []
-                
-                # Диагностическое логирование
-                print(f"🔍 ДИАГНОСТИКА СТАТЕЙ:")
-                print(f"   📊 Всего статей в БД для домена: {len(all_posts)}")
-                print(f"   📈 Статьи с linkability_score > 0: {len([p for p in all_posts if p.linkability_score and p.linkability_score > 0])}")
-                print(f"   📝 Статьи с семантическим резюме: {len([p for p in all_posts if p.semantic_summary])}")
-                print(f"   🔑 Статьи с ключевыми концепциями: {len([p for p in all_posts if p.key_concepts])}")
-
-                if client_id:
-                    await websocket_manager.send_step(client_id, "Анализ семантики", 2, 8, f"Обработка {len(all_posts)} статей...")
-
-                print(f"📊 Загружено {len(all_posts)} семантически обогащенных статей")
-                
-                # Шаг 2: Создаем улучшенный контекст для LLM
-                articles_context = ""
-                posts_data = []
-                
-                for i, post in enumerate(all_posts, 1):
-                    post_data = {
-                        'title': post.title,
-                        'link': post.link,
-                        'content': post.content[:400],  # Больше контента
-                        'key_concepts': post.key_concepts or [],
-                        'semantic_summary': post.semantic_summary or '',
-                        'content_type': post.content_type or 'статья',
-                        'difficulty_level': post.difficulty_level or 'средний',
-                        'target_audience': post.target_audience or 'общая аудитория',
-                        'linkability_score': post.linkability_score or 0.5,
-                        'semantic_richness': post.semantic_richness or 0.5
-                    }
-                    posts_data.append(post_data)
-                    
-                    # Создаем богатый контекст для каждой статьи
-                    concepts_str = ', '.join(post_data['key_concepts'][:10]) if post_data['key_concepts'] else 'не определены'
-                    
-                    articles_context += f"""📄 СТАТЬЯ {i}: «{post_data['title']}»
-🔗 URL: {post_data['link']}
-📊 АНАЛИТИКА: Тип: {post_data['content_type']} | Сложность: {post_data['difficulty_level']} | Потенциал связей: {post_data['linkability_score']:.2f} | Семантическая насыщенность: {post_data['semantic_richness']:.2f}
-👥 ЦЕЛЕВАЯ АУДИТОРИЯ: {post_data['target_audience']}
-🧠 КЛЮЧЕВЫЕ КОНЦЕПЦИИ: {concepts_str}
-📝 СЕМАНТИЧЕСКОЕ РЕЗЮМЕ: {post_data['semantic_summary'] or 'Автоматически извлечено из контента'}
-💡 ФРАГМЕНТ КОНТЕНТА: {post_data['content']}...
-
-"""
-
-                if client_id:
-                    await websocket_manager.send_step(client_id, "Создание промпта", 3, 8, "Подготовка контекста для ИИ...")
-                
-                # Шаг 3: Создаем интеллектуальный промпт
-                intelligent_prompt = f"""🎯 ЗАДАЧА: Создание внутренних ссылок для сайта {domain}
-
-Анализируешь {len(all_posts)} статей сайта {domain}:
-
-{articles_context}
-
-ЦЕЛЬ: Создать качественные внутренние ссылки между статьями.
-
-ПРИНЦИПЫ:
-1. Семантическая связь между статьями
-2. Логичные переходы для читателя  
-3. Анкоры описывают содержание целевой страницы
-4. Избегай общих фраз: "читать далее", "подробнее"
-
-ПРИМЕРЫ ХОРОШИХ АНКОРОВ:
-❌ "подробное руководство по Волгограду"
-✅ "климат, цены на жилье и работу в Волгограде"
-
-❌ "информация о достопримечательностях"
-✅ "музеи и памятники Казани с режимом работы"
-
-ИНСТРУКЦИЯ:
-1. Найди семантические связи между статьями
-2. Создай 10-15 рекомендаций
-3. Для каждой дай обоснование
-
-ФОРМАТ:
-[№] ИСТОЧНИК: [URL] → ЦЕЛЬ: [URL]
-АНКОР: "[описательный анкор]"
-ОБОСНОВАНИЕ: [почему связь логична]
-
-НАЧНИ:"""
-
-                if client_id:
-                    await websocket_manager.send_step(client_id, "Запрос к ИИ", 4, 8, "Отправка семантического контекста...")
-                    await websocket_manager.send_ollama_info(client_id, {
-                        "status": "starting",
-                        "model": OLLAMA_MODEL,
-                        "model_info": "qwen2.5:7b - экспертный семантический анализ",
-                        "articles_count": len(all_posts),
-                        "prompt_length": len(intelligent_prompt),
-                        "timeout": 300,
-                        "settings": "temperature=0.3, ctx=10240, predict=1500",
-                        "expected_recommendations": "12-18 экспертных рекомендаций"
-                    })
-                
-                print("🤖 Отправляю экспертный семантический запрос...")
-                print(f"📝 Размер промпта: {len(intelligent_prompt)} символов")
-                
-                # Шаг 4: Запрос к Ollama с оптимальными настройками
-                start_time = datetime.now()
-                async with httpx.AsyncClient(timeout=600.0) as client:
-                    response = await client.post(
-                        OLLAMA_URL,
-                        json={
-                            "model": OLLAMA_MODEL,
-                            "prompt": intelligent_prompt,
-                            "stream": False,
-                            "options": {
-                                "temperature": OPTIMAL_TEMPERATURE,
-                                "num_ctx": OPTIMAL_CONTEXT_SIZE,
-                                "num_predict": OPTIMAL_PREDICTION_SIZE,
-                                "top_p": OPTIMAL_TOP_P,
-                                "top_k": OPTIMAL_TOP_K,
-                                "repeat_penalty": OPTIMAL_REPEAT_PENALTY,
-                                "seed": 123,
-                                "stop": ["🚀 НАЧНИ", "КОНЕЦ АНАЛИЗА", "```"],
-                                "num_thread": 6
-                            }
-                        },
-                        timeout=600
-                    )
-                
-                request_time = (datetime.now() - start_time).total_seconds()
-                
-                if client_id:
-                    await websocket_manager.send_ollama_info(client_id, {
-                        "status": "completed",
-                        "response_code": response.status_code,
-                        "request_time": f"{request_time:.1f}s",
-                        "response_length": len(response.text) if response.status_code == 200 else 0
-                    })
-                
-                if response.status_code != 200:
-                    error_msg = f"❌ Ollama error: {response.status_code}"
-                    if client_id:
-                        await websocket_manager.send_error(client_id, error_msg)
-                    return []
-                
-                data = response.json()
-                content = data.get("response", "")
-                
-                if client_id:
-                    await websocket_manager.send_step(client_id, "Обработка результата", 5, 8, "Парсинг семантических рекомендаций...")
-                
-                print(f"📝 Получен ответ от Ollama: {len(content)} символов за {request_time:.1f}с")
-                print("🔍 ЭКСПЕРТНЫЙ ОТВЕТ:")
-                print("="*70)
-                print(content[:1500] + "..." if len(content) > 1500 else content)
-                print("="*70)
-                
-                # Шаг 5: Улучшенный парсинг рекомендаций
-                recommendations = parse_intelligent_recommendations(content, domain, posts_data)
-                
-                if client_id:
-                    await websocket_manager.send_step(client_id, "Финализация", 6, 8, f"Обработано {len(recommendations)} рекомендаций")
-                
-                total_time = (datetime.now() - analysis_start_time).total_seconds()
-                print(f"✅ Интеллектуальный анализ завершен: {len(recommendations)} рекомендаций за {total_time:.1f}с")
-                
-                return recommendations[:25]  # Возвращаем топ-25
-                
-            except Exception as db_error:
-                error_msg = f"❌ Ошибка БД: {db_error}"
-                print(error_msg)
-                if client_id:
-                    await websocket_manager.send_error(client_id, "Ошибка базы данных", str(db_error))
-                return []
-                
-    except Exception as e:
-        error_msg = f"❌ Критическая ошибка интеллектуального анализа: {e}"
-        print(error_msg)
-        if client_id:
-            await websocket_manager.send_error(client_id, "Критическая ошибка", str(e))
-        return []
