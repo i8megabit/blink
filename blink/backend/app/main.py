@@ -8,7 +8,7 @@ import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Tuple
 
@@ -18,12 +18,13 @@ import nltk
 import numpy as np
 import ollama
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import (
@@ -32,6 +33,20 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# Импортируем новые модули
+from .monitoring import monitoring, monitoring_middleware, metrics_endpoint, health_check
+from .cache import cache_service, cache_middleware, cache_stats, cache_clear
+from .validation import (
+    ValidationErrorHandler, DomainAnalysisRequest, SEOAnalysisResult,
+    UserRegistrationRequest, UserLoginRequest, UserProfileUpdateRequest,
+    AnalysisHistoryRequest, ExportRequest, Validators, ValidationUtils
+)
+from .auth import (
+    get_current_user, create_access_token, get_password_hash, verify_password,
+    User, UserCreate, UserResponse, Token, TokenData
+)
+from .database import get_db, engine
 
 # Загрузка NLTK данных при старте
 try:
@@ -100,22 +115,22 @@ class WebSocketManager:
         """Подключение нового клиента."""
         await websocket.accept()
         self.active_connections[client_id] = websocket
-        print(f"🔌 WebSocket подключен: {client_id}")
+        monitoring.logger.info(f"WebSocket подключен: {client_id}")
 
     def disconnect(self, client_id: str) -> None:
         """Отключение клиента."""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-            print(f"🔌 WebSocket отключен: {client_id}")
+            monitoring.logger.info(f"WebSocket отключен: {client_id}")
 
     async def send_progress(self, client_id: str, message: dict) -> None:
         """Отправка прогресса конкретному клиенту."""
         if client_id in self.active_connections:
             try:
                 await self.active_connections[client_id].send_json(message)
-                print(f"📊 Прогресс отправлен {client_id}: {message}")
+                monitoring.logger.debug(f"Прогресс отправлен {client_id}: {message}")
             except Exception as e:
-                print(f"❌ Ошибка отправки прогресса {client_id}: {e}")
+                monitoring.log_error(e, {"client_id": client_id, "operation": "send_progress"})
 
     async def send_error(self, client_id: str, error: str, details: str = "") -> None:
         """Отправка ошибки клиенту."""
@@ -157,9 +172,9 @@ class WebSocketManager:
                     "emoji": emoji,
                     "timestamp": datetime.now().isoformat()
                 })
-                print(f"🧠 Мысль ИИ отправлена {client_id}: {thought[:50]}...")
+                monitoring.logger.debug(f"Мысль ИИ отправлена {client_id}: {thought[:50]}...")
             except Exception as e:
-                print(f"❌ Ошибка отправки мысли {client_id}: {e}")
+                monitoring.log_error(e, {"client_id": client_id, "operation": "send_ai_thinking"})
     
     async def send_enhanced_ai_thinking(self, client_id: str, ai_thought: AIThought) -> None:
         """Отправка расширенных мыслей ИИ с аналитикой."""
@@ -176,9 +191,9 @@ class WebSocketManager:
                     "reasoning_chain": ai_thought.reasoning_chain,
                     "timestamp": ai_thought.timestamp.isoformat()
                 })
-                print(f"🔬 Расширенная мысль ИИ отправлена {client_id}: {ai_thought.stage}")
+                monitoring.logger.debug(f"Расширенная мысль ИИ отправлена {client_id}: {ai_thought.stage}")
             except Exception as e:
-                print(f"❌ Ошибка отправки расширенной мысли {client_id}: {e}")
+                monitoring.log_error(e, {"client_id": client_id, "operation": "send_enhanced_ai_thinking"})
 
 
 # Глобальные переменные
@@ -191,9 +206,16 @@ thought_generator: Optional['IntelligentThoughtGenerator'] = None
 rag_manager: Optional['AdvancedRAGManager'] = None
 cumulative_manager: Optional['CumulativeIntelligenceManager'] = None
 
-app = FastAPI()
+# Создаем FastAPI приложение с настройками мониторинга
+app = FastAPI(
+    title="Blink SEO Platform",
+    description="Платформа для SEO-инженеров с AI-анализом",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-# Добавляем CORS middleware
+# Добавляем middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -201,6 +223,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Добавляем middleware мониторинга
+app.middleware("http")(monitoring_middleware)
+
+# Инструментируем приложение для мониторинга
+monitoring.instrument_fastapi(app)
+monitoring.instrument_sqlalchemy(engine)
+monitoring.instrument_requests()
 
 # Добавляем статические файлы
 static_dir = Path(__file__).parent.parent.parent / "frontend"
@@ -950,6 +980,381 @@ async def get_benchmarks():
         return {"error": str(e)}
 
 
+# ============================================================================
+# НОВЫЕ API ENDPOINTS ДЛЯ МОНИТОРИНГА, КЭШИРОВАНИЯ И ВАЛИДАЦИИ
+# ============================================================================
+
+# Endpoints для мониторинга
+@app.get("/metrics")
+async def get_metrics():
+    """Endpoint для получения метрик Prometheus"""
+    return await metrics_endpoint()
+
+@app.get("/api/v1/monitoring/health")
+async def get_monitoring_health():
+    """Endpoint для проверки здоровья с мониторингом"""
+    return await health_check()
+
+@app.get("/api/v1/monitoring/stats")
+async def get_monitoring_stats():
+    """Получение статистики мониторинга"""
+    try:
+        stats = await cache_service.get_stats()
+        return {
+            "cache_stats": stats,
+            "active_connections": len(websocket_manager.active_connections) if websocket_manager else 0,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "get_monitoring_stats"})
+        raise HTTPException(status_code=500, detail="Ошибка получения статистики")
+
+# Endpoints для кэширования
+@app.get("/api/v1/cache/stats")
+async def get_cache_stats():
+    """Получение статистики кэша"""
+    return await cache_stats()
+
+@app.post("/api/v1/cache/clear")
+async def clear_cache():
+    """Очистка кэша"""
+    return await cache_clear()
+
+@app.delete("/api/v1/cache/{pattern}")
+async def clear_cache_pattern(pattern: str):
+    """Очистка кэша по паттерну"""
+    try:
+        deleted_count = await cache_service.clear_pattern(pattern)
+        return {"success": True, "deleted_count": deleted_count}
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "clear_cache_pattern", "pattern": pattern})
+        raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
+
+# Endpoints для аутентификации
+@app.post("/api/v1/auth/register", response_model=UserResponse)
+async def register_user(user_data: UserRegistrationRequest, db: AsyncSession = Depends(get_db)):
+    """Регистрация нового пользователя"""
+    try:
+        # Проверяем, существует ли пользователь с таким email
+        existing_user = await db.execute(
+            select(User).where(User.email == user_data.email)
+        )
+        if existing_user.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail="Пользователь с таким email уже существует"
+            )
+        
+        # Создаем нового пользователя
+        hashed_password = get_password_hash(user_data.password)
+        db_user = User(
+            email=user_data.email,
+            username=user_data.username,
+            hashed_password=hashed_password
+        )
+        
+        db.add(db_user)
+        await db.commit()
+        await db.refresh(db_user)
+        
+        monitoring.logger.info(f"Зарегистрирован новый пользователь: {user_data.email}")
+        
+        return UserResponse(
+            id=db_user.id,
+            email=db_user.email,
+            username=db_user.username,
+            is_active=db_user.is_active,
+            created_at=db_user.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "register_user", "email": user_data.email})
+        raise HTTPException(status_code=500, detail="Ошибка регистрации пользователя")
+
+@app.post("/api/v1/auth/login", response_model=Token)
+async def login_user(user_data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
+    """Вход пользователя"""
+    try:
+        # Ищем пользователя
+        user = await db.execute(
+            select(User).where(User.email == user_data.email)
+        )
+        user = user.scalar_one_or_none()
+        
+        if not user or not verify_password(user_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=401,
+                detail="Неверный email или пароль"
+            )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Пользователь неактивен"
+            )
+        
+        # Создаем токен доступа
+        access_token = create_access_token(data={"sub": str(user.id)})
+        
+        monitoring.logger.info(f"Пользователь вошел в систему: {user.email}")
+        
+        return Token(access_token=access_token, token_type="bearer")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "login_user", "email": user_data.email})
+        raise HTTPException(status_code=500, detail="Ошибка входа")
+
+@app.get("/api/v1/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Получение информации о текущем пользователе"""
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at
+    )
+
+@app.post("/api/v1/auth/refresh", response_model=Token)
+async def refresh_token(current_user: User = Depends(get_current_user)):
+    """Обновление токена доступа"""
+    try:
+        access_token = create_access_token(data={"sub": str(current_user.id)})
+        return Token(access_token=access_token, token_type="bearer")
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "refresh_token", "user_id": current_user.id})
+        raise HTTPException(status_code=500, detail="Ошибка обновления токена")
+
+@app.post("/api/v1/auth/logout")
+async def logout_user(current_user: User = Depends(get_current_user)):
+    """Выход пользователя"""
+    try:
+        monitoring.logger.info(f"Пользователь вышел из системы: {current_user.email}")
+        return {"message": "Успешный выход из системы"}
+    except Exception as e:
+        monitoring.log_error(e, {"operation": "logout_user", "user_id": current_user.id})
+        raise HTTPException(status_code=500, detail="Ошибка выхода")
+
+# Endpoints для SEO анализа с валидацией
+@app.post("/api/v1/seo/analyze", response_model=SEOAnalysisResult)
+async def analyze_domain(
+    request_data: DomainAnalysisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Анализ домена с валидацией"""
+    try:
+        # Логируем начало анализа
+        monitoring.logger.info(f"Начат анализ домена: {request_data.domain}")
+        
+        # Здесь будет логика анализа домена
+        # Пока возвращаем заглушку
+        analysis_result = SEOAnalysisResult(
+            domain=request_data.domain,
+            analysis_date=datetime.utcnow(),
+            score=75.5,
+            recommendations=[
+                {
+                    "type": "internal_linking",
+                    "priority": "high",
+                    "description": "Добавить внутренние ссылки между связанными статьями"
+                }
+            ],
+            metrics={
+                "total_posts": 100,
+                "internal_links": 50,
+                "semantic_density": 0.8
+            },
+            status="completed"
+        )
+        
+        # Логируем завершение анализа
+        monitoring.log_seo_analysis(
+            domain=request_data.domain,
+            status="completed",
+            duration=2.5
+        )
+        
+        return analysis_result
+        
+    except Exception as e:
+        monitoring.log_error(e, {
+            "operation": "analyze_domain",
+            "domain": request_data.domain,
+            "user_id": current_user.id
+        })
+        raise HTTPException(status_code=500, detail="Ошибка анализа домена")
+
+@app.post("/api/v1/seo/competitors")
+async def analyze_competitors(
+    request_data: CompetitorAnalysisRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Анализ конкурентов"""
+    try:
+        monitoring.logger.info(f"Начат анализ конкурентов для домена: {request_data.domain}")
+        
+        # Здесь будет логика анализа конкурентов
+        result = {
+            "domain": request_data.domain,
+            "competitors": request_data.competitors,
+            "analysis_date": datetime.utcnow().isoformat(),
+            "metrics": {
+                "traffic_comparison": {},
+                "backlink_analysis": {},
+                "keyword_overlap": {}
+            }
+        }
+        
+        return result
+        
+    except Exception as e:
+        monitoring.log_error(e, {
+            "operation": "analyze_competitors",
+            "domain": request_data.domain,
+            "user_id": current_user.id
+        })
+        raise HTTPException(status_code=500, detail="Ошибка анализа конкурентов")
+
+# Endpoints для истории и экспорта
+@app.get("/api/v1/history")
+async def get_analysis_history(
+    request: AnalysisHistoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение истории анализов с валидацией"""
+    try:
+        # Здесь будет логика получения истории
+        history = [
+            {
+                "id": 1,
+                "domain": "example.com",
+                "analysis_date": datetime.utcnow().isoformat(),
+                "status": "completed",
+                "score": 85.0
+            }
+        ]
+        
+        return {
+            "history": history,
+            "total": len(history),
+            "limit": request.limit,
+            "offset": request.offset
+        }
+        
+    except Exception as e:
+        monitoring.log_error(e, {
+            "operation": "get_analysis_history",
+            "user_id": current_user.id
+        })
+        raise HTTPException(status_code=500, detail="Ошибка получения истории")
+
+@app.post("/api/v1/export")
+async def export_data(
+    request_data: ExportRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Экспорт данных"""
+    try:
+        monitoring.logger.info(f"Запрошен экспорт данных: {request_data.format}")
+        
+        # Здесь будет логика экспорта
+        export_result = {
+            "format": request_data.format,
+            "analysis_count": len(request_data.analysis_ids),
+            "download_url": f"/api/v1/downloads/export_{datetime.utcnow().timestamp()}.{request_data.format}",
+            "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat()
+        }
+        
+        return export_result
+        
+    except Exception as e:
+        monitoring.log_error(e, {
+            "operation": "export_data",
+            "user_id": current_user.id,
+            "format": request_data.format
+        })
+        raise HTTPException(status_code=500, detail="Ошибка экспорта данных")
+
+# Endpoints для валидации
+@app.post("/api/v1/validate/domain")
+async def validate_domain(domain: str):
+    """Валидация домена"""
+    try:
+        # Используем валидатор из модуля валидации
+        validated_domain = Validators.validate_url(f"https://{domain}")
+        return {
+            "valid": True,
+            "domain": domain,
+            "sanitized": ValidationUtils.sanitize_input(domain)
+        }
+    except ValueError as e:
+        return {
+            "valid": False,
+            "domain": domain,
+            "error": str(e)
+        }
+
+@app.post("/api/v1/validate/email")
+async def validate_email(email: str):
+    """Валидация email"""
+    try:
+        # Простая валидация email
+        import re
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if re.match(pattern, email):
+            return {
+                "valid": True,
+                "email": email,
+                "sanitized": ValidationUtils.sanitize_input(email)
+            }
+        else:
+            return {
+                "valid": False,
+                "email": email,
+                "error": "Некорректный формат email"
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "email": email,
+            "error": str(e)
+        }
+
+# Обработчики ошибок
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    """Обработчик ошибок валидации Pydantic"""
+    return ValidationErrorHandler.handle_validation_error(exc)
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Обработчик HTTP ошибок"""
+    return ValidationErrorHandler.handle_http_error(exc)
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Общий обработчик исключений"""
+    monitoring.log_error(exc, {
+        "request_method": request.method,
+        "request_path": request.url.path,
+        "operation": "general_exception"
+    })
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "message": "Внутренняя ошибка сервера",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
 # Инициализация при запуске
 @app.on_event("startup")
 async def startup_event():
@@ -957,7 +1362,12 @@ async def startup_event():
     global websocket_manager
     websocket_manager = WebSocketManager()
     initialize_rag_system()
-    print("🚀 reLink API v4.0.0 запущен!")
+    
+    # Создаем директорию для логов
+    os.makedirs("logs", exist_ok=True)
+    
+    monitoring.logger.info("🚀 Blink SEO Platform запущен!")
+    print("🚀 Blink SEO Platform v1.0.0 запущен!")
 
 
 if __name__ == "__main__":
