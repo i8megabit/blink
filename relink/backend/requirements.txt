@@ -17,19 +17,19 @@ numpy==1.24.3
 pandas==2.1.4
 
 # RAG система зависимости  
-chromadb==0.4.22
+chromadb==0.4.14
 ollama==0.1.8
 
 # Мониторинг и наблюдаемость
 prometheus-client==0.19.0
-opentelemetry-api==1.21.0
-opentelemetry-sdk==1.21.0
+opentelemetry-api==1.12.0
+opentelemetry-sdk==1.12.0
 opentelemetry-instrumentation-fastapi==0.42b0
 opentelemetry-instrumentation-sqlalchemy==0.42b0
 opentelemetry-instrumentation-requests==0.42b0
 opentelemetry-instrumentation-httpx==0.42b0
 opentelemetry-exporter-prometheus==0.55b1
-opentelemetry-exporter-jaeger==1.21.0
+opentelemetry-exporter-jaeger
 
 # Кэширование
 redis[hiredis]==5.0.1
