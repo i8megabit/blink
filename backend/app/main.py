@@ -1434,101 +1434,87 @@ async def reindex_wordpress_site(
         raise HTTPException(status_code=500, detail=f"Ошибка реиндексации: {str(e)}")
 
 async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]:
-    """Парсинг WordPress сайта для извлечения статей."""
+    """Парсинг WordPress сайта через REST API для извлечения статей."""
     posts = []
     
     try:
-        # Получаем главную страницу
+        # Формируем URL для WordPress REST API
+        api_url = f"{domain.rstrip('/')}/wp-json/wp/v2/posts"
+        
+        if client_id:
+            await websocket_manager.send_step(client_id, "Подключение к WordPress API", 0, 1)
+        
+        # Получаем статьи через WordPress REST API
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(domain)
+            # Сначала пробуем получить 100 статей
+            response = await client.get(f"{api_url}?per_page=100")
+            
             if response.status_code != 200:
-                raise Exception(f"Не удалось получить доступ к сайту: {response.status_code}")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Ищем ссылки на статьи (обычно в WordPress это /yyyy/mm/dd/post-slug/)
-            article_links = []
-            
-            # Ищем ссылки в основном контенте
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                if any(pattern in href for pattern in ['/20', '/19', '/post', '/article', '/blog']):
-                    if href.startswith('/'):
-                        href = domain.rstrip('/') + href
-                    elif not href.startswith(('http://', 'https://')):
-                        continue
+                # Если не получилось, пробуем получить меньше статей
+                response = await client.get(f"{api_url}?per_page=50")
+                
+                if response.status_code != 200:
+                    # Если и это не работает, пробуем получить 10 статей
+                    response = await client.get(f"{api_url}?per_page=10")
                     
-                    if href not in article_links:
-                        article_links.append(href)
+                    if response.status_code != 200:
+                        raise Exception(f"Не удалось получить доступ к WordPress API: {response.status_code}")
             
-            # Ограничиваем количество статей для тестирования
-            article_links = article_links[:10]
+            wp_posts = response.json()
             
             if client_id:
-                await websocket_manager.send_step(client_id, "Парсинг статей", 0, len(article_links))
+                await websocket_manager.send_step(client_id, f"Найдено {len(wp_posts)} статей", 1, len(wp_posts))
             
-            # Парсим каждую статью
-            for i, link in enumerate(article_links):
+            # Обрабатываем каждую статью
+            for i, wp_post in enumerate(wp_posts):
                 try:
                     if client_id:
-                        await websocket_manager.send_step(client_id, f"Обработка статьи {i+1}", i+1, len(article_links), link)
+                        await websocket_manager.send_step(client_id, f"Обработка статьи {i+1}", i+1, len(wp_posts))
                     
-                    article_response = await client.get(link)
-                    if article_response.status_code == 200:
-                        article_soup = BeautifulSoup(article_response.text, 'html.parser')
-                        
-                        # Извлекаем заголовок
-                        title = ""
-                        title_elem = article_soup.find('h1') or article_soup.find('title')
-                        if title_elem:
-                            title = title_elem.get_text().strip()
-                        
-                        # Извлекаем контент
-                        content = ""
-                        content_elem = article_soup.find('article') or article_soup.find(class_='entry-content') or article_soup.find(class_='post-content')
-                        if content_elem:
-                            content = content_elem.get_text().strip()
-                        else:
-                            # Fallback: берем весь текст из body
-                            body = article_soup.find('body')
-                            if body:
-                                content = body.get_text().strip()
-                        
-                        # Извлекаем excerpt
-                        excerpt = ""
-                        excerpt_elem = article_soup.find(class_='excerpt') or article_soup.find(class_='summary')
-                        if excerpt_elem:
-                            excerpt = excerpt_elem.get_text().strip()
-                        
-                        # Извлекаем дату
-                        date = datetime.now(timezone.utc)
-                        date_elem = article_soup.find('time') or article_soup.find(class_='date')
-                        if date_elem:
-                            try:
-                                date_str = date_elem.get('datetime') or date_elem.get_text()
-                                date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                            except:
-                                pass
-                        
-                        if title and content:
-                            posts.append({
-                                'id': i + 1,
-                                'title': title,
-                                'content': content,
-                                'excerpt': excerpt,
-                                'link': link,
-                                'date': date
-                            })
+                    # Извлекаем данные из WordPress API ответа
+                    post_id = wp_post.get('id', 0)
+                    title = wp_post.get('title', {}).get('rendered', '')
+                    content = wp_post.get('content', {}).get('rendered', '')
+                    excerpt = wp_post.get('excerpt', {}).get('rendered', '')
+                    link = wp_post.get('link', '')
                     
-                    # Небольшая задержка между запросами
-                    await asyncio.sleep(0.5)
+                    # Парсим дату
+                    date = datetime.now(timezone.utc)
+                    date_str = wp_post.get('date', '')
+                    if date_str:
+                        try:
+                            date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        except:
+                            pass
+                    
+                    # Очищаем HTML теги из контента
+                    if content:
+                        soup = BeautifulSoup(content, 'html.parser')
+                        content = soup.get_text().strip()
+                    
+                    if excerpt:
+                        soup = BeautifulSoup(excerpt, 'html.parser')
+                        excerpt = soup.get_text().strip()
+                    
+                    if title and content:
+                        posts.append({
+                            'id': post_id,
+                            'title': title,
+                            'content': content,
+                            'excerpt': excerpt,
+                            'link': link,
+                            'date': date
+                        })
+                    
+                    # Небольшая задержка между обработкой статей
+                    await asyncio.sleep(0.1)
                     
                 except Exception as e:
-                    logger.warning(f"Ошибка при парсинге статьи {link}: {e}")
+                    logger.warning(f"Ошибка при обработке статьи {i+1}: {e}")
                     continue
             
             if client_id:
-                await websocket_manager.send_step(client_id, "Индексация завершена", len(article_links), len(article_links))
+                await websocket_manager.send_step(client_id, "Индексация завершена", len(wp_posts), len(wp_posts))
         
         return posts
         
