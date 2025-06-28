@@ -1,9 +1,12 @@
 """Модели данных для приложения."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from uuid import uuid4
+from enum import Enum
+from pydantic import BaseModel, Field
 
 class Base(DeclarativeBase):
     """Базовый класс для всех моделей."""
@@ -29,6 +32,9 @@ class User(Base):
     domains: Mapped[List["Domain"]] = relationship("Domain", back_populates="owner")
     analyses: Mapped[List["AnalysisHistory"]] = relationship("AnalysisHistory", back_populates="user")
     diagrams: Mapped[List["Diagram"]] = relationship("Diagram", back_populates="user")
+    tests: Mapped[List["Test"]] = relationship("Test", back_populates="user")
+    test_executions: Mapped[List["TestExecution"]] = relationship("TestExecution", back_populates="user")
+    test_suites: Mapped[List["TestSuite"]] = relationship("TestSuite", back_populates="user")
     
     __table_args__ = (
         Index('idx_user_username', 'username'),
@@ -327,4 +333,336 @@ class DiagramTemplate(Base):
         Index('idx_template_name', 'name'),
         Index('idx_template_type', 'diagram_type'),
         Index('idx_template_active', 'is_active'),
-    ) 
+    )
+
+# ============================================================================
+# МОДЕЛИ ДЛЯ СИСТЕМЫ ТЕСТИРОВАНИЯ
+# ============================================================================
+
+class TestType(str, Enum):
+    """Типы тестов"""
+    UNIT = "unit"
+    INTEGRATION = "integration"
+    PERFORMANCE = "performance"
+    LOAD = "load"
+    SECURITY = "security"
+    API = "api"
+    UI = "ui"
+    E2E = "e2e"
+    BENCHMARK = "benchmark"
+    SEO = "seo"
+    LLM = "llm"
+
+
+class TestStatus(str, Enum):
+    """Статусы тестов"""
+    PENDING = "pending"
+    RUNNING = "running"
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    ERROR = "error"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+
+
+class TestPriority(str, Enum):
+    """Приоритеты тестов"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class TestEnvironment(str, Enum):
+    """Окружения для тестирования"""
+    LOCAL = "local"
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+
+class TestRequest(BaseModel):
+    """Запрос на создание теста"""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    test_type: TestType
+    priority: TestPriority = TestPriority.MEDIUM
+    environment: TestEnvironment = TestEnvironment.LOCAL
+    timeout: Optional[int] = Field(None, ge=1, le=3600)
+    parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    retry_count: int = Field(default=0, ge=0, le=5)
+    parallel: bool = Field(default=False)
+    dependencies: Optional[List[str]] = Field(default_factory=list)
+    tags: Optional[List[str]] = Field(default_factory=list)
+
+
+class TestResult(BaseModel):
+    """Результат выполнения теста"""
+    test_id: str
+    status: TestStatus
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    duration: Optional[float] = Field(None, ge=0)
+    passed: Optional[int] = Field(None, ge=0)
+    failed: Optional[int] = Field(None, ge=0)
+    skipped: Optional[int] = Field(None, ge=0)
+    total: Optional[int] = Field(None, ge=0)
+    message: Optional[str] = None
+    error: Optional[str] = None
+    stack_trace: Optional[str] = None
+    memory_usage: Optional[float] = Field(None, ge=0)
+    cpu_usage: Optional[float] = Field(None, ge=0, le=100)
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class TestExecution(BaseModel):
+    """Выполнение теста"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    test_request: Optional[TestRequest] = None
+    status: TestStatus = TestStatus.PENDING
+    progress: float = Field(default=0.0, ge=0.0, le=100.0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    results: List[TestResult] = Field(default_factory=list)
+    user_id: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class TestSuite(BaseModel):
+    """Набор тестов"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    tests: List[TestRequest] = Field(..., min_items=1)
+    parallel: bool = Field(default=False)
+    stop_on_failure: bool = Field(default=False)
+    timeout: Optional[int] = Field(None, ge=1, le=7200)
+    tags: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TestReport(BaseModel):
+    """Отчет о тестировании"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    execution_id: str
+    total_tests: int = Field(..., ge=0)
+    passed_tests: int = Field(..., ge=0)
+    failed_tests: int = Field(..., ge=0)
+    skipped_tests: int = Field(..., ge=0)
+    total_duration: float = Field(..., ge=0)
+    average_duration: float = Field(..., ge=0)
+    success_rate: float = Field(..., ge=0, le=100)
+    results: List[TestResult]
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TestMetrics(BaseModel):
+    """Метрики тестирования"""
+    execution_id: str
+    response_time_avg: float = Field(..., ge=0)
+    response_time_min: float = Field(..., ge=0)
+    response_time_max: float = Field(..., ge=0)
+    response_time_std: float = Field(..., ge=0)
+    memory_usage_avg: float = Field(..., ge=0)
+    cpu_usage_avg: float = Field(..., ge=0, le=100)
+    throughput: float = Field(..., ge=0)
+    error_rate: float = Field(..., ge=0, le=100)
+    collected_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TestFilter(BaseModel):
+    """Фильтр для поиска тестов"""
+    test_type: Optional[TestType] = None
+    status: Optional[TestStatus] = None
+    priority: Optional[TestPriority] = None
+    environment: Optional[TestEnvironment] = None
+    created_after: Optional[datetime] = None
+    created_before: Optional[datetime] = None
+    name_contains: Optional[str] = None
+    description_contains: Optional[str] = None
+    tags: Optional[List[str]] = None
+    limit: int = Field(default=50, ge=1, le=1000)
+    offset: int = Field(default=0, ge=0)
+    sort_by: str = Field(default="created_at")
+    sort_order: str = Field(default="desc")
+
+
+class TestResponse(BaseModel):
+    """Ответ с информацией о тесте"""
+    id: str
+    name: str
+    description: Optional[str]
+    test_type: TestType
+    priority: TestPriority
+    environment: TestEnvironment
+    status: TestStatus
+    created_at: datetime
+    updated_at: datetime
+    tags: List[str]
+    metadata: Dict[str, Any]
+
+
+class TestExecutionResponse(BaseModel):
+    """Ответ с информацией о выполнении теста"""
+    id: str
+    test_request: Optional[TestRequest]
+    status: TestStatus
+    progress: float
+    created_at: datetime
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    results: List[TestResult]
+    user_id: Optional[int]
+    metadata: Dict[str, Any]
+
+
+class TestSuiteRequest(BaseModel):
+    """Запрос на создание набора тестов"""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    tests: List[TestRequest] = Field(..., min_items=1)
+    parallel: bool = Field(default=False)
+    stop_on_failure: bool = Field(default=False)
+    timeout: Optional[int] = Field(None, ge=1, le=7200)
+    tags: List[str] = Field(default_factory=list)
+
+
+class TestSuiteResponse(BaseModel):
+    """Ответ с информацией о наборе тестов"""
+    id: str
+    name: str
+    description: Optional[str]
+    tests: List[TestRequest]
+    parallel: bool
+    stop_on_failure: bool
+    timeout: Optional[int]
+    tags: List[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+# ============================================================================
+# МОДЕЛИ БАЗЫ ДАННЫХ ДЛЯ ТЕСТИРОВАНИЯ
+# ============================================================================
+
+class Test(Base):
+    """Модель теста в базе данных"""
+    __tablename__ = "tests"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    test_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    priority: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
+    environment: Mapped[str] = mapped_column(String(20), nullable=False, default="local")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    timeout: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    parameters: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    parallel: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dependencies: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
+    tags: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Связи
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="tests")
+    executions: Mapped[List["TestExecution"]] = relationship("TestExecution", back_populates="test", cascade="all, delete-orphan")
+
+
+class TestExecution(Base):
+    """Модель выполнения теста в базе данных"""
+    __tablename__ = "test_executions"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    test_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("tests.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    
+    # Связи
+    test: Mapped[Optional["Test"]] = relationship("Test", back_populates="executions")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="test_executions")
+    results: Mapped[List["TestResult"]] = relationship("TestResult", back_populates="execution", cascade="all, delete-orphan")
+
+
+class TestResult(Base):
+    """Модель результата теста в базе данных"""
+    __tablename__ = "test_results"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    execution_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_executions.id"), nullable=False)
+    test_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    passed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    skipped: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    stack_trace: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    memory_usage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cpu_usage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    
+    # Связи
+    execution: Mapped["TestExecution"] = relationship("TestExecution", back_populates="results")
+
+
+class TestSuite(Base):
+    """Модель набора тестов в базе данных"""
+    __tablename__ = "test_suites"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tests: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    parallel: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    stop_on_failure: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    timeout: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tags: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Связи
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="test_suites")
+
+
+class TestReport(Base):
+    """Модель отчета о тестировании в базе данных"""
+    __tablename__ = "test_reports"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    execution_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_executions.id"), nullable=False)
+    total_tests: Mapped[int] = mapped_column(Integer, nullable=False)
+    passed_tests: Mapped[int] = mapped_column(Integer, nullable=False)
+    failed_tests: Mapped[int] = mapped_column(Integer, nullable=False)
+    skipped_tests: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_duration: Mapped[float] = mapped_column(Float, nullable=False)
+    average_duration: Mapped[float] = mapped_column(Float, nullable=False)
+    success_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    results: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    
+    # Связи
+    execution: Mapped["TestExecution"] = relationship("TestExecution")
+
+
+# Обновляем модель User для связи с тестами
+User.tests = relationship("Test", back_populates="user")
+User.test_executions = relationship("TestExecution", back_populates="user")
+User.test_suites = relationship("TestSuite", back_populates="user") 
