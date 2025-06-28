@@ -20,6 +20,7 @@ from .config import settings
 from .models import Diagram, DiagramEmbedding, DiagramTemplate, AnalysisHistory, User
 from .exceptions import OllamaException, DatabaseException
 from .monitoring import logger, monitor_operation
+from .llm_router import llm_router, LLMServiceType, generate_diagram as llm_generate_diagram
 
 @dataclass
 class DiagramGenerationRequest:
@@ -57,15 +58,13 @@ class DiagramService:
     """Сервис для работы с SVG диаграммами."""
     
     def __init__(self):
-        self.ollama_url = settings.OLLAMA_BASE_URL
         self.default_model = settings.DEFAULT_LLM_MODEL
-        self.client = httpx.AsyncClient(timeout=30.0)
         
     async def __aenter__(self):
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
+        pass
     
     @monitor_operation("diagram_generation")
     async def generate_diagram(
@@ -73,7 +72,7 @@ class DiagramService:
         request: DiagramGenerationRequest,
         db: AsyncSession
     ) -> DiagramGenerationResult:
-        """Генерация SVG диаграммы с использованием LLM."""
+        """Генерация SVG диаграммы с использованием единого LLM-маршрутизатора."""
         start_time = datetime.now()
         
         try:
@@ -83,8 +82,8 @@ class DiagramService:
             # Формируем промпт для LLM
             prompt = self._build_prompt(request, template)
             
-            # Генерируем SVG через LLM
-            svg_content = await self._generate_svg_with_llm(prompt)
+            # Генерируем SVG через единый LLM-маршрутизатор
+            svg_content = await self._generate_svg_with_llm_router(prompt, request.diagram_type)
             
             # Валидируем и оцениваем качество
             validation_result = await self._validate_svg(svg_content)
@@ -198,180 +197,77 @@ class DiagramService:
     
     def _build_prompt(self, request: DiagramGenerationRequest, template: DiagramTemplate) -> str:
         """Формирование промпта для LLM."""
-        style = request.style_config or template.default_style
+        # Подготавливаем данные для шаблона
+        components_str = json.dumps(request.components, ensure_ascii=False, indent=2)
+        relationships_str = json.dumps(request.relationships, ensure_ascii=False, indent=2)
         
-        # Форматируем компоненты и связи
-        components_text = "\n".join([
-            f"- {comp.get('name', 'Component')}: {comp.get('description', '')}"
-            for comp in request.components
-        ])
+        style_config = request.style_config or template.default_style
+        style_str = json.dumps(style_config, ensure_ascii=False, indent=2)
         
-        relationships_text = "\n".join([
-            f"- {rel.get('from', '')} -> {rel.get('to', '')}: {rel.get('type', 'connection')}"
-            for rel in request.relationships
-        ])
-        
-        # Создаем промпт с примерами
+        # Формируем промпт
         prompt = f"""
-Ты - эксперт по созданию профессиональных SVG диаграмм. Создай диаграмму на основе следующих требований:
-
-## ТЕХНИЧЕСКИЕ ТРЕБОВАНИЯ:
-
-### 1. СТРУКТУРА SVG:
-- Используй viewBox для масштабируемости
-- Добавь xmlns="http://www.w3.org/2000/svg"
-- Установи width="800" height="600"
-- Включи preserveAspectRatio="xMidYMid meet"
-
-### 2. КОМПОНЕНТЫ СИСТЕМЫ:
-{components_text}
-
-### 3. СВЯЗИ МЕЖДУ КОМПОНЕНТАМИ:
-{relationships_text}
-
-### 4. ДИЗАЙН-СИСТЕМА:
-- Цветовая схема: {style.get('colors', {})}
-- Шрифт: {style.get('font_family', 'Arial, sans-serif')}
-- Размер шрифта: {style.get('font_size', 12)}px
-- Толщина линий: {style.get('stroke_width', 2)}px
-
-### 5. ТЕХНИЧЕСКИЕ ЭЛЕМЕНТЫ:
-- Используй <defs> для переиспользуемых элементов
-- Добавь <filter> для теней и эффектов
-- Создай <linearGradient> для градиентов
-- Используй <clipPath> для обрезки элементов
-
-### 6. ИНТЕРАКТИВНОСТЬ:
-- Добавь <title> и <desc> для accessibility
-- Используй CSS hover эффекты
-- Включи JavaScript для динамики
-- Добавь data-атрибуты для метаданных
-
-### 7. АНИМАЦИИ:
-- Используй <animate> для простых анимаций
-- Добавь <animateTransform> для трансформаций
-- Включи <animateMotion> для движения по пути
-- Установи dur="2s" для плавности
-
-## ПРИМЕР СТРУКТУРЫ SVG:
-
-```svg
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-  <defs>
-    <linearGradient id="componentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#45a049;stop-opacity:1" />
-    </linearGradient>
-    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
-    </filter>
-  </defs>
-  
-  <title>{request.title}</title>
-  <desc>{request.description}</desc>
-  
-  <g id="components">
-    <!-- Компоненты системы -->
-  </g>
-  
-  <g id="relationships">
-    <!-- Стрелки и линии -->
-  </g>
-  
-  <g id="legend">
-    <!-- Объяснение элементов -->
-  </g>
-  
-  <style>
-    .component {{ cursor: pointer; transition: all 0.3s; }}
-    .component:hover {{ filter: brightness(1.2) drop-shadow(0 0 10px rgba(0,0,0,0.3)); }}
-  </style>
-  
-  <script>
-    // JavaScript для интерактивности
-  </script>
-</svg>
-```
-
-## КРИТИЧЕСКИЕ ТРЕБОВАНИЯ:
-1. Генерируй ТОЛЬКО валидный SVG код
-2. Не добавляй комментарии вне SVG
-3. Используй семантические имена для id и class
-4. Обеспечь accessibility (ARIA labels)
-5. Оптимизируй для веб-отображения
-
-Тип диаграммы: {request.diagram_type}
 Заголовок: {request.title}
 Описание: {request.description}
 
-Создай профессиональную SVG диаграмму, следуя всем техническим требованиям выше.
+{template.prompt_template.format(
+    components=components_str,
+    relationships=relationships_str,
+    style=style_str
+)}
+
+ВАЖНО: Верни только валидный SVG код без дополнительных комментариев или объяснений.
+SVG должен быть оптимизирован для веб-отображения и включать все необходимые стили.
 """
         
-        return prompt
+        return prompt.strip()
     
-    async def _generate_svg_with_llm(self, prompt: str) -> str:
-        """Генерация SVG с помощью LLM."""
+    async def _generate_svg_with_llm_router(self, prompt: str, diagram_type: str) -> str:
+        """
+        🔄 Генерация SVG через единый LLM-маршрутизатор
+        
+        Использует проверенный RAG-подход, основанный на опыте SEO-рекомендаций:
+        - Конкурентная обработка
+        - Кэширование
+        - Обработка ошибок
+        - Fallback механизмы
+        """
         try:
-            payload = {
-                "model": self.default_model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.3,
-                    "top_p": 0.9,
-                    "top_k": 50,
-                    "repeat_penalty": 1.1,
-                    "num_ctx": 4096
-                }
-            }
+            logger.info(f"🎨 Генерация диаграммы типа '{diagram_type}' через LLM-маршрутизатор")
             
-            response = await self.client.post(
-                f"{self.ollama_url}/api/generate",
-                json=payload
-            )
+            # Используем единый маршрутизатор для генерации диаграммы
+            svg_content = await llm_generate_diagram(prompt, diagram_type)
             
-            if response.status_code != 200:
-                raise OllamaException(f"Ollama вернул статус {response.status_code}")
-            
-            result = response.json()
-            svg_content = result.get("response", "")
-            
-            # Извлекаем SVG из ответа
-            import re
-            svg_match = re.search(r'<svg.*?</svg>', svg_content, re.DOTALL | re.IGNORECASE)
-            if svg_match:
-                return svg_match.group(0)
-            else:
-                # Если SVG не найден, создаем базовый
+            # Проверяем, что получили валидный SVG
+            if not svg_content.strip().startswith('<svg'):
+                logger.warning("LLM вернул невалидный SVG, используем fallback")
                 return self._create_fallback_svg()
-                
+            
+            logger.info(f"✅ Диаграмма сгенерирована успешно ({len(svg_content)} символов)")
+            return svg_content
+            
         except Exception as e:
-            logger.error(f"Ошибка генерации SVG с LLM: {e}")
+            logger.error(f"❌ Ошибка генерации через LLM-маршрутизатор: {e}")
+            logger.info("🔄 Используем fallback SVG")
             return self._create_fallback_svg()
     
     def _create_fallback_svg(self) -> str:
-        """Создание базового SVG при ошибке."""
-        return """
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+        """Создание fallback SVG при ошибках."""
+        return '''<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="fallbackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#D63031;stop-opacity:1" />
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0f0f0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
     </linearGradient>
   </defs>
-  
-  <title>Fallback Diagram</title>
-  <desc>Базовая диаграмма при ошибке генерации</desc>
-  
-  <rect x="50" y="50" width="700" height="500" fill="url(#fallbackGradient)" rx="10"/>
-  <text x="400" y="300" text-anchor="middle" fill="white" font-size="24" font-family="Arial, sans-serif">
-    Диаграмма будет сгенерирована
+  <rect width="800" height="600" fill="url(#bg)" stroke="#ccc" stroke-width="2"/>
+  <text x="400" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#666">
+    Диаграмма временно недоступна
   </text>
-  <text x="400" y="330" text-anchor="middle" fill="white" font-size="16" font-family="Arial, sans-serif">
-    Попробуйте еще раз
+  <text x="400" y="330" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#999">
+    Попробуйте позже
   </text>
-</svg>
-"""
+</svg>'''
     
     async def _validate_svg(self, svg_content: str) -> Dict[str, Any]:
         """Валидация и оценка качества SVG."""
@@ -604,23 +500,9 @@ class DiagramService:
     async def _create_text_embedding(self, text: str) -> np.ndarray:
         """Создание эмбеддинга для текста."""
         try:
-            # Используем Ollama для создания эмбеддингов
-            payload = {
-                "model": "nomic-embed-text",
-                "prompt": text
-            }
-            
-            response = await self.client.post(
-                f"{self.ollama_url}/api/embeddings",
-                json=payload
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                return np.array(result.get("embedding", []))
-            else:
-                # Fallback: создаем случайный эмбеддинг
-                return np.random.rand(384)
+            # Используем единый LLM-маршрутизатор для создания эмбеддингов
+            embedding = await llm_router.generate_embedding(text)
+            return embedding
                 
         except Exception as e:
             logger.error(f"Ошибка создания эмбеддинга: {e}")
