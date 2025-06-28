@@ -10,7 +10,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy import MetaData
 import logging
 
-from .config import settings
+from .config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,18 @@ DEFAULT_DATABASE_URL = (
 )
 
 # Создание асинхронного движка
-engine = create_async_engine(
-    settings.database.url or DEFAULT_DATABASE_URL,
-    echo=settings.database.echo,
-    pool_size=settings.database.pool_size,
-    max_overflow=settings.database.max_overflow,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-)
+def get_engine():
+    settings = get_settings()
+    return create_async_engine(
+        settings.database.url or DEFAULT_DATABASE_URL,
+        echo=settings.database.echo,
+        pool_size=settings.database.pool_size,
+        max_overflow=settings.database.max_overflow,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+
+engine = get_engine()
 
 # Создание фабрики сессий
 AsyncSessionLocal = async_sessionmaker(

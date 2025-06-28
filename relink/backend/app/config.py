@@ -39,11 +39,11 @@ def get_version_from_readme() -> str:
 
 class DatabaseSettings(BaseSettings):
     """Настройки базы данных"""
-    host: str = Field(default="localhost", env="DB_HOST")
-    port: int = Field(default=5432, env="DB_PORT")
-    database: str = Field(default="relink_db", env="DB_NAME")
-    username: str = Field(default="postgres", env="DB_USER")
-    password: str = Field(default="", env="DB_PASSWORD")
+    host: str = Field(default=os.environ.get('DB_HOST', 'localhost'), env="DB_HOST")
+    port: int = Field(default=int(os.environ.get('DB_PORT', 5432)), env="DB_PORT")
+    database: str = Field(default=os.environ.get('DB_NAME', 'relink_db'), env="DB_NAME")
+    username: str = Field(default=os.environ.get('DB_USER', 'postgres'), env="DB_USER")
+    password: str = Field(default=os.environ.get('DB_PASSWORD', ''), env="DB_PASSWORD")
     pool_size: int = Field(default=10, env="DB_POOL_SIZE")
     max_overflow: int = Field(default=20, env="DB_MAX_OVERFLOW")
     echo: bool = Field(default=False, env="DB_ECHO")
@@ -63,6 +63,10 @@ class DatabaseSettings(BaseSettings):
             return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
         else:
             return f"postgresql://{self.username}@{self.host}:{self.port}/{self.database}"
+    
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
 
 class RedisSettings(BaseSettings):
@@ -143,42 +147,61 @@ class Settings(BaseSettings):
     """Основные настройки приложения"""
     environment: str = Field(default="development", env="ENVIRONMENT")
     debug: bool = Field(default=False, env="DEBUG")
-    
-    # Подмодули настроек
-    database: DatabaseSettings = DatabaseSettings()
-    redis: RedisSettings = RedisSettings()
-    ollama: OllamaSettings = OllamaSettings()
-    security: SecuritySettings = SecuritySettings()
-    api: APISettings = APISettings()
-    monitoring: MonitoringSettings = MonitoringSettings()
-    cache: CacheSettings = CacheSettings()
 
     DEFAULT_LLM_MODEL: str = "qwen2.5:7b-instruct-turbo"
 
     @property
+    def database(self) -> DatabaseSettings:
+        return DatabaseSettings()
+
+    @property
+    def redis(self) -> RedisSettings:
+        return RedisSettings()
+
+    @property
+    def ollama(self) -> OllamaSettings:
+        return OllamaSettings()
+
+    @property
+    def security(self) -> SecuritySettings:
+        return SecuritySettings()
+
+    @property
+    def api(self) -> APISettings:
+        return APISettings()
+
+    @property
+    def monitoring(self) -> MonitoringSettings:
+        return MonitoringSettings()
+
+    @property
+    def cache(self) -> CacheSettings:
+        return CacheSettings()
+
+    @property
     def default_llm_model(self) -> str:
         return self.DEFAULT_LLM_MODEL
-    
+
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), ".env")
         env_file_encoding = "utf-8"
         case_sensitive = False
-    
+
     @validator('environment')
     def validate_environment(cls, v):
         allowed = ['development', 'testing', 'staging', 'production']
         if v not in allowed:
             raise ValueError(f'Environment должен быть одним из: {allowed}')
         return v
-    
+
     def is_development(self) -> bool:
         """Проверка, что это среда разработки"""
         return self.environment == "development"
-    
+
     def is_production(self) -> bool:
         """Проверка, что это продакшн среда"""
         return self.environment == "production"
-    
+
     def is_testing(self) -> bool:
         """Проверка, что это тестовая среда"""
         return self.environment == "testing"
@@ -195,10 +218,6 @@ def get_settings() -> Settings:
     except Exception as e:
         logger.error(f"Ошибка загрузки настроек: {e}")
         raise
-
-
-# Глобальный экземпляр настроек
-settings = get_settings()
 
 
 def reload_settings():
