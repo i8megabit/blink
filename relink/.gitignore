@@ -2,6 +2,10 @@
 # SEO Link Recommender - .gitignore
 # ========================================
 
+#rules
+*rules*.md
+*roadmap*.md
+
 # 🐍 Python
 __pycache__/
 *.py[cod]
