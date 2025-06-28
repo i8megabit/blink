@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 🎯 ПАТТЕРНЫ ДЛЯ АВТОМАТИЧЕСКОГО ВЫБОРА CURSOR RULES
+
+## 📋 АНАЛИЗ РЕПОЗИТОРИЯ
+
+### Структура проекта reLink:
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Backend**: FastAPI + SQLAlchemy + PostgreSQL  
+- **AI/ML**: Ollama + RAG + LLM интеграция
+- **DevOps**: Docker + Docker Compose + GitHub Actions
+- **Testing**: Selenium + RAG + LLM тестирование
+
+### Ключевые файлы и паттерны:
+- `**/frontend/src/components/` - UI компоненты
+- `**/backend/app/` - API и бизнес-логика
+- `**/testing/selenium/` - автоматизированное тестирование
+- `**/llm_tuning/` - настройка и оптимизация LLM
+- `**/monitoring/` - мониторинг и алерты
+
+---

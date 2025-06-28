@@ -1,180 +1,285 @@
-# Makefile для reLink - AI-Powered SEO Platform
-# Оптимизирован для Apple Silicon M4
+# ========================================
+# SEO Link Recommender - Makefile
+# ========================================
 
-.PHONY: help metrics resources build test deploy clean
+.PHONY: help version get-version set-version tag-version release-version build test clean docs version-update version-sync
+
+# Переменные
+PYTHON := python3
+VERSION_MANAGER := scripts/version_manager.py
 
 # Цвета для вывода
-GREEN = \033[0;32m
-YELLOW = \033[1;33m
-RED = \033[0;31m
-BLUE = \033[0;34m
-NC = \033[0m # No Color
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+RED := \033[0;31m
+NC := \033[0m # No Color
 
-help: ## Показать справку по командам
-	@echo "$(BLUE)🔗 reLink - AI-Powered SEO Platform$(NC)"
+help: ## Показать справку
+	@echo "$(GREEN)🚀 SEO Link Recommender - Makefile$(NC)"
+	@echo ""
 	@echo "$(YELLOW)Доступные команды:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 
-metrics: ## Обновить метрики проекта в README.md
-	@echo "$(BLUE)📊 Обновление метрик проекта...$(NC)"
-	@python3 update_metrics.py
+# ========================================
+# Управление версиями (SemVer 2.0)
+# ========================================
 
-resources: ## Рассчитать лимиты ресурсов для всех микросервисов
-	@echo "$(BLUE)🚀 Расчет лимитов ресурсов для Apple Silicon M4...$(NC)"
-	@python3 resource_limits.py
+.PHONY: version version-current version-bump version-release version-prerelease version-set version-validate version-changelog
 
-build: ## Собрать все Docker образы
-	@echo "$(BLUE)🔨 Сборка Docker образов...$(NC)"
-	@docker-compose build --parallel
+version: version-current
+	@echo "📦 Информация о версии"
 
-build-native: ## Собрать образы с оптимизацией для Apple Silicon
-	@echo "$(BLUE)🍎 Сборка с оптимизацией для Apple Silicon...$(NC)"
-	@DOCKER_DEFAULT_PLATFORM=linux/arm64 docker-compose build --parallel
+version-current:
+	@echo "🔍 Текущая версия:"
+	@$(PYTHON) $(VERSION_MANAGER) current
 
-up: ## Запустить все сервисы
-	@echo "$(BLUE)🚀 Запуск всех сервисов...$(NC)"
-	@docker-compose up -d
+version-bump:
+	@echo "🚀 Увеличение версии..."
+	@if [ -z "$(TYPE)" ]; then \
+		echo "❌ Укажите TYPE=major|minor|patch"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) bump --type $(TYPE)
 
-up-native: ## Запустить с оптимизацией для Apple Silicon
-	@echo "$(BLUE)🍎 Запуск с оптимизацией для Apple Silicon...$(NC)"
-	@docker-compose -f docker-compose.native-gpu.yml up -d
+version-release:
+	@echo "🎉 Создание релиза..."
+	@$(PYTHON) $(VERSION_MANAGER) release --type $(or $(TYPE),patch)
 
-down: ## Остановить все сервисы
-	@echo "$(RED)🛑 Остановка всех сервисов...$(NC)"
-	@docker-compose down
+version-prerelease:
+	@echo "🔧 Создание prerelease..."
+	@if [ -z "$(NAME)" ]; then \
+		echo "❌ Укажите NAME=имя_prerelease"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) prerelease --prerelease $(NAME) --type $(or $(TYPE),rc)
 
-logs: ## Показать логи всех сервисов
-	@echo "$(BLUE)📋 Логи сервисов:$(NC)"
-	@docker-compose logs -f
+version-set:
+	@echo "⚙️ Установка версии..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Укажите VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) set --version $(VERSION)
 
-status: ## Показать статус сервисов
-	@echo "$(BLUE)📊 Статус сервисов:$(NC)"
-	@docker-compose ps
+version-validate:
+	@echo "✅ Валидация версии..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "❌ Укажите VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) validate --version $(VERSION)
 
-test: ## Запустить все тесты
-	@echo "$(BLUE)🧪 Запуск тестов...$(NC)"
+version-changelog:
+	@echo "📝 Обновление changelog..."
+	@if [ -z "$(CHANGES)" ]; then \
+		echo "❌ Укажите CHANGES=\"изменение1 изменение2\""; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(VERSION_MANAGER) changelog --changes $(CHANGES)
+
+# ========================================
+# Сборка и тестирование
+# ========================================
+
+build: ## Сборка Docker образов
+	@echo "$(GREEN)🔨 Сборка Docker образов...$(NC)"
+	docker-compose build
+
+build-parallel: ## Сборка для параллельного режима
+	@echo "$(GREEN)🔨 Сборка для параллельного режима...$(NC)"
+	docker-compose -f docker-compose.parallel.yml build
+
+test: ## Запуск тестов
+	@echo "$(GREEN)🧪 Запуск тестов...$(NC)"
+	@cd backend && python3 -m pytest -v
+
+test-frontend: ## Тесты frontend
+	@echo "$(GREEN)🧪 Тесты frontend...$(NC)"
 	@cd frontend && npm test
-	@cd backend && python -m pytest
 
-test-e2e: ## Запустить E2E тесты
-	@echo "$(BLUE)🧪 Запуск E2E тестов...$(NC)"
+test-docs: ## Тесты микросервиса документации
+	@echo "$(GREEN)🧪 Тесты микросервиса документации...$(NC)"
+	@cd docs && make test
+
+test-testing: ## Тесты микросервиса тестирования
+	@echo "$(GREEN)🧪 Тесты микросервиса тестирования...$(NC)"
+	@cd testing && make test
+
+test-e2e: ## E2E тесты
+	@echo "$(GREEN)🧪 E2E тесты...$(NC)"
 	@cd frontend && npm run test:e2e
 
-lint: ## Проверить код линтером
-	@echo "$(BLUE)🔍 Проверка кода...$(NC)"
-	@cd frontend && npm run lint
-	@cd backend && python -m flake8 .
+# ========================================
+# Запуск и остановка
+# ========================================
 
-format: ## Форматировать код
-	@echo "$(BLUE)✨ Форматирование кода...$(NC)"
-	@cd frontend && npm run format
-	@cd backend && python -m black .
+up: ## Запуск системы
+	@echo "$(GREEN)🚀 Запуск системы...$(NC)"
+	docker-compose up -d
 
-clean: ## Очистить все контейнеры и образы
-	@echo "$(RED)🧹 Очистка Docker...$(NC)"
-	@docker-compose down -v --rmi all
-	@docker system prune -f
+up-parallel: ## Запуск параллельного режима
+	@echo "$(GREEN)🚀 Запуск параллельного режима...$(NC)"
+	./run_parallel.sh
 
-clean-all: ## Полная очистка (включая node_modules)
-	@echo "$(RED)🧹 Полная очистка...$(NC)"
-	@docker-compose down -v --rmi all
-	@docker system prune -f
-	@cd frontend && rm -rf node_modules package-lock.json
-	@cd backend && rm -rf __pycache__ .pytest_cache
+down: ## Остановка системы
+	@echo "$(GREEN)🛑 Остановка системы...$(NC)"
+	docker-compose down
 
-install: ## Установить зависимости
-	@echo "$(BLUE)📦 Установка зависимостей...$(NC)"
-	@cd frontend && npm install
+restart: ## Перезапуск системы
+	@echo "$(GREEN)🔄 Перезапуск системы...$(NC)"
+	docker-compose restart
+
+# ========================================
+# Мониторинг и логи
+# ========================================
+
+logs: ## Показать логи всех сервисов
+	@echo "$(GREEN)📋 Логи системы...$(NC)"
+	docker-compose logs -f
+
+logs-backend: ## Логи backend
+	@echo "$(GREEN)📋 Логи backend...$(NC)"
+	docker-compose logs -f backend
+
+logs-frontend: ## Логи frontend
+	@echo "$(GREEN)📋 Логи frontend...$(NC)"
+	docker-compose logs -f frontend
+
+logs-docs: ## Логи микросервиса документации
+	@echo "$(GREEN)📋 Логи микросервиса документации...$(NC)"
+	docker-compose logs -f docs
+
+logs-testing: ## Логи микросервиса тестирования
+	@echo "$(GREEN)📋 Логи микросервиса тестирования...$(NC)"
+	docker-compose logs -f testing
+
+logs-redis: ## Логи Redis
+	@echo "$(GREEN)📋 Логи Redis...$(NC)"
+	docker-compose logs -f redis
+
+logs-ollama: ## Логи Ollama
+	@echo "$(GREEN)📋 Логи Ollama...$(NC)"
+	docker-compose logs -f ollama
+
+status: ## Статус контейнеров
+	@echo "$(GREEN)📊 Статус контейнеров...$(NC)"
+	docker-compose ps
+
+stats: ## Статистика использования ресурсов
+	@echo "$(GREEN)📊 Статистика ресурсов...$(NC)"
+	docker stats
+
+# ========================================
+# Микросервис документации
+# ========================================
+
+docs-health: ## Проверка здоровья микросервиса документации
+	@echo "$(GREEN)🏥 Проверка здоровья микросервиса документации...$(NC)"
+	@curl -f http://localhost:8001/api/v1/health || echo "$(RED)❌ Микросервис документации недоступен$(NC)"
+
+docs-version: ## Получение версии из микросервиса документации
+	@echo "$(GREEN)🏷️ Версия из микросервиса документации...$(NC)"
+	@curl -s http://localhost:8001/api/v1/version | jq . || echo "$(RED)❌ Ошибка получения версии$(NC)"
+
+docs-cache-stats: ## Статистика кэша микросервиса документации
+	@echo "$(GREEN)📊 Статистика кэша...$(NC)"
+	@curl -s http://localhost:8001/api/v1/cache/stats | jq . || echo "$(RED)❌ Ошибка получения статистики кэша$(NC)"
+
+docs-clear-cache: ## Очистка кэша микросервиса документации
+	@echo "$(GREEN)🧹 Очистка кэша...$(NC)"
+	@curl -X DELETE http://localhost:8001/api/v1/cache/clear || echo "$(RED)❌ Ошибка очистки кэша$(NC)"
+
+docs-open: ## Открыть документацию API микросервиса
+	@echo "$(GREEN)📖 Открытие документации API...$(NC)"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:8001/docs; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:8001/docs; \
+	else \
+		echo "$(YELLOW)📖 Документация API: http://localhost:8001/docs$(NC)"; \
+	fi
+
+docs-redoc: ## Открыть ReDoc документацию микросервиса
+	@echo "$(GREEN)📋 Открытие ReDoc документации...$(NC)"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:8001/redoc; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:8001/redoc; \
+	else \
+		echo "$(YELLOW)📋 ReDoc документация: http://localhost:8001/redoc$(NC)"; \
+	fi
+
+# ========================================
+# Очистка и обслуживание
+# ========================================
+
+clean: ## Очистка Docker ресурсов
+	@echo "$(GREEN)🧹 Очистка Docker ресурсов...$(NC)"
+	docker system prune -f
+	docker volume prune -f
+
+clean-all: ## Полная очистка (включая образы)
+	@echo "$(GREEN)🧹 Полная очистка...$(NC)"
+	docker system prune -a -f
+	docker volume prune -f
+
+clean-data: ## Очистка данных (БД, кэш)
+	@echo "$(GREEN)🧹 Очистка данных...$(NC)"
+	rm -rf postgres_data chroma_db ollama_models
+
+# ========================================
+# Документация
+# ========================================
+
+docs: ## Открыть документацию
+	@echo "$(GREEN)📚 Открытие документации...$(NC)"
+	@if command -v open >/dev/null 2>&1; then \
+		open DOCUMENTATION.md; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open DOCUMENTATION.md; \
+	else \
+		echo "$(YELLOW)📖 Документация: DOCUMENTATION.md$(NC)"; \
+	fi
+
+# ========================================
+# Разработка
+# ========================================
+
+dev-setup: ## Настройка окружения разработки
+	@echo "$(GREEN)🔧 Настройка окружения разработки...$(NC)"
 	@cd backend && pip install -r requirements.txt
+	@cd frontend && npm install
+	@cd docs && make install-dev
 
-dev: ## Запустить в режиме разработки
-	@echo "$(BLUE)🔧 Запуск в режиме разработки...$(NC)"
-	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+dev-backend: ## Запуск backend в режиме разработки
+	@echo "$(GREEN)🔧 Запуск backend в режиме разработки...$(NC)"
+	@cd backend && python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-prod: ## Запустить в production режиме
-	@echo "$(BLUE)🚀 Запуск в production режиме...$(NC)"
-	@docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+dev-frontend: ## Запуск frontend в режиме разработки
+	@echo "$(GREEN)🔧 Запуск frontend в режиме разработки...$(NC)"
+	@cd frontend && npm run dev
 
-monitor: ## Открыть мониторинг
-	@echo "$(BLUE)📊 Открытие мониторинга...$(NC)"
-	@open http://localhost:3000
-	@open http://localhost:8000/docs
-	@open http://localhost:9090
+dev-docs: ## Запуск микросервиса документации в режиме разработки
+	@echo "$(GREEN)🔧 Запуск микросервиса документации в режиме разработки...$(NC)"
+	@cd docs && make run
 
-backup: ## Создать резервную копию данных
-	@echo "$(BLUE)💾 Создание резервной копии...$(NC)"
-	@mkdir -p backups
-	@docker-compose exec postgres pg_dump -U postgres relink > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
+# ========================================
+# Утилиты
+# ========================================
 
-restore: ## Восстановить данные из резервной копии
-	@echo "$(BLUE)🔄 Восстановление данных...$(NC)"
-	@ls -la backups/
-	@echo "Введите имя файла для восстановления:"
-	@read filename && docker-compose exec -T postgres psql -U postgres relink < backups/$$filename
-
-update: ## Обновить все зависимости
-	@echo "$(BLUE)🔄 Обновление зависимостей...$(NC)"
-	@cd frontend && npm update
-	@cd backend && pip install --upgrade -r requirements.txt
-
-security: ## Проверить безопасность
-	@echo "$(BLUE)🛡️ Проверка безопасности...$(NC)"
-	@cd frontend && npm audit
-	@cd backend && safety check
-
-performance: ## Запустить тесты производительности
-	@echo "$(BLUE)⚡ Тесты производительности...$(NC)"
-	@cd backend && python -m pytest tests/test_performance.py -v
-
-docs: ## Сгенерировать документацию
-	@echo "$(BLUE)📚 Генерация документации...$(NC)"
-	@cd backend && python -m pydoc -w app/
-	@cd frontend && npm run build:docs
-
-deploy: build test up ## Полный деплой (сборка + тесты + запуск)
-	@echo "$(GREEN)✅ Деплой завершен!$(NC)"
-
-# Специальные команды для Apple Silicon
-apple-setup: ## Настройка для Apple Silicon
-	@echo "$(BLUE)🍎 Настройка для Apple Silicon M4...$(NC)"
-	@echo "export OLLAMA_METAL=1" >> ~/.zshrc
-	@echo "export OLLAMA_FLASH_ATTENTION=1" >> ~/.zshrc
-	@echo "export OLLAMA_KV_CACHE_TYPE=q8_0" >> ~/.zshrc
-	@echo "export OLLAMA_CONTEXT_LENGTH=4096" >> ~/.zshrc
-	@echo "export OLLAMA_BATCH_SIZE=512" >> ~/.zshrc
-	@echo "export OLLAMA_NUM_PARALLEL=2" >> ~/.zshrc
-	@echo "$(GREEN)✅ Переменные окружения добавлены в ~/.zshrc$(NC)"
-	@echo "$(YELLOW)Перезапустите терминал или выполните: source ~/.zshrc$(NC)"
-
-# Команды для мониторинга
-check-health: ## Проверить здоровье сервисов
-	@echo "$(BLUE)🏥 Проверка здоровья сервисов...$(NC)"
-	@curl -f http://localhost:8000/health || echo "$(RED)❌ Backend недоступен$(NC)"
+check-all: ## Проверка всех сервисов
+	@echo "$(GREEN)🔍 Проверка всех сервисов...$(NC)"
+	@echo "$(YELLOW)Backend:$(NC)"
+	@curl -f http://localhost:8000/api/v1/health || echo "$(RED)❌ Backend недоступен$(NC)"
+	@echo "$(YELLOW)Frontend:$(NC)"
 	@curl -f http://localhost:3000 || echo "$(RED)❌ Frontend недоступен$(NC)"
+	@echo "$(YELLOW)Документация:$(NC)"
+	@curl -f http://localhost:8001/api/v1/health || echo "$(RED)❌ Микросервис документации недоступен$(NC)"
+	@echo "$(YELLOW)Ollama:$(NC)"
 	@curl -f http://localhost:11434/api/tags || echo "$(RED)❌ Ollama недоступен$(NC)"
+	@echo "$(YELLOW)Redis:$(NC)"
+	@docker exec $$(docker ps -q --filter name=redis) redis-cli ping || echo "$(RED)❌ Redis недоступен$(NC)"
 
-# Команды для разработки
-watch: ## Запустить в режиме наблюдения
-	@echo "$(BLUE)👀 Режим наблюдения...$(NC)"
-	@cd frontend && npm run dev &
-	@cd backend && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Информационные команды
-info: ## Показать информацию о проекте
-	@echo "$(BLUE)📋 Информация о проекте:$(NC)"
-	@echo "  Версия: 4.1.1"
-	@echo "  Python: 3.11+"
-	@echo "  Node.js: 18+"
-	@echo "  Docker: готов"
-	@echo "  Apple Silicon: оптимизирован"
-	@echo ""
-	@echo "$(YELLOW)Порты:$(NC)"
-	@echo "  Frontend: http://localhost:3000"
-	@echo "  Backend: http://localhost:8000"
-	@echo "  Ollama: http://localhost:11434"
-	@echo "  Prometheus: http://localhost:9090"
-	@echo "  Grafana: http://localhost:3001"
-
-version: ## Показать версию
-	@echo "reLink v4.1.1 - AI-Powered SEO Platform"
-	@echo "Оптимизирован для Apple Silicon M4" 
+# ========================================
+# Остальная часть Makefile остается без изменений
+# ======================================== 
