@@ -11,6 +11,8 @@ import uuid
 import httpx
 import psutil
 import traceback
+from fastapi import APIRouter, Response
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
@@ -738,5 +740,36 @@ class TestingService:
 
 # Глобальный экземпляр сервиса тестирования
 testing_service = TestingService()
+
+router = APIRouter()
+
+@router.get("/coverage", tags=["testing"])
+def get_coverage_report():
+    """Возвращает отчет о покрытии тестами (coverage.json)"""
+    try:
+        # Генерируем отчет coverage
+        subprocess.run(["pytest", "--cov=app", "--cov-report=json:coverage.json", "--disable-warnings"], check=True)
+        with open("coverage.json", "r") as f:
+            return Response(content=f.read(), media_type="application/json")
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/code-analysis", tags=["testing"])
+def get_code_analysis():
+    """Возвращает результаты линтинга, typecheck и анализа сложности"""
+    try:
+        # Линтинг
+        lint = subprocess.run(["flake8", "app", "--format=json"], capture_output=True, text=True)
+        # Typecheck
+        typecheck = subprocess.run(["mypy", "app", "--show-error-codes", "--pretty"], capture_output=True, text=True)
+        # Cyclomatic complexity (radon)
+        complexity = subprocess.run(["radon", "cc", "app", "-j"], capture_output=True, text=True)
+        return {
+            "lint": lint.stdout,
+            "typecheck": typecheck.stdout,
+            "complexity": complexity.stdout
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 __all__ = ['testing_service']

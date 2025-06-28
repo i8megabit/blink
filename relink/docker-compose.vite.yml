@@ -19,10 +19,10 @@ services:
       resources:
         limits:
           cpus: '1.391'
-          memory: 1734Mi
+          memory: 1734M
         reservations:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
@@ -48,10 +48,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     depends_on:
       - backend
     labels:
@@ -79,10 +79,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     depends_on:
       - backend
     profiles:
@@ -99,10 +99,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     volumes:
       - ../relink_db:/var/lib/postgresql/data
     ports:

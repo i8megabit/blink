@@ -70,7 +70,7 @@ from .models import (
 )
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
-from .testing_service import testing_service
+from .testing_service import testing_service, router as testing_router
 
 # Загрузка NLTK данных при старте
 try:
@@ -1375,6 +1375,8 @@ async def get_testing_health():
         "running_executions": len(testing_service.running_executions),
         "timestamp": datetime.utcnow().isoformat()
     }
+
+app.include_router(testing_router, prefix="/api/v1/testing")
 
 if __name__ == "__main__":
     import uvicorn
