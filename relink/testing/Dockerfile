@@ -37,7 +37,7 @@ RUN groupadd -r testing && useradd -r -g testing testing
 WORKDIR /app
 
 # Копирование кода приложения
-COPY --chown=testing:testing . .
+COPY --chown=testing:testing testing/ .
 
 # Установка прав доступа
 RUN chown -R testing:testing /app

@@ -5,7 +5,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, root_validator, model_validator
 import uuid
 
 
@@ -116,18 +116,20 @@ class TestResult(BaseModel):
     # Дополнительные данные
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Дополнительные данные")
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_timing(cls, values):
         """Валидация временных меток"""
-        started_at = values.get("started_at")
-        finished_at = values.get("finished_at")
-        
-        if finished_at and started_at and finished_at < started_at:
-            raise ValueError("Время завершения не может быть раньше времени начала")
-        
-        if finished_at and started_at:
-            duration = (finished_at - started_at).total_seconds()
-            values["duration"] = duration
+        if isinstance(values, dict):
+            started_at = values.get("started_at")
+            finished_at = values.get("finished_at")
+            
+            if finished_at and started_at and finished_at < started_at:
+                raise ValueError("Время завершения не может быть раньше времени начала")
+            
+            if finished_at and started_at:
+                duration = (finished_at - started_at).total_seconds()
+                values["duration"] = duration
         
         return values
     
@@ -200,17 +202,19 @@ class TestExecution(BaseModel):
     # Метаданные
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные данные")
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_execution_type(cls, values):
         """Валидация типа выполнения"""
-        test_request = values.get("test_request")
-        test_suite = values.get("test_suite")
-        
-        if not test_request and not test_suite:
-            raise ValueError("Должен быть указан либо test_request, либо test_suite")
-        
-        if test_request and test_suite:
-            raise ValueError("Нельзя указывать одновременно test_request и test_suite")
+        if isinstance(values, dict):
+            test_request = values.get("test_request")
+            test_suite = values.get("test_suite")
+            
+            if not test_request and not test_suite:
+                raise ValueError("Должен быть указан либо test_request, либо test_suite")
+            
+            if test_request and test_suite:
+                raise ValueError("Нельзя указывать одновременно test_request и test_suite")
         
         return values
     
@@ -364,4 +368,94 @@ class TestFilter(BaseModel):
         """Валидация порядка сортировки"""
         if v not in ["asc", "desc"]:
             raise ValueError("Порядок сортировки должен быть 'asc' или 'desc'")
-        return v 
+        return v
+
+
+# Response модели для API
+class TestResponse(BaseModel):
+    """Ответ с данными теста"""
+    id: str = Field(..., description="Уникальный ID")
+    name: str = Field(..., description="Название теста")
+    description: Optional[str] = Field(None, description="Описание теста")
+    test_type: TestType = Field(..., description="Тип теста")
+    priority: TestPriority = Field(..., description="Приоритет")
+    environment: TestEnvironment = Field(..., description="Окружение")
+    status: TestStatus = Field(..., description="Статус")
+    
+    # Параметры теста
+    timeout: Optional[int] = Field(None, description="Таймаут в секундах")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Параметры теста")
+    
+    # Настройки выполнения
+    retry_count: int = Field(..., description="Количество повторов")
+    parallel: bool = Field(..., description="Запуск в параллели")
+    
+    # Зависимости
+    dependencies: List[str] = Field(default_factory=list, description="Зависимости от других тестов")
+    
+    # Метаданные
+    tags: List[str] = Field(default_factory=list, description="Теги")
+    created_at: datetime = Field(..., description="Время создания")
+    updated_at: datetime = Field(..., description="Время обновления")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные данные")
+
+
+class TestSuiteRequest(BaseModel):
+    """Запрос на создание набора тестов"""
+    name: str = Field(..., min_length=1, max_length=200, description="Название набора")
+    description: Optional[str] = Field(None, max_length=1000, description="Описание")
+    
+    # Тесты в наборе
+    tests: List[TestRequest] = Field(..., min_items=1, description="Список тестов")
+    
+    # Настройки выполнения
+    parallel: bool = Field(default=False, description="Параллельное выполнение")
+    stop_on_failure: bool = Field(default=False, description="Остановка при первой ошибке")
+    timeout: Optional[int] = Field(None, ge=1, le=7200, description="Общий таймаут")
+    
+    # Метаданные
+    tags: List[str] = Field(default_factory=list, description="Теги")
+
+
+class TestSuiteResponse(BaseModel):
+    """Ответ с данными набора тестов"""
+    id: str = Field(..., description="Уникальный ID")
+    name: str = Field(..., description="Название набора")
+    description: Optional[str] = Field(None, description="Описание")
+    
+    # Тесты в наборе
+    tests: List[TestResponse] = Field(..., description="Список тестов")
+    
+    # Настройки выполнения
+    parallel: bool = Field(..., description="Параллельное выполнение")
+    stop_on_failure: bool = Field(..., description="Остановка при первой ошибке")
+    timeout: Optional[int] = Field(None, description="Общий таймаут")
+    
+    # Метаданные
+    tags: List[str] = Field(..., description="Теги")
+    created_at: datetime = Field(..., description="Время создания")
+    updated_at: datetime = Field(..., description="Время обновления")
+
+
+class TestExecutionResponse(BaseModel):
+    """Ответ с данными выполнения теста"""
+    id: str = Field(..., description="Уникальный ID")
+    
+    # Что выполняется
+    test_request: Optional[TestResponse] = Field(None, description="Запрос на выполнение теста")
+    test_suite: Optional[TestSuiteResponse] = Field(None, description="Набор тестов")
+    
+    # Статус выполнения
+    status: TestStatus = Field(..., description="Статус")
+    progress: float = Field(..., description="Прогресс в %")
+    
+    # Временные метки
+    created_at: datetime = Field(..., description="Время создания")
+    started_at: Optional[datetime] = Field(None, description="Время начала")
+    finished_at: Optional[datetime] = Field(None, description="Время завершения")
+    
+    # Результаты
+    results: List[TestResult] = Field(..., description="Результаты тестов")
+    
+    # Метаданные
+    metadata: Dict[str, Any] = Field(..., description="Дополнительные данные") 

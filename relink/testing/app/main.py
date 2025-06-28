@@ -54,8 +54,8 @@ app = FastAPI(
     title="reLink Testing Service",
     description="Микросервис для управления и выполнения тестов платформы reLink",
     version="1.0.0",
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
     lifespan=lifespan
 )
 
@@ -99,7 +99,7 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={
             "error": "Внутренняя ошибка сервера",
-            "detail": str(exc) if settings.DEBUG else "Произошла неожиданная ошибка"
+            "detail": str(exc) if settings.debug else "Произошла неожиданная ошибка"
         }
     )
 
@@ -412,6 +412,6 @@ if __name__ == "__main__":
         "app.main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=settings.DEBUG,
+        reload=settings.debug,
         log_level="info"
     ) 
