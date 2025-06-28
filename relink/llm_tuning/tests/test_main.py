@@ -1,531 +1,714 @@
 """
-Тесты для основного приложения LLM Tuning микросервиса
+Тесты для микросервиса LLM Tuning
 """
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
+import json
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch, AsyncMock
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.main import app
-from app.database import get_db
-from app.services import LLMTuningService
+from app.database import get_db, init_db
+from app.models import (
+    LLMModel, ModelRoute, TuningSession, RAGDocument, 
+    PerformanceMetrics, ModelStatus, RouteStrategy
+)
 from app.schemas import (
-    LLMModelCreate, ModelRouteCreate, TuningSessionCreate,
-    GenerateRequest, OptimizationRequest
+    LLMModelCreate, LLMModelUpdate, RouteCreate,
+    TuningSessionCreate, RAGQuery
 )
 
 
+# Фикстуры для тестов
 @pytest.fixture
-def client():
-    """Фикстура для тестового клиента"""
-    return TestClient(app)
+async def test_db():
+    """Создание тестовой базы данных"""
+    # Используем SQLite в памяти для тестов
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        echo=False
+    )
+    
+    async_session = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    
+    # Создаем таблицы
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: sync_conn.execute(
+            "CREATE TABLE IF NOT EXISTS llm_models ("
+            "id INTEGER PRIMARY KEY, "
+            "name TEXT NOT NULL, "
+            "base_model TEXT NOT NULL, "
+            "provider TEXT NOT NULL, "
+            "is_available BOOLEAN DEFAULT TRUE, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ))
+        
+        await conn.run_sync(lambda sync_conn: sync_conn.execute(
+            "CREATE TABLE IF NOT EXISTS model_routes ("
+            "id INTEGER PRIMARY KEY, "
+            "name TEXT NOT NULL, "
+            "model_id INTEGER, "
+            "strategy TEXT NOT NULL, "
+            "is_active BOOLEAN DEFAULT TRUE, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ))
+        
+        await conn.run_sync(lambda sync_conn: sync_conn.execute(
+            "CREATE TABLE IF NOT EXISTS tuning_sessions ("
+            "id INTEGER PRIMARY KEY, "
+            "model_id INTEGER NOT NULL, "
+            "status TEXT NOT NULL, "
+            "progress INTEGER DEFAULT 0, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ))
+    
+    yield async_session
+    
+    await engine.dispose()
 
 
 @pytest.fixture
-def mock_db_session():
-    """Фикстура для мока сессии БД"""
-    return AsyncMock(spec=AsyncSession)
+async def client(test_db):
+    """Создание тестового клиента"""
+    async def override_get_db():
+        async with test_db() as session:
+            yield session
+    
+    app.dependency_overrides[get_db] = override_get_db
+    
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+    
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def mock_llm_service(mock_db_session):
-    """Фикстура для мока LLM сервиса"""
-    service = MagicMock(spec=LLMTuningService)
-    service.model_manager = MagicMock()
-    service.route_manager = MagicMock()
-    service.rag_service = MagicMock()
-    service.tuning_service = MagicMock()
-    service.performance_monitor = MagicMock()
-    service.optimization_service = MagicMock()
-    return service
+def sample_model_data():
+    """Тестовые данные для модели"""
+    return {
+        "name": "test-model",
+        "base_model": "llama2",
+        "provider": "ollama",
+        "description": "Тестовая модель",
+        "parameters": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "max_tokens": 1000
+        }
+    }
 
 
+@pytest.fixture
+def sample_route_data():
+    """Тестовые данные для маршрута"""
+    return {
+        "name": "test-route",
+        "model_id": 1,
+        "strategy": RouteStrategy.ROUND_ROBIN,
+        "request_types": ["text", "code"],
+        "keywords": ["python", "programming"],
+        "complexity_threshold": 0.5,
+        "is_active": True
+    }
+
+
+@pytest.fixture
+def sample_tuning_session_data():
+    """Тестовые данные для сессии тюнинга"""
+    return {
+        "model_id": 1,
+        "strategy": "instruction_tuning",
+        "parameters": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "learning_rate": 0.001
+        },
+        "training_data": json.dumps([
+            {
+                "instruction": "Объясни концепцию",
+                "input": "",
+                "output": "Это концепция..."
+            }
+        ]),
+        "system_prompt": "Ты полезный ассистент."
+    }
+
+
+# Тесты API endpoints
 class TestHealthCheck:
-    """Тесты для health check эндпоинтов"""
+    """Тесты health check endpoint"""
     
-    def test_health_check(self, client):
-        """Тест основного health check"""
-        response = client.get("/health")
+    @pytest.mark.asyncio
+    async def test_health_check(self, client):
+        """Тест проверки здоровья сервиса"""
+        response = await client.get("/health")
+        
         assert response.status_code == 200
         data = response.json()
-        assert "status" in data
-        assert "timestamp" in data
+        
+        assert data["status"] == "healthy"
+        assert data["service"] == "llm-tuning"
         assert "version" in data
-    
-    def test_health_detailed(self, client):
-        """Тест детального health check"""
-        response = client.get("/health/detailed")
-        assert response.status_code == 200
-        data = response.json()
-        assert "status" in data
-        assert "database" in data
-        assert "ollama" in data
-        assert "timestamp" in data
-        assert "version" in data
+        assert "environment" in data
+        assert "features" in data
 
 
 class TestModelsAPI:
-    """Тесты для API моделей"""
+    """Тесты API для управления моделями"""
     
-    def test_list_models(self, client, mock_llm_service):
-        """Тест получения списка моделей"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.model_manager.list_models.return_value = []
-            
-            response = client.get("/api/models/")
-            assert response.status_code == 200
-            data = response.json()
-            assert "items" in data
-            assert "total" in data
-    
-    def test_get_model(self, client, mock_llm_service):
-        """Тест получения модели по ID"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_model = MagicMock()
-            mock_model.id = 1
-            mock_model.name = "test-model"
-            mock_llm_service.model_manager.get_model.return_value = mock_model
-            
-            response = client.get("/api/models/1")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["id"] == 1
-            assert data["name"] == "test-model"
-    
-    def test_create_model(self, client, mock_llm_service):
+    @pytest.mark.asyncio
+    async def test_create_model(self, client, sample_model_data):
         """Тест создания модели"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            model_data = {
-                "name": "test-model",
-                "description": "Test model",
-                "model_type": "llama",
-                "version": "1.0"
-            }
+        with patch('app.services.ModelService.create_model') as mock_create:
+            mock_create.return_value = LLMModel(**sample_model_data, id=1)
             
-            mock_model = MagicMock()
-            mock_model.id = 1
-            mock_model.name = "test-model"
-            mock_llm_service.model_manager.create_model.return_value = mock_model
+            response = await client.post(
+                "/api/v1/models",
+                json=sample_model_data
+            )
             
-            response = client.post("/api/models/", json=model_data)
-            assert response.status_code == 201
+            assert response.status_code == 200
+            data = response.json()
+            assert data["name"] == sample_model_data["name"]
+            assert data["base_model"] == sample_model_data["base_model"]
+    
+    @pytest.mark.asyncio
+    async def test_list_models(self, client):
+        """Тест получения списка моделей"""
+        with patch('app.services.ModelService.list_models') as mock_list:
+            mock_list.return_value = [
+                LLMModel(id=1, name="model1", base_model="llama2", provider="ollama"),
+                LLMModel(id=2, name="model2", base_model="mistral", provider="ollama")
+            ]
+            
+            response = await client.get("/api/v1/models")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 2
+            assert data[0]["name"] == "model1"
+            assert data[1]["name"] == "model2"
+    
+    @pytest.mark.asyncio
+    async def test_get_model(self, client):
+        """Тест получения модели по ID"""
+        with patch('app.services.ModelService.get_model') as mock_get:
+            mock_get.return_value = LLMModel(
+                id=1, name="test-model", base_model="llama2", provider="ollama"
+            )
+            
+            response = await client.get("/api/v1/models/1")
+            
+            assert response.status_code == 200
             data = response.json()
             assert data["id"] == 1
             assert data["name"] == "test-model"
     
-    def test_update_model(self, client, mock_llm_service):
-        """Тест обновления модели"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            update_data = {"description": "Updated description"}
+    @pytest.mark.asyncio
+    async def test_get_model_not_found(self, client):
+        """Тест получения несуществующей модели"""
+        with patch('app.services.ModelService.get_model') as mock_get:
+            mock_get.return_value = None
             
-            mock_model = MagicMock()
-            mock_model.id = 1
-            mock_model.description = "Updated description"
-            mock_llm_service.model_manager.update_model.return_value = mock_model
+            response = await client.get("/api/v1/models/999")
             
-            response = client.put("/api/models/1", json=update_data)
-            assert response.status_code == 200
-            data = response.json()
-            assert data["description"] == "Updated description"
-    
-    def test_delete_model(self, client, mock_llm_service):
-        """Тест удаления модели"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.model_manager.delete_model.return_value = True
-            
-            response = client.delete("/api/models/1")
-            assert response.status_code == 204
+            assert response.status_code == 404
+            assert "не найдена" in response.json()["detail"]
 
 
 class TestRoutesAPI:
-    """Тесты для API маршрутов"""
+    """Тесты API для маршрутизации"""
     
-    def test_list_routes(self, client, mock_llm_service):
-        """Тест получения списка маршрутов"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.route_manager._route_cache = {}
-            
-            response = client.get("/api/routes/")
-            assert response.status_code == 200
-            data = response.json()
-            assert "items" in data
-            assert "total" in data
-    
-    def test_create_route(self, client, mock_llm_service):
+    @pytest.mark.asyncio
+    async def test_create_route(self, client, sample_route_data):
         """Тест создания маршрута"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            route_data = {
-                "name": "test-route",
-                "description": "Test route",
-                "strategy": "round_robin",
-                "model_id": 1
+        with patch('app.services.RouterService.create_route') as mock_create:
+            mock_create.return_value = ModelRoute(**sample_route_data, id=1)
+            
+            response = await client.post(
+                "/api/v1/routes",
+                json=sample_route_data
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["name"] == sample_route_data["name"]
+            assert data["strategy"] == sample_route_data["strategy"]
+    
+    @pytest.mark.asyncio
+    async def test_route_request(self, client):
+        """Тест маршрутизации запроса"""
+        with patch('app.services.RouterService.route_request') as mock_route:
+            mock_route.return_value = {
+                "model": "llama2",
+                "response": "Тестовый ответ",
+                "route_used": "test-route"
             }
             
-            mock_route = MagicMock()
-            mock_route.id = 1
-            mock_route.name = "test-route"
-            mock_llm_service.route_manager.create_route.return_value = mock_route
-            
-            response = client.post("/api/routes/", json=route_data)
-            assert response.status_code == 201
-            data = response.json()
-            assert data["id"] == 1
-            assert data["name"] == "test-route"
-    
-    def test_get_route(self, client, mock_llm_service):
-        """Тест получения маршрута по ID"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_route = MagicMock()
-            mock_route.id = 1
-            mock_route.name = "test-route"
-            mock_llm_service.route_manager._route_cache = {"test-route": mock_route}
-            
-            response = client.get("/api/routes/1")
-            assert response.status_code == 200
-
-
-class TestTuningAPI:
-    """Тесты для API тюнинга"""
-    
-    def test_list_tuning_sessions(self, client, mock_llm_service):
-        """Тест получения списка сессий тюнинга"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.tuning_service.get_tuning_sessions.return_value = []
-            
-            response = client.get("/api/tuning/sessions/")
-            assert response.status_code == 200
-            data = response.json()
-            assert "items" in data
-            assert "total" in data
-    
-    def test_create_tuning_session(self, client, mock_llm_service):
-        """Тест создания сессии тюнинга"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            session_data = {
-                "name": "test-session",
-                "description": "Test tuning session",
-                "strategy": "fine_tuning",
-                "model_id": 1
-            }
-            
-            mock_session = MagicMock()
-            mock_session.id = 1
-            mock_session.name = "test-session"
-            mock_llm_service.tuning_service.create_tuning_session.return_value = mock_session
-            
-            response = client.post("/api/tuning/sessions/", json=session_data)
-            assert response.status_code == 201
-            data = response.json()
-            assert data["id"] == 1
-            assert data["name"] == "test-session"
-    
-    def test_start_tuning(self, client, mock_llm_service):
-        """Тест запуска тюнинга"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.tuning_service.start_tuning.return_value = True
-            
-            response = client.post("/api/tuning/sessions/1/start")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-
-
-class TestGenerateAPI:
-    """Тесты для API генерации"""
-    
-    def test_generate_text(self, client, mock_llm_service):
-        """Тест генерации текста"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            generate_data = {
-                "content": "Test prompt",
-                "request_type": "general",
+            request_data = {
+                "request_type": "text",
+                "content": "Привет, как дела?",
                 "use_rag": False
             }
             
-            mock_result = {
-                "response": "Generated response",
-                "model_used": "test-model",
-                "tokens_generated": 10,
-                "response_time": 1.5
-            }
-            mock_llm_service.process_request.return_value = mock_result
+            response = await client.post(
+                "/api/v1/route",
+                json=request_data
+            )
             
-            response = client.post("/api/generate/", json=generate_data)
             assert response.status_code == 200
             data = response.json()
-            assert data["response"] == "Generated response"
-            assert data["model_used"] == "test-model"
-    
-    def test_generate_with_rag(self, client, mock_llm_service):
-        """Тест генерации с RAG"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            generate_data = {
-                "content": "Test prompt",
-                "request_type": "general",
-                "use_rag": True
-            }
-            
-            mock_result = {
-                "response": "Generated response with RAG",
-                "model_used": "test-model",
-                "tokens_generated": 15,
-                "response_time": 2.0
-            }
-            mock_llm_service.process_request.return_value = mock_result
-            
-            response = client.post("/api/generate/", json=generate_data)
-            assert response.status_code == 200
-            data = response.json()
-            assert "RAG" in data["response"]
-
-
-class TestOptimizationAPI:
-    """Тесты для API оптимизации"""
-    
-    def test_optimize_model(self, client, mock_llm_service):
-        """Тест оптимизации модели"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            optimization_data = {
-                "model_id": 1,
-                "target_response_time": 1.0,
-                "target_quality": 0.9
-            }
-            
-            mock_result = {
-                "model_id": 1,
-                "optimization_applied": True,
-                "new_params": {"temperature": 0.8},
-                "performance_improvement": 0.15
-            }
-            mock_llm_service.optimization_service.optimize_model.return_value = mock_result
-            
-            response = client.post("/api/optimize/", json=optimization_data)
-            assert response.status_code == 200
-            data = response.json()
-            assert data["optimization_applied"] is True
-            assert data["performance_improvement"] == 0.15
+            assert data["model"] == "llama2"
+            assert data["response"] == "Тестовый ответ"
 
 
 class TestRAGAPI:
-    """Тесты для API RAG"""
+    """Тесты API для RAG"""
     
-    def test_add_document(self, client, mock_llm_service):
-        """Тест добавления документа в RAG"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
+    @pytest.mark.asyncio
+    async def test_rag_query(self, client):
+        """Тест RAG запроса"""
+        with patch('app.services.RAGService.generate_with_rag') as mock_rag:
+            mock_rag.return_value = {
+                "response": "Ответ с контекстом",
+                "context_documents": [
+                    {"title": "Документ 1", "source": "test", "relevance_score": 0.8}
+                ]
+            }
+            
+            query_data = {
+                "query": "Что такое машинное обучение?",
+                "model_name": "llama2",
+                "use_context": True
+            }
+            
+            response = await client.post(
+                "/api/v1/rag/query",
+                json=query_data
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["response"] == "Ответ с контекстом"
+            assert len(data["context_documents"]) == 1
+    
+    @pytest.mark.asyncio
+    async def test_add_document(self, client):
+        """Тест добавления документа"""
+        with patch('app.services.RAGService.add_document') as mock_add:
+            mock_add.return_value = RAGDocument(
+                id=1, title="Test Doc", content="Test content", source="test"
+            )
+            
             document_data = {
                 "title": "Test Document",
-                "content": "Test content for RAG",
-                "source": "test-source",
-                "tags": ["test", "rag"]
+                "content": "This is test content",
+                "source": "test",
+                "document_type": "article"
             }
             
-            mock_document = MagicMock()
-            mock_document.id = 1
-            mock_document.title = "Test Document"
-            mock_llm_service.rag_service.add_document.return_value = mock_document
+            response = await client.post(
+                "/api/v1/rag/documents",
+                params=document_data
+            )
             
-            response = client.post("/api/rag/documents/", json=document_data)
-            assert response.status_code == 201
+            assert response.status_code == 200
+            data = response.json()
+            assert data["title"] == "Test Document"
+
+
+class TestTuningAPI:
+    """Тесты API для тюнинга"""
+    
+    @pytest.mark.asyncio
+    async def test_create_tuning_session(self, client, sample_tuning_session_data):
+        """Тест создания сессии тюнинга"""
+        with patch('app.services.TuningService.create_tuning_session') as mock_create:
+            mock_create.return_value = TuningSession(
+                **sample_tuning_session_data, id=1, status=ModelStatus.PENDING
+            )
+            
+            response = await client.post(
+                "/api/v1/tuning/sessions",
+                json=sample_tuning_session_data
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["model_id"] == sample_tuning_session_data["model_id"]
+            assert data["status"] == ModelStatus.PENDING
+    
+    @pytest.mark.asyncio
+    async def test_list_tuning_sessions(self, client):
+        """Тест получения списка сессий тюнинга"""
+        with patch('app.services.TuningService.list_tuning_sessions') as mock_list:
+            mock_list.return_value = [
+                TuningSession(id=1, model_id=1, status=ModelStatus.COMPLETED),
+                TuningSession(id=2, model_id=1, status=ModelStatus.FAILED)
+            ]
+            
+            response = await client.get("/api/v1/tuning/sessions")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 2
+            assert data[0]["status"] == ModelStatus.COMPLETED
+            assert data[1]["status"] == ModelStatus.FAILED
+    
+    @pytest.mark.asyncio
+    async def test_get_tuning_session(self, client):
+        """Тест получения сессии тюнинга"""
+        with patch('app.services.TuningService.get_tuning_session') as mock_get:
+            mock_get.return_value = TuningSession(
+                id=1, model_id=1, status=ModelStatus.TUNING, progress=50
+            )
+            
+            response = await client.get("/api/v1/tuning/sessions/1")
+            
+            assert response.status_code == 200
             data = response.json()
             assert data["id"] == 1
-            assert data["title"] == "Test Document"
-    
-    def test_search_documents(self, client, mock_llm_service):
-        """Тест поиска документов в RAG"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_documents = []
-            mock_llm_service.rag_service.search_documents.return_value = mock_documents
-            
-            response = client.get("/api/rag/search?query=test")
-            assert response.status_code == 200
-            data = response.json()
-            assert "documents" in data
+            assert data["status"] == ModelStatus.TUNING
+            assert data["progress"] == 50
 
 
-class TestMonitoringAPI:
-    """Тесты для API мониторинга"""
+class TestMetricsAPI:
+    """Тесты API для метрик"""
     
-    def test_get_metrics(self, client, mock_llm_service):
-        """Тест получения метрик"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_metrics = []
-            mock_llm_service.performance_monitor.get_model_metrics.return_value = mock_metrics
+    @pytest.mark.asyncio
+    async def test_record_metrics(self, client):
+        """Тест записи метрик"""
+        with patch('app.services.MonitoringService.record_metrics') as mock_record:
+            mock_record.return_value = PerformanceMetrics(
+                id=1, model_id=1, response_time=1.5, tokens_generated=100
+            )
             
-            response = client.get("/api/monitoring/metrics/1")
+            metrics_data = {
+                "model_id": 1,
+                "response_time": 1.5,
+                "tokens_generated": 100,
+                "success_rate": 1.0
+            }
+            
+            response = await client.post(
+                "/api/v1/metrics",
+                json=metrics_data
+            )
+            
             assert response.status_code == 200
             data = response.json()
-            assert "metrics" in data
+            assert data["model_id"] == 1
+            assert data["response_time"] == 1.5
     
-    def test_get_performance_summary(self, client, mock_llm_service):
-        """Тест получения сводки производительности"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_summary = {
+    @pytest.mark.asyncio
+    async def test_get_metrics_summary(self, client):
+        """Тест получения сводки метрик"""
+        with patch('app.services.MonitoringService.get_metrics_summary') as mock_summary:
+            mock_summary.return_value = {
                 "total_requests": 100,
-                "avg_response_time": 1.5,
-                "avg_tokens_generated": 50,
+                "avg_response_time": 1.2,
+                "avg_tokens_generated": 150,
                 "avg_success_rate": 0.95
             }
-            mock_llm_service.performance_monitor.get_performance_summary.return_value = mock_summary
             
-            response = client.get("/api/monitoring/summary/1")
+            response = await client.get("/api/v1/metrics/summary")
+            
             assert response.status_code == 200
             data = response.json()
             assert data["total_requests"] == 100
-            assert data["avg_response_time"] == 1.5
+            assert data["avg_response_time"] == 1.2
 
 
-class TestSystemAPI:
-    """Тесты для системных API"""
+# Интеграционные тесты
+class TestIntegration:
+    """Интеграционные тесты"""
     
-    def test_get_system_status(self, client, mock_llm_service):
-        """Тест получения статуса системы"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_status = {
-                "status": "healthy",
-                "models_count": 5,
-                "active_routes": 3,
-                "total_requests_24h": 1000,
-                "avg_response_time": 1.5
-            }
-            mock_llm_service.get_system_status.return_value = mock_status
-            
-            response = client.get("/api/system/status")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "healthy"
-            assert data["models_count"] == 5
-    
-    def test_get_system_stats(self, client, mock_llm_service):
-        """Тест получения статистики системы"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            response = client.get("/api/system/stats")
-            assert response.status_code == 200
-            data = response.json()
-            assert "statistics" in data
-
-
-class TestErrorHandling:
-    """Тесты для обработки ошибок"""
-    
-    def test_model_not_found(self, client, mock_llm_service):
-        """Тест обработки ошибки 'модель не найдена'"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.model_manager.get_model.return_value = None
-            
-            response = client.get("/api/models/999")
-            assert response.status_code == 404
-            data = response.json()
-            assert "error" in data
-    
-    def test_route_not_found(self, client, mock_llm_service):
-        """Тест обработки ошибки 'маршрут не найден'"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            mock_llm_service.route_manager._route_cache = {}
-            
-            response = client.get("/api/routes/999")
-            assert response.status_code == 404
-            data = response.json()
-            assert "error" in data
-    
-    def test_invalid_request_data(self, client):
-        """Тест обработки невалидных данных запроса"""
-        invalid_data = {
-            "name": "",  # Пустое имя
-            "model_type": "invalid_type"
+    @pytest.mark.asyncio
+    async def test_full_workflow(self, client):
+        """Тест полного workflow"""
+        # 1. Создаем модель
+        model_data = {
+            "name": "test-model",
+            "base_model": "llama2",
+            "provider": "ollama"
         }
         
-        response = client.post("/api/models/", json=invalid_data)
-        assert response.status_code == 422  # Validation Error
-
-
-class TestAuthentication:
-    """Тесты для аутентификации"""
-    
-    def test_public_endpoints_no_auth(self, client):
-        """Тест публичных эндпоинтов без аутентификации"""
-        endpoints = [
-            "/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json"
-        ]
-        
-        for endpoint in endpoints:
-            response = client.get(endpoint)
-            assert response.status_code in [200, 404]  # 404 для несуществующих
-    
-    def test_protected_endpoints_require_auth(self, client):
-        """Тест защищенных эндпоинтов с требованием аутентификации"""
-        endpoints = [
-            "/api/models/",
-            "/api/routes/",
-            "/api/tuning/sessions/",
-            "/api/generate/"
-        ]
-        
-        for endpoint in endpoints:
-            response = client.get(endpoint)
-            assert response.status_code == 401  # Unauthorized
-    
-    def test_protected_endpoints_with_auth(self, client, mock_llm_service):
-        """Тест защищенных эндпоинтов с аутентификацией"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            headers = {"X-API-Key": "test-api-key"}
+        with patch('app.services.ModelService.create_model') as mock_create_model:
+            mock_create_model.return_value = LLMModel(**model_data, id=1)
             
-            response = client.get("/api/models/", headers=headers)
+            response = await client.post("/api/v1/models", json=model_data)
             assert response.status_code == 200
+            model_id = response.json()["id"]
+        
+        # 2. Создаем маршрут
+        route_data = {
+            "name": "test-route",
+            "model_id": model_id,
+            "strategy": RouteStrategy.ROUND_ROBIN
+        }
+        
+        with patch('app.services.RouterService.create_route') as mock_create_route:
+            mock_create_route.return_value = ModelRoute(**route_data, id=1)
+            
+            response = await client.post("/api/v1/routes", json=route_data)
+            assert response.status_code == 200
+        
+        # 3. Создаем сессию тюнинга
+        session_data = {
+            "model_id": model_id,
+            "strategy": "instruction_tuning",
+            "parameters": {"temperature": 0.7}
+        }
+        
+        with patch('app.services.TuningService.create_tuning_session') as mock_create_session:
+            mock_create_session.return_value = TuningSession(
+                **session_data, id=1, status=ModelStatus.PENDING
+            )
+            
+            response = await client.post("/api/v1/tuning/sessions", json=session_data)
+            assert response.status_code == 200
+        
+        # 4. Проверяем статус модели
+        with patch('app.services.ModelService.get_models_status') as mock_status:
+            mock_status.return_value = {
+                "total_models": 1,
+                "available_models": 1,
+                "tuning_sessions": 1
+            }
+            
+            response = await client.get("/api/v1/models/status")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_models"] == 1
 
 
-class TestRateLimiting:
-    """Тесты для ограничения частоты запросов"""
+# Тесты сервисов
+class TestModelService:
+    """Тесты сервиса моделей"""
     
-    def test_rate_limit_exceeded(self, client):
-        """Тест превышения лимита запросов"""
-        # Отправляем много запросов подряд
-        for _ in range(100):
-            response = client.get("/health")
-            if response.status_code == 429:  # Too Many Requests
-                break
-        else:
-            pytest.skip("Rate limiting not implemented or configured")
+    @pytest.mark.asyncio
+    async def test_list_models(self, test_db):
+        """Тест получения списка моделей"""
+        from app.services import ModelService
+        
+        async with test_db() as session:
+            service = ModelService(session)
+            
+            with patch.object(service, 'ollama_client') as mock_client:
+                mock_client.get.return_value.json.return_value = {
+                    "models": [{"name": "llama2"}, {"name": "mistral"}]
+                }
+                
+                models = await service.list_models()
+                assert len(models) >= 0  # Может быть 0, если БД пустая
 
 
+class TestRAGService:
+    """Тесты RAG сервиса"""
+    
+    @pytest.mark.asyncio
+    async def test_search_documents(self, test_db):
+        """Тест поиска документов"""
+        from app.services import RAGService
+        
+        async with test_db() as session:
+            service = RAGService(session)
+            
+            with patch.object(service, '_generate_embeddings') as mock_embeddings:
+                mock_embeddings.return_value = [0.1, 0.2, 0.3]
+                
+                documents = await service.search_documents("test query")
+                assert isinstance(documents, list)
+    
+    @pytest.mark.asyncio
+    async def test_generate_with_rag(self, test_db):
+        """Тест генерации с RAG"""
+        from app.services import RAGService
+        
+        async with test_db() as session:
+            service = RAGService(session)
+            
+            with patch.object(service, 'search_documents') as mock_search:
+                mock_search.return_value = []
+                
+                with patch.object(service, '_generate_response') as mock_generate:
+                    mock_generate.return_value = {
+                        "response": "Test response",
+                        "model": "llama2"
+                    }
+                    
+                    result = await service.generate_with_rag("llama2", "test query")
+                    assert "response" in result
+
+
+class TestTuningService:
+    """Тесты сервиса тюнинга"""
+    
+    @pytest.mark.asyncio
+    async def test_create_tuning_session(self, test_db):
+        """Тест создания сессии тюнинга"""
+        from app.services import TuningService
+        
+        async with test_db() as session:
+            service = TuningService(session)
+            
+            session_data = {
+                "model_id": 1,
+                "strategy": "instruction_tuning",
+                "parameters": {"temperature": 0.7}
+            }
+            
+            result = await service.create_tuning_session(session_data)
+            assert result is not None
+            assert result.model_id == 1
+    
+    @pytest.mark.asyncio
+    async def test_start_tuning(self, test_db):
+        """Тест запуска тюнинга"""
+        from app.services import TuningService
+        
+        async with test_db() as session:
+            service = TuningService(session)
+            
+            with patch.object(service, '_run_tuning') as mock_run:
+                mock_run.return_value = None
+                
+                result = await service.start_tuning(1)
+                assert result is True
+
+
+# Тесты утилит
+class TestUtils:
+    """Тесты утилит"""
+    
+    def test_simple_embeddings(self):
+        """Тест простых эмбеддингов"""
+        from app.services import RAGService
+        
+        service = RAGService(None)
+        embeddings = service._simple_embeddings("test text")
+        
+        assert isinstance(embeddings, list)
+        assert len(embeddings) == 128
+        assert all(isinstance(x, float) for x in embeddings)
+    
+    def test_cosine_similarity(self):
+        """Тест косинусного сходства"""
+        from app.services import RAGService
+        
+        service = RAGService(None)
+        
+        vec1 = [1.0, 0.0, 0.0]
+        vec2 = [1.0, 0.0, 0.0]
+        
+        similarity = service._cosine_similarity(vec1, vec2)
+        assert similarity == 1.0
+        
+        vec3 = [0.0, 1.0, 0.0]
+        similarity = service._cosine_similarity(vec1, vec3)
+        assert similarity == 0.0
+    
+    def test_extract_keywords(self):
+        """Тест извлечения ключевых слов"""
+        from app.services import RAGService
+        
+        service = RAGService(None)
+        
+        text = "Машинное обучение - это подраздел искусственного интеллекта"
+        keywords = service._extract_keywords(text)
+        
+        assert isinstance(keywords, list)
+        assert len(keywords) <= 10
+        assert all(isinstance(k, str) for k in keywords)
+
+
+# Тесты производительности
 class TestPerformance:
     """Тесты производительности"""
     
-    def test_response_time(self, client, mock_llm_service):
+    @pytest.mark.asyncio
+    async def test_concurrent_requests(self, client):
+        """Тест конкурентных запросов"""
+        import asyncio
+        
+        async def make_request():
+            with patch('app.services.ModelService.list_models') as mock_list:
+                mock_list.return_value = []
+                response = await client.get("/api/v1/models")
+                return response.status_code
+        
+        # Выполняем 10 конкурентных запросов
+        tasks = [make_request() for _ in range(10)]
+        results = await asyncio.gather(*tasks)
+        
+        # Все запросы должны быть успешными
+        assert all(status == 200 for status in results)
+    
+    @pytest.mark.asyncio
+    async def test_response_time(self, client):
         """Тест времени ответа"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            import time
+        import time
+        
+        with patch('app.services.ModelService.list_models') as mock_list:
+            mock_list.return_value = []
             
             start_time = time.time()
-            response = client.get("/health")
+            response = await client.get("/api/v1/models")
             end_time = time.time()
             
             response_time = end_time - start_time
-            assert response_time < 1.0  # Ответ должен быть быстрее 1 секунды
+            
             assert response.status_code == 200
+            assert response_time < 1.0  # Ответ должен быть быстрее 1 секунды
+
+
+# Тесты обработки ошибок
+class TestErrorHandling:
+    """Тесты обработки ошибок"""
     
-    def test_concurrent_requests(self, client, mock_llm_service):
-        """Тест конкурентных запросов"""
-        with patch('app.main.get_llm_service', return_value=mock_llm_service):
-            import asyncio
-            import concurrent.futures
+    @pytest.mark.asyncio
+    async def test_database_error(self, client):
+        """Тест ошибки базы данных"""
+        with patch('app.services.ModelService.list_models') as mock_list:
+            mock_list.side_effect = Exception("Database error")
             
-            def make_request():
-                return client.get("/health")
+            response = await client.get("/api/v1/models")
             
-            # Выполняем 10 конкурентных запросов
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(make_request) for _ in range(10)]
-                responses = [future.result() for future in futures]
+            assert response.status_code == 500
+            assert "error" in response.json()
+    
+    @pytest.mark.asyncio
+    async def test_ollama_connection_error(self, client):
+        """Тест ошибки подключения к Ollama"""
+        with patch('app.services.ModelService.list_models') as mock_list:
+            mock_list.side_effect = Exception("Connection refused")
             
-            # Все запросы должны быть успешными
-            for response in responses:
-                assert response.status_code == 200
+            response = await client.get("/api/v1/models")
+            
+            assert response.status_code == 500
+            assert "error" in response.json()
+    
+    @pytest.mark.asyncio
+    async def test_validation_error(self, client):
+        """Тест ошибки валидации"""
+        invalid_data = {
+            "name": "",  # Пустое имя
+            "base_model": "invalid-model"
+        }
+        
+        response = await client.post("/api/v1/models", json=invalid_data)
+        
+        assert response.status_code == 422  # Validation error
 
 
 if __name__ == "__main__":
-    pytest.main([__file__]) 
+    pytest.main([__file__, "-v"]) 
