@@ -44,6 +44,17 @@ class IssueSeverity(Enum):
     INFO = "info"
 
 
+class ScenarioType(Enum):
+    """Типы сценариев тестирования"""
+    AUTHENTICATION = "authentication"
+    FUNCTIONAL = "functional"
+    BENCHMARK = "benchmark"
+    SETTINGS = "settings"
+    EXPORT = "export"
+    JOURNEY = "journey"
+    END_TO_END = "end_to_end"
+
+
 @dataclass
 class UIElement:
     """Элемент пользовательского интерфейса"""
@@ -60,23 +71,32 @@ class UIElement:
 @dataclass
 class TestStep:
     """Шаг тестового сценария"""
-    step_id: str
-    description: str
-    action: str  # click, type, scroll, wait, etc.
-    target: Optional[str] = None  # селектор элемента
-    value: Optional[str] = None  # значение для ввода
+    step_id: Optional[str] = None
+    id: Optional[str] = None
+    name: str = ""
+    type: Optional[Any] = None
+    description: str = ""
+    action: str = ""
+    target: Optional[str] = None
+    value: Optional[str] = None
     expected_result: Optional[str] = None
     timeout: int = 10
     retry_count: int = 3
     dependencies: List[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        if self.type and hasattr(self.type, 'value'):
+            self.type = self.type.value
+
 
 @dataclass
 class TestScenario:
     """Тестовый сценарий"""
-    scenario_id: str
-    name: str
-    description: str
+    scenario_id: Optional[str] = None
+    id: Optional[str] = None
+    name: str = ""
+    type: Optional[Any] = None
+    description: str = ""
     steps: List[TestStep] = field(default_factory=list)
     variables: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
@@ -84,15 +104,19 @@ class TestScenario:
     timeout: int = 300
     user_profile: Optional[str] = None
 
+    def __post_init__(self):
+        if self.type and hasattr(self.type, 'value'):
+            self.type = self.type.value
+
 
 @dataclass
 class TestResult:
     """Результат выполнения теста"""
     test_id: str
     scenario_id: str
-    step_id: Optional[str] = None
     status: TestStatus
     start_time: datetime
+    step_id: Optional[str] = None
     end_time: Optional[datetime] = None
     duration: Optional[float] = None
     success: bool = False
@@ -235,4 +259,23 @@ class APIConfig:
     retry_count: int = 3
     headers: Dict[str, str] = field(default_factory=dict)
     auth_token: Optional[str] = None
-    verify_ssl: bool = True 
+    verify_ssl: bool = True
+
+
+@dataclass
+class UserAction:
+    type: str
+    target: str
+    data: dict = field(default_factory=dict)
+    id: Optional[str] = None  # для обратной совместимости
+
+
+@dataclass
+class HumanProfile:
+    name: str
+    age: int
+    occupation: str
+    tech_level: str
+    browsing_speed: str
+    patience: str
+    exploration_style: str 

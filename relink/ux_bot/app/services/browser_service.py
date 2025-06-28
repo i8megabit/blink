@@ -29,20 +29,6 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 @dataclass
-class UIElement:
-    """Интерактивный элемент UI"""
-    tag_name: str
-    element_type: str  # button, input, link, form, etc.
-    text: str
-    attributes: Dict[str, str]
-    xpath: str
-    css_selector: str
-    is_visible: bool
-    is_enabled: bool
-    position: Dict[str, int]  # x, y coordinates
-    size: Dict[str, int]  # width, height
-
-@dataclass
 class TechnicalAnalysis:
     """Технический анализ страницы"""
     url: str

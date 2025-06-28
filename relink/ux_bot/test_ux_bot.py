@@ -117,7 +117,7 @@ async def test_scenario_execution():
         await ux_bot.start_session()
         
         # Получение доступных сценариев
-        scenarios = ux_bot.scenario_service.get_all_scenarios()
+        scenarios = ux_bot.scenario_service.list_scenarios()
         logger.info(f"Доступно сценариев: {len(scenarios)}")
         
         if scenarios:

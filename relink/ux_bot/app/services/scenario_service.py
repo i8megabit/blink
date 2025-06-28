@@ -12,9 +12,9 @@ from dataclasses import dataclass
 import logging
 from datetime import datetime
 
-from ..models import TestScenario, TestStep, UserAction, TestResult, ScenarioType, UserProfile, TestStatus, Issue, IssueSeverity
+from ..models import TestScenario, TestStep, TestResult, UserProfile, TestStatus, Issue, IssueSeverity, ScenarioType, UserAction
 from ..services.browser_service import BrowserService
-from ..services.api_client import APIClient
+from ..api_client import APIClient
 from ..config import settings
 
 logger = logging.getLogger(__name__)

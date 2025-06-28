@@ -27,7 +27,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from .config import settings
 from .api_client import APIClient
-from .models import UIAnalysis, UserAction, TestReport, HumanProfile, BrowserConfig, APIConfig, PageAnalysis, Issue, IssueSeverity, UserProfile, ScenarioContext, TestResult, TestStatus
+from .models import TestReport, BrowserConfig, APIConfig, PageAnalysis, Issue, IssueSeverity, UserProfile, ScenarioContext, TestResult, TestStatus, HumanProfile
 from .services.browser_service import BrowserService
 from .services.scenario_service import ScenarioService
 

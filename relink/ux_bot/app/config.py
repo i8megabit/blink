@@ -27,6 +27,8 @@ class Settings:
     browser_headless: bool = True
     browser_timeout: int = 30
     browser_implicit_wait: int = 10
+    browser_viewport_width: int = 1920
+    browser_viewport_height: int = 1080
     
     # Настройки тестирования
     test_timeout: int = 300  # 5 минут
