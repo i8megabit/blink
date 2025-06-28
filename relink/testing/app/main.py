@@ -38,15 +38,10 @@ security = HTTPBearer(auto_error=False)
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
     logger.info("🚀 Запуск микросервиса тестирования reLink...")
-    
-    # Инициализация подключений
-    await testing_service.initialize()
-    
+    # await testing_service.initialize()  # временно убрано
     logger.info("✅ Микросервис тестирования успешно запущен")
     yield
-    
-    # Очистка ресурсов
-    await testing_service.cleanup()
+    # await testing_service.cleanup()  # временно убрано
     logger.info("🛑 Микросервис тестирования остановлен")
 
 # Создание FastAPI приложения
@@ -62,7 +57,7 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,7 +65,7 @@ app.add_middleware(
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=settings.ALLOWED_HOSTS
+    allowed_hosts=settings.allowed_hosts
 )
 
 # Dependency для получения базы данных
@@ -81,7 +76,7 @@ async def get_db() -> Database:
 # Dependency для аутентификации (заглушка)
 async def get_current_user(token: str = Depends(security)):
     """Получение текущего пользователя"""
-    if not settings.AUTH_REQUIRED:
+    if not settings.auth_required:
         return {"user_id": "anonymous", "role": "tester"}
     
     # TODO: Реализовать реальную аутентификацию
@@ -410,8 +405,9 @@ async def websocket_execution_updates(websocket, execution_id: str):
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host=settings.host,
+        port=settings.port,
         reload=settings.debug,
-        log_level="info"
+        log_level="info",
+        workers=1
     ) 
