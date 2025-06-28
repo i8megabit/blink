@@ -31,16 +31,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Копируем только requirements для лучшего использования кеша
-COPY docs/requirements.txt ./requirements.txt
+# COPY docs/requirements.txt ./requirements.txt
 
 # Создаем виртуальное окружение и устанавливаем зависимости
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Устанавливаем зависимости с оптимизацией
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# RUN --mount=type=cache,target=/root/.cache/pip     pip install --no-cache-dir --upgrade pip setuptools wheel &&     pip install --no-cache-dir -r requirements.txt
 
 # Продакшн этап
 FROM base as production
@@ -60,12 +58,12 @@ RUN chown -R appuser:appuser /app && \
     chown -R appuser:appuser /home/appuser
 
 # Копируем код приложения
-COPY --chown=appuser:appuser docs/app ./app
-COPY --chown=appuser:appuser docs/static ./static
+# COPY --chown=appuser:appuser docs/app ./app
+# COPY --chown=appuser:appuser docs/static ./static
 COPY --chown=appuser:appuser VERSION ./VERSION
-COPY --chown=appuser:appuser README.md ./README.md
-COPY --chown=appuser:appuser TECHNICAL_ROADMAP.md ./TECHNICAL_ROADMAP.md
-COPY --chown=appuser:appuser CI_CD_SETUP.md ./CI_CD_SETUP.md
+# COPY --chown=appuser:appuser README.md ./README.md
+# COPY --chown=appuser:appuser TECHNICAL_ROADMAP.md ./TECHNICAL_ROADMAP.md
+# COPY --chown=appuser:appuser CI_CD_SETUP.md ./CI_CD_SETUP.md
 
 # Переключаемся на непривилегированного пользователя
 USER appuser

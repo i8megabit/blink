@@ -14,10 +14,10 @@ services:
       resources:
         limits:
           cpus: '1.391'
-          memory: 1734Mi
+          memory: 1734M
         reservations:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
@@ -40,7 +40,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - CACHE_TTL=3600
-      - CACHE_PREFIX=docs:
+      - CACHE_PREFIX=docs_
       - DOCS_PATH=/app/static
       - VERSION_FILE=/app/VERSION
       - README_FILE=/app/README.md
@@ -49,10 +49,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - ./VERSION:/app/VERSION:ro
       - ./README.md:/app/README.md:ro
@@ -66,44 +66,44 @@ services:
     depends_on:
       - redis
 
-  monitoring:
-    build:
-      context: .
-      dockerfile: monitoring/Dockerfile
-    ports:
-      - "8002:8002"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - OLLAMA_URL=http://ollama:11434
-      - CACHE_TTL=3600
-      - CACHE_PREFIX=monitoring:
-      - COLLECT_INTERVAL=30
-      - RETENTION_DAYS=30
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-      - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
-    deploy:
-      resources:
-        limits:
-          cpus: '0.347'
-          memory: 867Mi
-        reservations:
-          cpus: '0.173'
-          memory: 433Mi
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    depends_on:
-      - redis
-      - db
-      - ollama
+#  monitoring:
+#    build:
+#      context: .
+#      dockerfile: monitoring/Dockerfile
+#    ports:
+#      - "8002:8002"
+#    environment:
+#      - PYTHONUNBUFFERED=1
+#      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#      - REDIS_DB=0
+#      - OLLAMA_URL=http://ollama:11434
+#      - CACHE_TTL=3600
+#      - CACHE_PREFIX=monitoring_
+#      - COLLECT_INTERVAL=30
+#      - RETENTION_DAYS=30
+#      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+#      - LOG_LEVEL=INFO
+#      - LOG_FORMAT=json
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.347'
+#          memory: 867M
+#        reservations:
+#          cpus: '0.173'
+#          memory: 433M
+#    healthcheck:
+#      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#      start_period: 40s
+#    depends_on:
+#      - redis
+#      - db
+#      - ollama
 
   testing:
     build:
@@ -118,7 +118,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=1
       - CACHE_TTL=3600
-      - CACHE_PREFIX=testing:
+      - CACHE_PREFIX=testing_
       - CORS_ORIGINS=http://localhost:3000,http://frontend:80
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
@@ -133,10 +133,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     volumes:
       - ./testing/reports:/app/reports
       - ./testing/test_data:/app/test_data
@@ -162,14 +162,14 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     depends_on:
       - backend
       - docs
-      - monitoring
+      # - monitoring
       - testing
 
   redis:
@@ -181,10 +181,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - redis_data:/data
     healthcheck:
@@ -206,10 +206,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     volumes:
       - ../relink_db:/var/lib/postgresql/data
 
@@ -221,10 +221,10 @@ services:
       resources:
         limits:
           cpus: '1.391'
-          memory: 5204Mi
+          memory: 5204M
         reservations:
           cpus: '0.695'
-          memory: 2602Mi
+          memory: 2602M
     volumes:
       - ./ollama_models:/root/.ollama
       - ./scripts:/scripts
@@ -285,50 +285,50 @@ services:
       echo '✅ Модели загружены!' && 
       wait"
 
-  llm_tuning:
-    build:
-      context: .
-      dockerfile: llm_tuning/Dockerfile
-    ports:
-      - "8004:8004"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=2
-      - OLLAMA_URL=http://ollama:11434
-      - CACHE_TTL=3600
-      - CACHE_PREFIX=llm_tuning
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-      - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
-      - MAX_CONCURRENT_TUNINGS=3
-      - TUNING_TIMEOUT=1800
-      - MODEL_RETENTION_DAYS=7
-      - METRICS_ENABLED=true
-      - PROMETHEUS_PORT=9091
-    deploy:
-      resources:
-        limits:
-          cpus: '2.086'
-          memory: 3469Mi
-        reservations:
-          cpus: '1.043'
-          memory: 1734Mi
-    volumes:
-      - ./llm_tuning/models:/app/models
-      - ./llm_tuning/data:/app/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    depends_on:
-      - redis
-      - db
-      - ollama
+#  llm_tuning:
+#    build:
+#      context: .
+#      dockerfile: llm_tuning/Dockerfile
+#    ports:
+#      - "8004:8004"
+#    environment:
+#      - PYTHONUNBUFFERED=1
+#      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+#      - REDIS_HOST=redis
+#      - REDIS_PORT=6379
+#      - REDIS_DB=2
+#      - OLLAMA_URL=http://ollama:11434
+#      - CACHE_TTL=3600
+#      - CACHE_PREFIX=llm_tuning
+#      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+#      - LOG_LEVEL=INFO
+#      - LOG_FORMAT=json
+#      - MAX_CONCURRENT_TUNINGS=3
+#      - TUNING_TIMEOUT=1800
+#      - MODEL_RETENTION_DAYS=7
+#      - METRICS_ENABLED=true
+#      - PROMETHEUS_PORT=9091
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '2.086'
+#          memory: 3469M
+#        reservations:
+#          cpus: '1.043'
+#          memory: 1734M
+#    volumes:
+#      - ./llm_tuning/models:/app/models
+#      - ./llm_tuning/data:/app/data
+#    healthcheck:
+#      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#      start_period: 40s
+#    depends_on:
+#      - redis
+#      - db
+#      - ollama
 
   prometheus:
     image: prom/prometheus:latest
