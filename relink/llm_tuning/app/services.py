@@ -219,28 +219,65 @@ class RAGService:
             base_url=settings.OLLAMA_BASE_URL,
             timeout=settings.OLLAMA_TIMEOUT
         )
+        self._vector_cache: Dict[str, List[float]] = {}
     
     async def add_document(self, document_data: Dict[str, Any]) -> RAGDocument:
         """Добавление документа в RAG систему"""
-        document = RAGDocument(**document_data)
-        self.db.add(document)
-        await self.db.commit()
-        await self.db.refresh(document)
-        return document
+        try:
+            # Создаем документ
+            document = RAGDocument(**document_data)
+            
+            # Генерируем эмбеддинги для документа
+            embeddings = await self._generate_embeddings(document.content)
+            document.embeddings = json.dumps(embeddings)
+            
+            # Извлекаем ключевые слова
+            document.keywords = await self._extract_keywords(document.content)
+            
+            # Сохраняем в БД
+            self.db.add(document)
+            await self.db.commit()
+            await self.db.refresh(document)
+            
+            # Кэшируем эмбеддинги
+            self._vector_cache[f"doc_{document.id}"] = embeddings
+            
+            logger.info(f"Документ {document.title} добавлен в RAG систему")
+            return document
+            
+        except Exception as e:
+            logger.error(f"Ошибка добавления документа: {e}")
+            raise
     
     async def search_documents(self, query: str, limit: int = 5) -> List[RAGDocument]:
         """Поиск релевантных документов"""
-        # Простой поиск по ключевым словам
-        # В реальной системе здесь будет векторный поиск
-        stmt = select(RAGDocument).where(
-            or_(
-                RAGDocument.content.contains(query),
-                RAGDocument.metadata.contains({"keywords": query})
-            )
-        ).limit(limit)
-        
-        result = await self.db.execute(stmt)
-        return result.scalars().all()
+        try:
+            # Генерируем эмбеддинги для запроса
+            query_embeddings = await self._generate_embeddings(query)
+            
+            # Получаем все документы
+            stmt = select(RAGDocument).where(RAGDocument.is_active == True)
+            result = await self.db.execute(stmt)
+            documents = result.scalars().all()
+            
+            # Вычисляем косинусное сходство
+            similarities = []
+            for doc in documents:
+                if doc.embeddings:
+                    doc_embeddings = json.loads(doc.embeddings)
+                    similarity = self._cosine_similarity(query_embeddings, doc_embeddings)
+                    similarities.append((similarity, doc))
+            
+            # Сортируем по сходству и возвращаем топ результаты
+            similarities.sort(key=lambda x: x[0], reverse=True)
+            top_documents = [doc for _, doc in similarities[:limit]]
+            
+            logger.info(f"Найдено {len(top_documents)} релевантных документов для запроса")
+            return top_documents
+            
+        except Exception as e:
+            logger.error(f"Ошибка поиска документов: {e}")
+            return []
     
     async def generate_with_rag(
         self, 
@@ -249,38 +286,309 @@ class RAGService:
         context_documents: List[RAGDocument] = None
     ) -> Dict[str, Any]:
         """Генерация ответа с использованием RAG"""
-        if not context_documents:
-            context_documents = await self.search_documents(query)
-        
-        # Формируем контекст
-        context = "\n\n".join([doc.content for doc in context_documents])
-        
-        # Создаем промпт с контекстом
-        prompt = f"""Используй следующий контекст для ответа на вопрос:
-
-Контекст:
+        try:
+            # Если документы не переданы, ищем их
+            if not context_documents:
+                context_documents = await self.search_documents(query, limit=3)
+            
+            # Формируем контекст из документов
+            context = self._build_context(context_documents)
+            
+            # Создаем промпт с контекстом
+            system_prompt = """Ты полезный ассистент. Используй предоставленный контекст для ответа на вопросы пользователя. 
+            Если в контексте нет информации для ответа, скажи об этом честно."""
+            
+            user_prompt = f"""Контекст:
 {context}
 
 Вопрос: {query}
 
 Ответ:"""
+            
+            # Генерируем ответ
+            response = await self._generate_response(model_name, user_prompt, system_prompt)
+            
+            # Добавляем информацию о контексте
+            response["context_documents"] = [
+                {
+                    "title": doc.title,
+                    "source": doc.source,
+                    "relevance_score": doc.relevance_score
+                }
+                for doc in context_documents
+            ]
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Ошибка генерации с RAG: {e}")
+            return {
+                "error": str(e),
+                "response": "Извините, произошла ошибка при обработке запроса."
+            }
+    
+    async def _generate_embeddings(self, text: str) -> List[float]:
+        """Генерация эмбеддингов для текста"""
+        try:
+            # Используем простую модель для эмбеддингов
+            response = await self.ollama_client.post(
+                "/api/embeddings",
+                json={
+                    "model": "nomic-embed-text",
+                    "prompt": text
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("embedding", [])
+            else:
+                # Fallback: используем простые эмбеддинги
+                return self._simple_embeddings(text)
+                
+        except Exception as e:
+            logger.warning(f"Ошибка генерации эмбеддингов, используем fallback: {e}")
+            return self._simple_embeddings(text)
+    
+    def _simple_embeddings(self, text: str) -> List[float]:
+        """Простая реализация эмбеддингов для fallback"""
+        # Простая реализация на основе частоты символов
+        import string
+        from collections import Counter
         
-        # Отправляем запрос к модели
-        response = await self.ollama_client.post(
-            f"/api/generate",
-            json={
+        # Нормализуем текст
+        text = text.lower()
+        text = ''.join(c for c in text if c.isalnum() or c.isspace())
+        
+        # Считаем частоту символов
+        char_freq = Counter(text)
+        
+        # Создаем вектор фиксированной длины
+        embedding = [0.0] * 128
+        for i, (char, freq) in enumerate(char_freq.most_common(128)):
+            if i < 128:
+                embedding[i] = freq / len(text)
+        
+        return embedding
+    
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """Вычисление косинусного сходства между векторами"""
+        try:
+            import numpy as np
+            
+            # Приводим к одинаковой длине
+            min_len = min(len(vec1), len(vec2))
+            vec1 = vec1[:min_len]
+            vec2 = vec2[:min_len]
+            
+            # Вычисляем косинусное сходство
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            
+            return dot_product / (norm1 * norm2)
+            
+        except Exception as e:
+            logger.error(f"Ошибка вычисления косинусного сходства: {e}")
+            return 0.0
+    
+    async def _extract_keywords(self, text: str) -> List[str]:
+        """Извлечение ключевых слов из текста"""
+        try:
+            # Простая реализация извлечения ключевых слов
+            import re
+            from collections import Counter
+            
+            # Удаляем стоп-слова
+            stop_words = {
+                'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все', 'она',
+                'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только', 'ее',
+                'мне', 'было', 'вот', 'от', 'меня', 'еще', 'нет', 'о', 'из', 'ему', 'теперь', 'когда',
+                'даже', 'ну', 'вдруг', 'ли', 'если', 'уже', 'или', 'ни', 'быть', 'был', 'него', 'до',
+                'вас', 'нибудь', 'опять', 'уж', 'вам', 'ведь', 'там', 'потом', 'себя', 'ничего', 'ей',
+                'может', 'они', 'тут', 'где', 'есть', 'надо', 'ней', 'для', 'мы', 'тебя', 'их', 'чем',
+                'была', 'сам', 'чтоб', 'без', 'будто', 'чего', 'раз', 'тоже', 'себе', 'под', 'будет',
+                'ж', 'тогда', 'кто', 'этот', 'того', 'потому', 'этого', 'какой', 'совсем', 'ним', 'здесь',
+                'этом', 'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'сейчас', 'были', 'куда', 'зачем',
+                'всех', 'никогда', 'можно', 'при', 'наконец', 'два', 'об', 'другой', 'хоть', 'после',
+                'над', 'больше', 'тот', 'через', 'эти', 'нас', 'про', 'всего', 'них', 'какая', 'много',
+                'разве', 'три', 'эту', 'моя', 'впрочем', 'хорошо', 'свою', 'этой', 'перед', 'иногда',
+                'лучше', 'чуть', 'том', 'нельзя', 'такой', 'им', 'более', 'всегда', 'притом', 'будет',
+                'очень', 'нас', 'вдвоем', 'под', 'оборот', 'теперь', 'долго', 'ли', 'очень', 'либо',
+                'впрочем', 'все', 'таки', 'более', 'всегда', 'между'
+            }
+            
+            # Нормализуем текст
+            text = text.lower()
+            text = re.sub(r'[^\w\s]', '', text)
+            
+            # Разбиваем на слова
+            words = text.split()
+            
+            # Фильтруем стоп-слова и короткие слова
+            keywords = [
+                word for word in words 
+                if word not in stop_words and len(word) > 2
+            ]
+            
+            # Считаем частоту и возвращаем топ-10
+            word_freq = Counter(keywords)
+            return [word for word, _ in word_freq.most_common(10)]
+            
+        except Exception as e:
+            logger.error(f"Ошибка извлечения ключевых слов: {e}")
+            return []
+    
+    def _build_context(self, documents: List[RAGDocument]) -> str:
+        """Построение контекста из документов"""
+        if not documents:
+            return ""
+        
+        context_parts = []
+        for i, doc in enumerate(documents, 1):
+            context_parts.append(f"Документ {i}: {doc.title}")
+            context_parts.append(f"Источник: {doc.source}")
+            context_parts.append(f"Содержание: {doc.content[:500]}...")
+            context_parts.append("")
+        
+        return "\n".join(context_parts)
+    
+    async def _generate_response(
+        self, 
+        model_name: str, 
+        prompt: str, 
+        system_prompt: str = None
+    ) -> Dict[str, Any]:
+        """Генерация ответа от модели"""
+        try:
+            payload = {
                 "model": model_name,
                 "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "num_predict": 1000
-                }
+                "stream": False
             }
-        )
-        
-        return response.json()
+            
+            if system_prompt:
+                payload["system"] = system_prompt
+            
+            response = await self.ollama_client.post(
+                "/api/generate",
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "response": data.get("response", ""),
+                    "model": model_name,
+                    "tokens_used": data.get("eval_count", 0),
+                    "prompt_eval_count": data.get("prompt_eval_count", 0),
+                    "eval_count": data.get("eval_count", 0)
+                }
+            else:
+                return {
+                    "error": f"Ошибка генерации: {response.text}",
+                    "response": "Извините, произошла ошибка при генерации ответа."
+                }
+                
+        except Exception as e:
+            logger.error(f"Ошибка генерации ответа: {e}")
+            return {
+                "error": str(e),
+                "response": "Извините, произошла ошибка при генерации ответа."
+            }
+    
+    async def update_document(self, doc_id: int, updates: Dict[str, Any]) -> Optional[RAGDocument]:
+        """Обновление документа"""
+        try:
+            stmt = select(RAGDocument).where(RAGDocument.id == doc_id)
+            result = await self.db.execute(stmt)
+            document = result.scalar_one_or_none()
+            
+            if not document:
+                return None
+            
+            # Обновляем поля
+            for key, value in updates.items():
+                if hasattr(document, key):
+                    setattr(document, key, value)
+            
+            # Если изменился контент, обновляем эмбеддинги
+            if "content" in updates:
+                embeddings = await self._generate_embeddings(document.content)
+                document.embeddings = json.dumps(embeddings)
+                document.keywords = await self._extract_keywords(document.content)
+                
+                # Обновляем кэш
+                self._vector_cache[f"doc_{document.id}"] = embeddings
+            
+            await self.db.commit()
+            await self.db.refresh(document)
+            
+            return document
+            
+        except Exception as e:
+            logger.error(f"Ошибка обновления документа: {e}")
+            return None
+    
+    async def delete_document(self, doc_id: int) -> bool:
+        """Удаление документа"""
+        try:
+            stmt = select(RAGDocument).where(RAGDocument.id == doc_id)
+            result = await self.db.execute(stmt)
+            document = result.scalar_one_or_none()
+            
+            if not document:
+                return False
+            
+            # Удаляем из кэша
+            cache_key = f"doc_{document.id}"
+            if cache_key in self._vector_cache:
+                del self._vector_cache[cache_key]
+            
+            # Помечаем как неактивный
+            document.is_active = False
+            await self.db.commit()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления документа: {e}")
+            return False
+    
+    async def get_documents_stats(self) -> Dict[str, Any]:
+        """Получение статистики документов"""
+        try:
+            # Общее количество документов
+            total_stmt = select(func.count(RAGDocument.id))
+            total_result = await self.db.execute(total_stmt)
+            total_docs = total_result.scalar()
+            
+            # Активные документы
+            active_stmt = select(func.count(RAGDocument.id)).where(RAGDocument.is_active == True)
+            active_result = await self.db.execute(active_stmt)
+            active_docs = active_result.scalar()
+            
+            # Документы по типам
+            type_stmt = select(
+                RAGDocument.document_type,
+                func.count(RAGDocument.id)
+            ).group_by(RAGDocument.document_type)
+            type_result = await self.db.execute(type_stmt)
+            docs_by_type = dict(type_result.all())
+            
+            return {
+                "total_documents": total_docs,
+                "active_documents": active_docs,
+                "documents_by_type": docs_by_type,
+                "vector_cache_size": len(self._vector_cache)
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения статистики документов: {e}")
+            return {}
 
 
 class TuningService:
@@ -342,35 +650,338 @@ class TuningService:
             return False
     
     async def _run_tuning(self, session_id: int):
-        """Выполнение процесса тюнинга"""
+        """Выполнение процесса тюнинга модели"""
         session = await self.get_tuning_session(session_id)
         if not session:
+            logger.error(f"Сессия тюнинга {session_id} не найдена")
             return
         
         try:
-            # Здесь будет логика тюнинга модели
-            # Пока что симулируем процесс
+            logger.info(f"🚀 Начинаем тюнинг модели для сессии {session_id}")
             
-            # Обновляем прогресс
-            for progress in range(0, 101, 10):
+            # Получаем данные модели
+            model = await self._get_model_by_session(session_id)
+            if not model:
                 await self.update_tuning_session(session_id, {
-                    "progress": progress
+                    "status": ModelStatus.FAILED,
+                    "error_message": "Модель не найдена"
                 })
-                await asyncio.sleep(1)  # Симуляция работы
+                return
             
-            # Завершаем тюнинг
+            # Обновляем статус на "в процессе"
             await self.update_tuning_session(session_id, {
-                "status": ModelStatus.READY,
-                "completed_at": datetime.now(),
-                "progress": 100
+                "status": ModelStatus.TUNING,
+                "started_at": datetime.now()
             })
             
+            # Этап 1: Подготовка данных (10%)
+            logger.info("📊 Этап 1: Подготовка данных для тюнинга")
+            await self.update_tuning_session(session_id, {"progress": 10})
+            
+            training_data = await self._prepare_training_data(session)
+            if not training_data:
+                await self.update_tuning_session(session_id, {
+                    "status": ModelStatus.FAILED,
+                    "error_message": "Не удалось подготовить данные для тюнинга"
+                })
+                return
+            
+            # Этап 2: Создание Modelfile (20%)
+            logger.info("📝 Этап 2: Создание Modelfile")
+            await self.update_tuning_session(session_id, {"progress": 20})
+            
+            modelfile = await self._create_modelfile(model, training_data, session)
+            if not modelfile:
+                await self.update_tuning_session(session_id, {
+                    "status": ModelStatus.FAILED,
+                    "error_message": "Не удалось создать Modelfile"
+                })
+                return
+            
+            # Этап 3: Загрузка базовой модели (40%)
+            logger.info("⬇️ Этап 3: Загрузка базовой модели")
+            await self.update_tuning_session(session_id, {"progress": 40})
+            
+            base_model_loaded = await self._ensure_base_model(model.base_model)
+            if not base_model_loaded:
+                await self.update_tuning_session(session_id, {
+                    "status": ModelStatus.FAILED,
+                    "error_message": "Не удалось загрузить базовую модель"
+                })
+                return
+            
+            # Этап 4: Создание тюнированной модели (70%)
+            logger.info("🔧 Этап 4: Создание тюнированной модели")
+            await self.update_tuning_session(session_id, {"progress": 70})
+            
+            tuned_model_name = f"{model.name}-tuned-{session_id}"
+            model_created = await self._create_tuned_model(tuned_model_name, modelfile)
+            if not model_created:
+                await self.update_tuning_session(session_id, {
+                    "status": ModelStatus.FAILED,
+                    "error_message": "Не удалось создать тюнированную модель"
+                })
+                return
+            
+            # Этап 5: Валидация модели (90%)
+            logger.info("✅ Этап 5: Валидация тюнированной модели")
+            await self.update_tuning_session(session_id, {"progress": 90})
+            
+            validation_result = await self._validate_tuned_model(tuned_model_name, session)
+            if not validation_result["success"]:
+                await self.update_tuning_session(session_id, {
+                    "status": ModelStatus.FAILED,
+                    "error_message": f"Валидация не пройдена: {validation_result['error']}"
+                })
+                return
+            
+            # Этап 6: Завершение (100%)
+            logger.info("🎉 Этап 6: Завершение тюнинга")
+            await self.update_tuning_session(session_id, {
+                "status": ModelStatus.READY,
+                "progress": 100,
+                "completed_at": datetime.now(),
+                "tuned_model_name": tuned_model_name,
+                "validation_metrics": validation_result["metrics"]
+            })
+            
+            logger.info(f"✅ Тюнинг модели завершен успешно: {tuned_model_name}")
+            
         except Exception as e:
-            logger.error(f"Ошибка в процессе тюнинга: {e}")
+            logger.error(f"❌ Ошибка в процессе тюнинга сессии {session_id}: {e}")
             await self.update_tuning_session(session_id, {
                 "status": ModelStatus.FAILED,
                 "error_message": str(e)
             })
+    
+    async def _get_model_by_session(self, session_id: int) -> Optional[LLMModel]:
+        """Получение модели по ID сессии"""
+        stmt = select(TuningSession).where(TuningSession.id == session_id)
+        result = await self.db.execute(stmt)
+        session = result.scalar_one_or_none()
+        
+        if not session:
+            return None
+        
+        stmt = select(LLMModel).where(LLMModel.id == session.model_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def _prepare_training_data(self, session: TuningSession) -> Optional[List[Dict[str, str]]]:
+        """Подготовка данных для тюнинга"""
+        try:
+            # Получаем данные для тюнинга из сессии
+            training_data = []
+            
+            # Примеры запросов и ответов для тюнинга
+            if session.training_data:
+                training_data = json.loads(session.training_data)
+            else:
+                # Используем стандартные примеры
+                training_data = [
+                    {
+                        "instruction": "Объясни концепцию машинного обучения",
+                        "input": "",
+                        "output": "Машинное обучение - это подраздел искусственного интеллекта, который позволяет компьютерам учиться на данных без явного программирования."
+                    },
+                    {
+                        "instruction": "Напиши код для сортировки массива",
+                        "input": "массив [3, 1, 4, 1, 5]",
+                        "output": "def sort_array(arr):\n    return sorted(arr)\n\n# Пример использования\narr = [3, 1, 4, 1, 5]\nsorted_arr = sort_array(arr)\nprint(sorted_arr)  # [1, 1, 3, 4, 5]"
+                    }
+                ]
+            
+            return training_data
+            
+        except Exception as e:
+            logger.error(f"Ошибка подготовки данных для тюнинга: {e}")
+            return None
+    
+    async def _create_modelfile(
+        self, 
+        model: LLMModel, 
+        training_data: List[Dict[str, str]], 
+        session: TuningSession
+    ) -> Optional[str]:
+        """Создание Modelfile для тюнинга"""
+        try:
+            modelfile_lines = [
+                f"FROM {model.base_model}",
+                "",
+                "# Параметры модели",
+                f"PARAMETER temperature {session.parameters.get('temperature', 0.7)}",
+                f"PARAMETER top_p {session.parameters.get('top_p', 0.9)}",
+                f"PARAMETER top_k {session.parameters.get('top_k', 40)}",
+                f"PARAMETER repeat_penalty {session.parameters.get('repeat_penalty', 1.1)}",
+                "",
+                "# Системный промпт",
+                f'SYSTEM """{session.system_prompt or "Ты полезный ассистент."}"""',
+                "",
+                "# Данные для тюнинга"
+            ]
+            
+            # Добавляем примеры для тюнинга
+            for i, example in enumerate(training_data):
+                instruction = example.get("instruction", "")
+                input_text = example.get("input", "")
+                output = example.get("output", "")
+                
+                if input_text:
+                    prompt = f"{instruction}\n\nВходные данные: {input_text}"
+                else:
+                    prompt = instruction
+                
+                modelfile_lines.extend([
+                    f"# Пример {i+1}",
+                    f'PROMPT """{prompt}"""',
+                    f'RESPONSE """{output}"""',
+                    ""
+                ])
+            
+            modelfile = "\n".join(modelfile_lines)
+            logger.info(f"Создан Modelfile для модели {model.name}")
+            return modelfile
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания Modelfile: {e}")
+            return None
+    
+    async def _ensure_base_model(self, base_model: str) -> bool:
+        """Проверка и загрузка базовой модели"""
+        try:
+            # Проверяем, есть ли модель в Ollama
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{settings.OLLAMA_BASE_URL}/api/tags")
+                if response.status_code == 200:
+                    models = response.json().get("models", [])
+                    model_names = [model["name"] for model in models]
+                    
+                    if base_model in model_names:
+                        logger.info(f"Базовая модель {base_model} уже загружена")
+                        return True
+            
+            # Если модель не найдена, пытаемся загрузить
+            logger.info(f"Загружаем базовую модель {base_model}")
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{settings.OLLAMA_BASE_URL}/api/pull",
+                    json={"name": base_model}
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Базовая модель {base_model} успешно загружена")
+                    return True
+                else:
+                    logger.error(f"Ошибка загрузки базовой модели {base_model}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Ошибка проверки базовой модели: {e}")
+            return False
+    
+    async def _create_tuned_model(self, model_name: str, modelfile: str) -> bool:
+        """Создание тюнированной модели"""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{settings.OLLAMA_BASE_URL}/api/create",
+                    json={
+                        "name": model_name,
+                        "modelfile": modelfile
+                    }
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Тюнированная модель {model_name} создана успешно")
+                    return True
+                else:
+                    logger.error(f"Ошибка создания тюнированной модели: {response.text}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Ошибка создания тюнированной модели: {e}")
+            return False
+    
+    async def _validate_tuned_model(self, model_name: str, session: TuningSession) -> Dict[str, Any]:
+        """Валидация тюнированной модели"""
+        try:
+            # Тестовые запросы для валидации
+            test_queries = [
+                "Привет, как дела?",
+                "Объясни простыми словами, что такое API",
+                "Напиши короткое стихотворение о программировании"
+            ]
+            
+            results = []
+            total_tokens = 0
+            total_time = 0
+            
+            async with httpx.AsyncClient() as client:
+                for query in test_queries:
+                    start_time = time.time()
+                    
+                    response = await client.post(
+                        f"{settings.OLLAMA_BASE_URL}/api/generate",
+                        json={
+                            "model": model_name,
+                            "prompt": query,
+                            "stream": False
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        end_time = time.time()
+                        
+                        results.append({
+                            "query": query,
+                            "response": result.get("response", ""),
+                            "tokens": result.get("eval_count", 0),
+                            "time": end_time - start_time
+                        })
+                        
+                        total_tokens += result.get("eval_count", 0)
+                        total_time += end_time - start_time
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Ошибка валидации: {response.text}"
+                        }
+            
+            # Вычисляем метрики
+            avg_response_time = total_time / len(results) if results else 0
+            avg_tokens = total_tokens / len(results) if results else 0
+            
+            # Проверяем качество ответов (простая проверка на длину)
+            quality_score = sum(1 for r in results if len(r["response"]) > 10) / len(results)
+            
+            metrics = {
+                "avg_response_time": avg_response_time,
+                "avg_tokens": avg_tokens,
+                "quality_score": quality_score,
+                "test_queries_count": len(test_queries),
+                "successful_responses": len(results)
+            }
+            
+            # Критерии успешной валидации
+            success = (
+                avg_response_time < 5.0 and  # Время ответа менее 5 секунд
+                quality_score > 0.8 and      # Качество ответов более 80%
+                len(results) == len(test_queries)  # Все запросы обработаны
+            )
+            
+            return {
+                "success": success,
+                "metrics": metrics,
+                "error": None if success else "Модель не прошла валидацию"
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка валидации модели: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
 
 class PerformanceMonitor:
