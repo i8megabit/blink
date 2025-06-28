@@ -8,6 +8,7 @@ import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+from .config import settings
 from .llm.centralized_architecture import (
     CentralizedLLMArchitecture, 
     LLMRequest, 
@@ -16,7 +17,7 @@ from .llm.centralized_architecture import (
     shutdown_architecture
 )
 from .llm.concurrent_manager import ConcurrentOllamaManager
-from .llm.distributed_cache import DistributedRAGCache
+from .llm.distributed_cache import DistributedCache
 from .llm.request_prioritizer import RequestPrioritizer
 from .llm.rag_monitor import RAGMonitor
 

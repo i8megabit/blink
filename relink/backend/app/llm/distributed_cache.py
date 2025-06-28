@@ -15,7 +15,7 @@ import pickle
 import redis.asyncio as redis
 from redis.asyncio import Redis
 
-from .centralized_architecture import LLMResponse
+from .types import LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class CachedDocument:
     created_at: datetime
     access_count: int = 0
 
-class DistributedRAGCache:
+class DistributedCache:
     """Распределенный кэш для RAG операций"""
     
     def __init__(self, redis_url: str = "redis://localhost:6379", config: Optional[CacheConfig] = None):
@@ -54,7 +54,7 @@ class DistributedRAGCache:
         self.cache_misses = 0
         self.embedding_generations = 0
         
-        logger.info(f"DistributedRAGCache инициализирован с Redis: {redis_url}")
+        logger.info(f"DistributedCache инициализирован с Redis: {redis_url}")
     
     async def __aenter__(self):
         """Асинхронный контекстный менеджер"""

@@ -229,4 +229,7 @@ def reload_settings():
 
 
 # Экспорт для обратной совместимости
-RelinkSettings = Settings 
+RelinkSettings = Settings
+
+# Создаем экземпляр настроек для прямого импорта
+settings = get_settings() 

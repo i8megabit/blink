@@ -1,17 +1,22 @@
 """
-Централизованная LLM архитектура для конкурентного использования Ollama
+LLM модули для reLink
 """
 
 from .centralized_architecture import CentralizedLLMArchitecture
+from .distributed_cache import DistributedCache
 from .concurrent_manager import ConcurrentOllamaManager
-from .distributed_cache import DistributedRAGCache
 from .request_prioritizer import RequestPrioritizer
 from .rag_monitor import RAGMonitor
+from .types import LLMRequest, LLMResponse, RequestPriority, RequestStatus
 
 __all__ = [
     'CentralizedLLMArchitecture',
-    'ConcurrentOllamaManager', 
-    'DistributedRAGCache',
+    'DistributedCache',
+    'ConcurrentOllamaManager',
     'RequestPrioritizer',
-    'RAGMonitor'
+    'RAGMonitor',
+    'LLMRequest',
+    'LLMResponse',
+    'RequestPriority',
+    'RequestStatus',
 ] 

@@ -1,16 +1,20 @@
 """
-Централизованная архитектура для конкурентного использования Ollama
+Централизованная архитектура LLM для reLink
+Обеспечивает единую точку доступа к Ollama с приоритизацией и кэшированием
 """
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 import time
+import uuid
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any, Callable
+from dataclasses import dataclass, field
+from contextlib import asynccontextmanager
 
+from .types import LLMRequest, LLMResponse, RequestPriority, RequestStatus, PerformanceMetrics
 from .concurrent_manager import ConcurrentOllamaManager
-from .distributed_cache import DistributedRAGCache
+from .distributed_cache import DistributedCache
 from .request_prioritizer import RequestPrioritizer
 from .rag_monitor import RAGMonitor
 
@@ -47,7 +51,7 @@ class CentralizedLLMArchitecture:
     
     def __init__(self, redis_url: str = "redis://localhost:6379"):
         self.concurrent_manager = ConcurrentOllamaManager()
-        self.cache_manager = DistributedRAGCache(redis_url)
+        self.cache_manager = DistributedCache(redis_url)
         self.request_prioritizer = RequestPrioritizer()
         self.monitoring = RAGMonitor()
         
