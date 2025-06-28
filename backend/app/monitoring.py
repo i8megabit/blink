@@ -42,125 +42,130 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Prometheus метрики
-REQUEST_COUNT = Counter(
-    'http_requests_total',
-    'Total number of HTTP requests',
-    ['method', 'endpoint', 'status']
-)
+# Проверяем, не созданы ли уже метрики
+try:
+    REQUEST_COUNT = Counter(
+        'http_requests_total',
+        'Total number of HTTP requests',
+        ['method', 'endpoint', 'status']
+    )
 
-REQUEST_DURATION = Histogram(
-    'http_request_duration_seconds',
-    'HTTP request duration in seconds',
-    ['method', 'endpoint']
-)
+    REQUEST_DURATION = Histogram(
+        'http_request_duration_seconds',
+        'HTTP request duration in seconds',
+        ['method', 'endpoint']
+    )
 
-REQUEST_SIZE = Histogram(
-    'http_request_size_bytes',
-    'HTTP request size in bytes',
-    ['method', 'endpoint']
-)
+    REQUEST_SIZE = Histogram(
+        'http_request_size_bytes',
+        'HTTP request size in bytes',
+        ['method', 'endpoint']
+    )
 
-RESPONSE_SIZE = Histogram(
-    'http_response_size_bytes',
-    'HTTP response size in bytes',
-    ['method', 'endpoint']
-)
+    RESPONSE_SIZE = Histogram(
+        'http_response_size_bytes',
+        'HTTP response size in bytes',
+        ['method', 'endpoint']
+    )
 
-ACTIVE_REQUESTS = Gauge(
-    'http_active_requests',
-    'Number of active HTTP requests',
-    ['method', 'endpoint']
-)
+    ACTIVE_REQUESTS = Gauge(
+        'http_active_requests',
+        'Number of active HTTP requests',
+        ['method', 'endpoint']
+    )
 
-ERROR_COUNT = Counter(
-    'http_errors_total',
-    'Total number of HTTP errors',
-    ['method', 'endpoint', 'error_type']
-)
+    ERROR_COUNT = Counter(
+        'http_errors_total',
+        'Total number of HTTP errors',
+        ['method', 'endpoint', 'error_type']
+    )
 
-DATABASE_OPERATIONS = Counter(
-    'database_operations_total',
-    'Total number of database operations',
-    ['operation', 'table', 'status']
-)
+    DATABASE_OPERATIONS = Counter(
+        'database_operations_total',
+        'Total number of database operations',
+        ['operation', 'table', 'status']
+    )
 
-CACHE_OPERATIONS = Counter(
-    'cache_operations_total',
-    'Total number of cache operations',
-    ['operation', 'cache_type', 'status']
-)
+    CACHE_OPERATIONS = Counter(
+        'cache_operations_total',
+        'Total number of cache operations',
+        ['operation', 'cache_type', 'status']
+    )
 
-OLLAMA_REQUESTS = Counter(
-    'ollama_requests_total',
-    'Total number of Ollama requests',
-    ['model', 'operation', 'status']
-)
+    OLLAMA_REQUESTS = Counter(
+        'ollama_requests_total',
+        'Total number of Ollama requests',
+        ['model', 'operation', 'status']
+    )
 
-OLLAMA_RESPONSE_TIME = Histogram(
-    'ollama_response_time_seconds',
-    'Ollama response time in seconds',
-    ['model', 'operation']
-)
+    OLLAMA_RESPONSE_TIME = Histogram(
+        'ollama_response_time_seconds',
+        'Ollama response time in seconds',
+        ['model', 'operation']
+    )
 
-SYSTEM_MEMORY = Gauge(
-    'system_memory_bytes',
-    'System memory usage in bytes',
-    ['type']
-)
+    SYSTEM_MEMORY = Gauge(
+        'system_memory_bytes',
+        'System memory usage in bytes',
+        ['type']
+    )
 
-SYSTEM_CPU = Gauge(
-    'system_cpu_usage_percent',
-    'System CPU usage percentage'
-)
+    SYSTEM_CPU = Gauge(
+        'system_cpu_usage_percent',
+        'System CPU usage percentage'
+    )
 
-# RAG-специфичные метрики
-RAG_QUERIES = Counter(
-    'rag_queries_total',
-    'Total number of RAG queries',
-    ['service_type', 'status']
-)
+    # RAG-специфичные метрики
+    RAG_QUERIES = Counter(
+        'rag_queries_total',
+        'Total number of RAG queries',
+        ['service_type', 'status']
+    )
 
-RAG_EMBEDDING_GENERATION = Counter(
-    'rag_embedding_generation_total',
-    'Total number of embedding generations',
-    ['model', 'status']
-)
+    RAG_EMBEDDING_GENERATION = Counter(
+        'rag_embedding_generation_total',
+        'Total number of embedding generations',
+        ['model', 'status']
+    )
 
-RAG_SIMILARITY_SEARCH = Counter(
-    'rag_similarity_search_total',
-    'Total number of similarity searches',
-    ['vector_db', 'status']
-)
+    RAG_SIMILARITY_SEARCH = Counter(
+        'rag_similarity_search_total',
+        'Total number of similarity searches',
+        ['vector_db', 'status']
+    )
 
-RAG_CONTEXT_LENGTH = Histogram(
-    'rag_context_length_chars',
-    'RAG context length in characters',
-    ['service_type']
-)
+    RAG_CONTEXT_LENGTH = Histogram(
+        'rag_context_length_chars',
+        'RAG context length in characters',
+        ['service_type']
+    )
 
-RAG_RESPONSE_QUALITY = Histogram(
-    'rag_response_quality_score',
-    'RAG response quality score',
-    ['service_type', 'model']
-)
+    RAG_RESPONSE_QUALITY = Histogram(
+        'rag_response_quality_score',
+        'RAG response quality score',
+        ['service_type', 'model']
+    )
 
-RAG_CACHE_HIT_RATIO = Gauge(
-    'rag_cache_hit_ratio',
-    'RAG cache hit ratio',
-    ['cache_type']
-)
+    RAG_CACHE_HIT_RATIO = Gauge(
+        'rag_cache_hit_ratio',
+        'RAG cache hit ratio',
+        ['cache_type']
+    )
 
-VECTOR_DB_OPERATIONS = Counter(
-    'vector_db_operations_total',
-    'Total number of vector database operations',
-    ['operation', 'status']
-)
+    VECTOR_DB_OPERATIONS = Counter(
+        'vector_db_operations_total',
+        'Total number of vector database operations',
+        ['operation', 'status']
+    )
 
-EMBEDDING_DIMENSION = Gauge(
-    'embedding_dimension',
-    'Embedding vector dimension',
-    ['model']
-)
+    EMBEDDING_DIMENSION = Gauge(
+        'embedding_dimension',
+        'Embedding vector dimension',
+        ['model']
+    )
+except ValueError:
+    # Метрики уже созданы, используем существующие
+    pass
 
 
 class MonitoringMiddleware:

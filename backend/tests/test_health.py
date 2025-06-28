@@ -1,21 +1,18 @@
 import os
+import sys
 import importlib
 import pytest
 from httpx import AsyncClient, ASGITransport
+import respx
+from unittest.mock import patch, AsyncMock
 
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
 if os.path.exists("test.db"):
     os.remove("test.db")
 
-# Исправляем импорт для локального запуска
-import sys
+# Добавляем путь к модулям
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from backend.app import main
-importlib.reload(main)
-app = main.app
-import asyncio
-asyncio.get_event_loop().run_until_complete(main.on_startup())
-
+from app.main import app
 
 @pytest.mark.asyncio
 async def test_health() -> None:

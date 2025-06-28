@@ -5,6 +5,10 @@
 import pytest
 import asyncio
 import time
+import json
+import os
+import sys
+import importlib
 from unittest.mock import Mock, patch, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -21,7 +25,8 @@ from app.monitoring import (
     PerformanceMonitor,
     monitor_database_operation,
     monitor_cache_operation,
-    monitor_ollama_request
+    monitor_ollama_request,
+    RAGMonitor
 )
 
 

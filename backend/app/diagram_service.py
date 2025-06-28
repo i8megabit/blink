@@ -19,7 +19,11 @@ from pydantic import BaseModel, Field
 from .config import settings
 from .models import Diagram, DiagramEmbedding, DiagramTemplate, AnalysisHistory, User
 from .exceptions import OllamaException, DatabaseException
-from .monitoring import logger, monitor_operation
+from .monitoring import (
+    logger, metrics_collector, performance_monitor, 
+    get_metrics, get_health_status, monitor_operation,
+    MonitoringMiddleware, monitor_rag_operation
+)
 from .llm_router import llm_router, LLMServiceType, generate_diagram as llm_generate_diagram
 
 @dataclass
@@ -66,7 +70,7 @@ class DiagramService:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
     
-    @monitor_operation("diagram_generation")
+    @monitor_rag_operation("diagram_generation", "diagram_service")
     async def generate_diagram(
         self, 
         request: DiagramGenerationRequest,
@@ -508,7 +512,7 @@ SVG должен быть оптимизирован для веб-отобра�
         keywords = [word for word in words if word not in stop_words and len(word) > 2]
         return list(set(keywords))[:10]  # Возвращаем топ-10 уникальных слов
     
-    @monitor_operation("diagram_search")
+    @monitor_rag_operation("diagram_search", "diagram_service")
     async def search_diagrams(
         self,
         query: str,
@@ -569,7 +573,7 @@ SVG должен быть оптимизирован для веб-отобра�
             logger.error(f"Ошибка поиска диаграмм: {e}")
             return []
     
-    @monitor_operation("diagram_optimization")
+    @monitor_rag_operation("diagram_optimization", "diagram_service")
     async def optimize_diagram(self, diagram_id: int, db: AsyncSession) -> Dict[str, Any]:
         """Оптимизация существующей диаграммы."""
         try:

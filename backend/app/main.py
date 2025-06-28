@@ -2089,8 +2089,7 @@ async def test_login():
         from .auth import create_access_token
         
         # Создаем токен для тестового пользователя
-        token_data = TokenData(username="test_user")
-        access_token = create_access_token(data=token_data.dict())
+        access_token = create_access_token(data={"sub": "test_user"})
         
         return {
             "status": "success",

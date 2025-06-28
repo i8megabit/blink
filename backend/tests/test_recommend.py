@@ -4,20 +4,19 @@ import pytest
 import respx
 import httpx
 from httpx import AsyncClient, ASGITransport
-
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
-if os.path.exists("test.db"):
-    os.remove("test.db")
-
-# Исправляем импорт для локального запуска
+from unittest.mock import patch, AsyncMock
+import json
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from backend.app import main
-importlib.reload(main)
-app = main.app
 import asyncio
-asyncio.get_event_loop().run_until_complete(main.on_startup())
 
+# Настройка тестового окружения
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
+os.environ["OLLAMA_URL"] = "http://localhost:11434"
+os.environ["SECRET_KEY"] = "test-secret-key"
+
+# Добавляем путь к модулям
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from app.main import app
 
 @pytest.mark.asyncio
 @respx.mock
