@@ -6,6 +6,7 @@ import { SystemMonitoring } from '../components/SystemMonitoring'
 import { GlobalSearch } from '../components/GlobalSearch'
 import { ABTesting } from '../components/ABTesting'
 import { Benchmarks } from '../components/Benchmarks'
+import ArchGen from '../components/ArchGen'
 import { Card, Button, Badge } from '../components/ui'
 
 interface DashboardProps {
@@ -22,7 +23,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     { id: 'monitoring', name: 'Мониторинг', icon: '📈' },
     { id: 'ab-testing', name: 'A/B Тесты', icon: '🧪' },
     { id: 'benchmarks', name: 'Бенчмарки', icon: '🏆' },
-    { id: 'search', name: 'Поиск', icon: '🔍' }
+    { id: 'search', name: 'Поиск', icon: '🔍' },
+    { id: 'archgen', name: 'ArchGen', icon: '🏗️' }
   ]
 
   const renderTabContent = () => {
@@ -39,6 +41,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         return <Benchmarks />
       case 'search':
         return <GlobalSearch />
+      case 'archgen':
+        return <ArchGen />
       default:
         return <OverviewTab />
     }
@@ -370,6 +374,8 @@ const getTabDescription = (tabId: string): string => {
       return 'Бенчмарки и тестирование качества'
     case 'search':
       return 'Глобальный поиск по всем данным'
+    case 'archgen':
+      return 'Генерация архитектуры системы'
     default:
       return ''
   }
