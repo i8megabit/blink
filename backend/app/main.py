@@ -1295,6 +1295,817 @@ async def get_testing_health():
 app.include_router(testing_router, prefix="/api/v1/testing")
 app.include_router(auth_router, prefix="/api/v1")
 
+@app.post("/api/v1/wordpress/index")
+async def index_wordpress_site(
+    request: WPRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Индексация WordPress сайта."""
+    try:
+        domain = request.domain.strip().lower()
+        if not domain.startswith(('http://', 'https://')):
+            domain = f"https://{domain}"
+        
+        logger.info(f"Начинаю индексацию WordPress сайта: {domain}")
+        
+        # Проверяем, есть ли уже домен в базе
+        existing_domain = await db.execute(
+            select(Domain).where(Domain.name == domain)
+        )
+        domain_obj = existing_domain.scalar_one_or_none()
+        
+        if not domain_obj:
+            # Создаем новый домен
+            domain_obj = Domain(
+                name=domain,
+                display_name=domain.replace('https://', '').replace('http://', ''),
+                description=f"WordPress сайт {domain}",
+                owner_id=current_user.id
+            )
+            db.add(domain_obj)
+            await db.commit()
+            await db.refresh(domain_obj)
+        
+        # Парсим WordPress сайт
+        posts = await parse_wordpress_site(domain, request.client_id)
+        
+        # Сохраняем посты в базу данных
+        saved_posts = []
+        for post_data in posts:
+            post = WordPressPost(
+                domain_id=domain_obj.id,
+                wp_post_id=post_data.get('id', 0),
+                title=post_data.get('title', ''),
+                content=post_data.get('content', ''),
+                excerpt=post_data.get('excerpt', ''),
+                link=post_data.get('link', ''),
+                published_at=post_data.get('date', datetime.utcnow())
+            )
+            db.add(post)
+            saved_posts.append(post)
+        
+        await db.commit()
+        
+        # Обновляем статистику домена
+        domain_obj.total_posts = len(saved_posts)
+        domain_obj.last_analysis_at = datetime.utcnow()
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Индексация завершена. Найдено {len(saved_posts)} статей.",
+            "domain": domain,
+            "posts_count": len(saved_posts),
+            "domain_id": domain_obj.id
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка при индексации WordPress сайта: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка индексации: {str(e)}")
+
+@app.post("/api/v1/wordpress/reindex")
+async def reindex_wordpress_site(
+    request: WPRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Реиндексация WordPress сайта."""
+    try:
+        domain = request.domain.strip().lower()
+        if not domain.startswith(('http://', 'https://')):
+            domain = f"https://{domain}"
+        
+        logger.info(f"Начинаю реиндексацию WordPress сайта: {domain}")
+        
+        # Проверяем, есть ли домен в базе
+        existing_domain = await db.execute(
+            select(Domain).where(Domain.name == domain)
+        )
+        domain_obj = existing_domain.scalar_one_or_none()
+        
+        if not domain_obj:
+            raise HTTPException(status_code=404, detail="Домен не найден. Сначала выполните индексацию.")
+        
+        # Удаляем старые посты
+        await db.execute(
+            delete(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
+        )
+        await db.commit()
+        
+        # Парсим WordPress сайт заново
+        posts = await parse_wordpress_site(domain, request.client_id)
+        
+        # Сохраняем новые посты в базу данных
+        saved_posts = []
+        for post_data in posts:
+            post = WordPressPost(
+                domain_id=domain_obj.id,
+                wp_post_id=post_data.get('id', 0),
+                title=post_data.get('title', ''),
+                content=post_data.get('content', ''),
+                excerpt=post_data.get('excerpt', ''),
+                link=post_data.get('link', ''),
+                published_at=post_data.get('date', datetime.utcnow())
+            )
+            db.add(post)
+            saved_posts.append(post)
+        
+        await db.commit()
+        
+        # Обновляем статистику домена
+        domain_obj.total_posts = len(saved_posts)
+        domain_obj.last_analysis_at = datetime.utcnow()
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Реиндексация завершена. Обновлено {len(saved_posts)} статей.",
+            "domain": domain,
+            "posts_count": len(saved_posts),
+            "domain_id": domain_obj.id,
+            "reindexed_at": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при реиндексации WordPress сайта: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка реиндексации: {str(e)}")
+
+async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]:
+    """Парсинг WordPress сайта для извлечения статей."""
+    posts = []
+    
+    try:
+        # Получаем главную страницу
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(domain)
+            if response.status_code != 200:
+                raise Exception(f"Не удалось получить доступ к сайту: {response.status_code}")
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Ищем ссылки на статьи (обычно в WordPress это /yyyy/mm/dd/post-slug/)
+            article_links = []
+            
+            # Ищем ссылки в основном контенте
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if any(pattern in href for pattern in ['/20', '/19', '/post', '/article', '/blog']):
+                    if href.startswith('/'):
+                        href = domain.rstrip('/') + href
+                    elif not href.startswith(('http://', 'https://')):
+                        continue
+                    
+                    if href not in article_links:
+                        article_links.append(href)
+            
+            # Ограничиваем количество статей для тестирования
+            article_links = article_links[:10]
+            
+            if client_id:
+                await websocket_manager.send_step(client_id, "Парсинг статей", 0, len(article_links))
+            
+            # Парсим каждую статью
+            for i, link in enumerate(article_links):
+                try:
+                    if client_id:
+                        await websocket_manager.send_step(client_id, f"Обработка статьи {i+1}", i+1, len(article_links), link)
+                    
+                    article_response = await client.get(link)
+                    if article_response.status_code == 200:
+                        article_soup = BeautifulSoup(article_response.text, 'html.parser')
+                        
+                        # Извлекаем заголовок
+                        title = ""
+                        title_elem = article_soup.find('h1') or article_soup.find('title')
+                        if title_elem:
+                            title = title_elem.get_text().strip()
+                        
+                        # Извлекаем контент
+                        content = ""
+                        content_elem = article_soup.find('article') or article_soup.find(class_='entry-content') or article_soup.find(class_='post-content')
+                        if content_elem:
+                            content = content_elem.get_text().strip()
+                        else:
+                            # Fallback: берем весь текст из body
+                            body = article_soup.find('body')
+                            if body:
+                                content = body.get_text().strip()
+                        
+                        # Извлекаем excerpt
+                        excerpt = ""
+                        excerpt_elem = article_soup.find(class_='excerpt') or article_soup.find(class_='summary')
+                        if excerpt_elem:
+                            excerpt = excerpt_elem.get_text().strip()
+                        
+                        # Извлекаем дату
+                        date = datetime.utcnow()
+                        date_elem = article_soup.find('time') or article_soup.find(class_='date')
+                        if date_elem:
+                            try:
+                                date_str = date_elem.get('datetime') or date_elem.get_text()
+                                date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            except:
+                                pass
+                        
+                        if title and content:
+                            posts.append({
+                                'id': i + 1,
+                                'title': title,
+                                'content': content,
+                                'excerpt': excerpt,
+                                'link': link,
+                                'date': date
+                            })
+                    
+                    # Небольшая задержка между запросами
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.warning(f"Ошибка при парсинге статьи {link}: {e}")
+                    continue
+            
+            if client_id:
+                await websocket_manager.send_step(client_id, "Индексация завершена", len(article_links), len(article_links))
+        
+        return posts
+        
+    except Exception as e:
+        logger.error(f"Ошибка при парсинге WordPress сайта: {e}")
+        if client_id:
+            await websocket_manager.send_error(client_id, "Ошибка парсинга", str(e))
+        raise
+
+@app.post("/api/v1/seo/recommendations")
+async def get_seo_recommendations(
+    request_data: DomainAnalysisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение SEO рекомендаций на основе индексированных данных."""
+    try:
+        domain = request_data.domain.strip().lower()
+        if not domain.startswith(('http://', 'https://')):
+            domain = f"https://{domain}"
+        
+        # Получаем домен из базы данных
+        domain_obj = await db.execute(
+            select(Domain).where(Domain.name == domain)
+        )
+        domain_obj = domain_obj.scalar_one_or_none()
+        
+        if not domain_obj:
+            raise HTTPException(status_code=404, detail="Домен не найден. Сначала выполните индексацию.")
+        
+        # Получаем все посты домена
+        posts = await db.execute(
+            select(WordPressPost).where(WordPressPost.domain_id == domain_obj.id)
+        )
+        posts = posts.scalars().all()
+        
+        if not posts:
+            raise HTTPException(status_code=404, detail="Статьи не найдены. Сначала выполните индексацию.")
+        
+        # Анализируем контент и генерируем рекомендации
+        recommendations = await generate_seo_recommendations(posts, domain, request_data.client_id)
+        
+        # Сохраняем анализ в историю
+        analysis = AnalysisHistory(
+            domain_id=domain_obj.id,
+            user_id=current_user.id,
+            posts_analyzed=len(posts),
+            connections_found=len([r for r in recommendations if r.get('type') == 'internal_linking']),
+            recommendations_generated=len(recommendations),
+            recommendations=recommendations,
+            thematic_analysis={
+                "total_posts": len(posts),
+                "avg_content_length": sum(len(p.content) for p in posts) / len(posts),
+                "topics_found": len(set(p.content_type for p in posts if p.content_type))
+            },
+            semantic_metrics={
+                "content_quality_avg": sum(p.content_quality_score for p in posts) / len(posts),
+                "semantic_richness_avg": sum(p.semantic_richness for p in posts) / len(posts)
+            },
+            llm_model_used=OLLAMA_MODEL,
+            processing_time_seconds=0.0
+        )
+        db.add(analysis)
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "domain": domain,
+            "posts_analyzed": len(posts),
+            "recommendations": recommendations,
+            "analysis_id": analysis.id,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при генерации SEO рекомендаций: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации рекомендаций: {str(e)}")
+
+async def generate_seo_recommendations(posts: List[WordPressPost], domain: str, client_id: str = None) -> List[dict]:
+    """Генерация SEO рекомендаций на основе анализа постов."""
+    recommendations = []
+    
+    try:
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, "Анализирую контент для SEO рекомендаций...", "analyzing", "🔍")
+        
+        # Анализ внутренних ссылок
+        internal_linking_recs = await analyze_internal_linking(posts, client_id)
+        recommendations.extend(internal_linking_recs)
+        
+        # Анализ контента
+        content_recs = await analyze_content_quality(posts, client_id)
+        recommendations.extend(content_recs)
+        
+        # Анализ семантики
+        semantic_recs = await analyze_semantic_optimization(posts, client_id)
+        recommendations.extend(semantic_recs)
+        
+        # Анализ структуры
+        structure_recs = await analyze_content_structure(posts, client_id)
+        recommendations.extend(structure_recs)
+        
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, f"Сгенерировано {len(recommendations)} рекомендаций", "optimizing", "✅")
+        
+        return recommendations
+        
+    except Exception as e:
+        logger.error(f"Ошибка при генерации рекомендаций: {e}")
+        if client_id:
+            await websocket_manager.send_error(client_id, "Ошибка генерации рекомендаций", str(e))
+        raise
+
+async def analyze_internal_linking(posts: List[WordPressPost], client_id: str = None) -> List[dict]:
+    """Анализ внутренних ссылок."""
+    recommendations = []
+    
+    # Простой анализ - ищем статьи без внутренних ссылок
+    posts_without_links = []
+    for post in posts:
+        # Проверяем, есть ли в контенте ссылки на другие статьи
+        content_lower = post.content.lower()
+        has_internal_links = any(
+            other_post.title.lower() in content_lower 
+            for other_post in posts 
+            if other_post.id != post.id
+        )
+        
+        if not has_internal_links:
+            posts_without_links.append(post)
+    
+    if posts_without_links:
+        recommendations.append({
+            "type": "internal_linking",
+            "priority": "high",
+            "title": "Добавить внутренние ссылки",
+            "description": f"Найдено {len(posts_without_links)} статей без внутренних ссылок",
+            "details": [
+                {
+                    "post_title": post.title,
+                    "post_url": post.link,
+                    "suggested_links": [
+                        other_post.title 
+                        for other_post in posts[:3] 
+                        if other_post.id != post.id
+                    ]
+                }
+                for post in posts_without_links[:5]  # Показываем только первые 5
+            ]
+        })
+    
+    return recommendations
+
+async def analyze_content_quality(posts: List[WordPressPost], client_id: str = None) -> List[dict]:
+    """Анализ качества контента."""
+    recommendations = []
+    
+    # Анализ длины контента
+    short_posts = [post for post in posts if len(post.content) < 1000]
+    if short_posts:
+        recommendations.append({
+            "type": "content_quality",
+            "priority": "medium",
+            "title": "Расширить короткие статьи",
+            "description": f"Найдено {len(short_posts)} статей с недостаточным объемом контента",
+            "details": [
+                {
+                    "post_title": post.title,
+                    "post_url": post.link,
+                    "current_length": len(post.content),
+                    "recommended_length": "1500+ символов"
+                }
+                for post in short_posts[:3]
+            ]
+        })
+    
+    # Анализ заголовков
+    posts_without_h1 = [post for post in posts if not post.title or len(post.title) < 10]
+    if posts_without_h1:
+        recommendations.append({
+            "type": "content_quality",
+            "priority": "medium",
+            "title": "Улучшить заголовки статей",
+            "description": f"Найдено {len(posts_without_h1)} статей с неоптимальными заголовками",
+            "details": [
+                {
+                    "post_title": post.title,
+                    "post_url": post.link,
+                    "current_length": len(post.title),
+                    "recommendation": "Заголовок должен быть 50-60 символов"
+                }
+                for post in posts_without_h1[:3]
+            ]
+        })
+    
+    return recommendations
+
+async def analyze_semantic_optimization(posts: List[WordPressPost], client_id: str = None) -> List[dict]:
+    """Анализ семантической оптимизации."""
+    recommendations = []
+    
+    # Анализ ключевых слов
+    all_content = " ".join([post.content for post in posts])
+    words = word_tokenize(all_content.lower())
+    words = [word for word in words if word.isalpha() and word not in RUSSIAN_STOP_WORDS]
+    
+    # Простой анализ частоты слов
+    word_freq = defaultdict(int)
+    for word in words:
+        word_freq[word] += 1
+    
+    # Находим наиболее частые слова
+    top_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    recommendations.append({
+        "type": "semantic_optimization",
+        "priority": "medium",
+        "title": "Оптимизировать ключевые слова",
+        "description": "Анализ семантического ядра сайта",
+        "details": {
+            "top_keywords": [{"word": word, "frequency": freq} for word, freq in top_words],
+            "recommendation": "Используйте найденные ключевые слова в заголовках и мета-описаниях"
+        }
+    })
+    
+    return recommendations
+
+async def analyze_content_structure(posts: List[WordPressPost], client_id: str = None) -> List[dict]:
+    """Анализ структуры контента."""
+    recommendations = []
+    
+    # Анализ тематических групп
+    content_types = defaultdict(int)
+    for post in posts:
+        if post.content_type:
+            content_types[post.content_type] += 1
+    
+    if len(content_types) < 3:
+        recommendations.append({
+            "type": "content_structure",
+            "priority": "low",
+            "title": "Разнообразить типы контента",
+            "description": "Сайт содержит ограниченное количество типов контента",
+            "details": {
+                "current_types": dict(content_types),
+                "recommendation": "Добавьте различные типы контента: гайды, обзоры, новости, интервью"
+            }
+        })
+    
+    return recommendations
+
+@app.get("/api/v1/insights/{domain_id}")
+async def get_domain_insights(
+    domain_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение инсайтов по домену."""
+    try:
+        # Получаем домен
+        domain = await db.execute(
+            select(Domain).where(Domain.id == domain_id)
+        )
+        domain = domain.scalar_one_or_none()
+        
+        if not domain:
+            raise HTTPException(status_code=404, detail="Домен не найден")
+        
+        # Получаем посты домена
+        posts = await db.execute(
+            select(WordPressPost).where(WordPressPost.domain_id == domain_id)
+        )
+        posts = posts.scalars().all()
+        
+        # Получаем историю анализов
+        analyses = await db.execute(
+            select(AnalysisHistory)
+            .where(AnalysisHistory.domain_id == domain_id)
+            .order_by(AnalysisHistory.created_at.desc())
+            .limit(5)
+        )
+        analyses = analyses.scalars().all()
+        
+        # Генерируем инсайты
+        insights = await generate_domain_insights(posts, analyses)
+        
+        return {
+            "status": "success",
+            "domain": {
+                "id": domain.id,
+                "name": domain.name,
+                "display_name": domain.display_name,
+                "total_posts": domain.total_posts,
+                "last_analysis": domain.last_analysis_at.isoformat() if domain.last_analysis_at else None
+            },
+            "insights": insights,
+            "recent_analyses": [
+                {
+                    "id": analysis.id,
+                    "created_at": analysis.created_at.isoformat(),
+                    "posts_analyzed": analysis.posts_analyzed,
+                    "recommendations_count": analysis.recommendations_generated
+                }
+                for analysis in analyses
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при получении инсайтов: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения инсайтов: {str(e)}")
+
+@app.get("/api/v1/analytics/{domain_id}")
+async def get_domain_analytics(
+    domain_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение аналитики по домену."""
+    try:
+        # Получаем домен
+        domain = await db.execute(
+            select(Domain).where(Domain.id == domain_id)
+        )
+        domain = domain.scalar_one_or_none()
+        
+        if not domain:
+            raise HTTPException(status_code=404, detail="Домен не найден")
+        
+        # Получаем посты домена
+        posts = await db.execute(
+            select(WordPressPost).where(WordPressPost.domain_id == domain_id)
+        )
+        posts = posts.scalars().all()
+        
+        # Генерируем аналитику
+        analytics = await generate_domain_analytics(posts)
+        
+        return {
+            "status": "success",
+            "domain": {
+                "id": domain.id,
+                "name": domain.name,
+                "display_name": domain.display_name
+            },
+            "analytics": analytics,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при получении аналитики: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения аналитики: {str(e)}")
+
+async def generate_domain_insights(posts: List[WordPressPost], analyses: List[AnalysisHistory]) -> dict:
+    """Генерация инсайтов по домену."""
+    insights = {
+        "content_insights": {},
+        "performance_insights": {},
+        "seo_insights": {},
+        "trends": {}
+    }
+    
+    if not posts:
+        return insights
+    
+    # Инсайты по контенту
+    total_content_length = sum(len(post.content) for post in posts)
+    avg_content_length = total_content_length / len(posts)
+    
+    insights["content_insights"] = {
+        "total_posts": len(posts),
+        "total_content_length": total_content_length,
+        "average_content_length": round(avg_content_length, 2),
+        "content_distribution": {
+            "short_posts": len([p for p in posts if len(p.content) < 1000]),
+            "medium_posts": len([p for p in posts if 1000 <= len(p.content) < 3000]),
+            "long_posts": len([p for p in posts if len(p.content) >= 3000])
+        },
+        "top_performing_content": [
+            {
+                "title": post.title,
+                "url": post.link,
+                "length": len(post.content),
+                "quality_score": post.content_quality_score
+            }
+            for post in sorted(posts, key=lambda p: p.content_quality_score, reverse=True)[:5]
+        ]
+    }
+    
+    # Инсайты по производительности
+    if analyses:
+        latest_analysis = analyses[0]
+        insights["performance_insights"] = {
+            "last_analysis_date": latest_analysis.created_at.isoformat(),
+            "total_recommendations": latest_analysis.recommendations_generated,
+            "internal_links_found": latest_analysis.connections_found,
+            "analysis_metrics": latest_analysis.semantic_metrics
+        }
+    
+    # SEO инсайты
+    all_content = " ".join([post.content for post in posts])
+    words = word_tokenize(all_content.lower())
+    words = [word for word in words if word.isalpha() and word not in RUSSIAN_STOP_WORDS]
+    
+    word_freq = defaultdict(int)
+    for word in words:
+        word_freq[word] += 1
+    
+    top_keywords = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:15]
+    
+    insights["seo_insights"] = {
+        "top_keywords": [{"word": word, "frequency": freq} for word, freq in top_keywords],
+        "keyword_density": len(set(words)) / len(words) if words else 0,
+        "content_optimization_score": sum(post.content_quality_score for post in posts) / len(posts)
+    }
+    
+    # Тренды
+    if len(analyses) > 1:
+        insights["trends"] = {
+            "analysis_frequency": "regular" if len(analyses) >= 3 else "occasional",
+            "improvement_trend": "positive" if analyses[0].recommendations_generated < analyses[-1].recommendations_generated else "stable"
+        }
+    
+    return insights
+
+async def generate_domain_analytics(posts: List[WordPressPost]) -> dict:
+    """Генерация аналитики по домену."""
+    analytics = {
+        "content_metrics": {},
+        "semantic_analysis": {},
+        "quality_metrics": {},
+        "engagement_potential": {}
+    }
+    
+    if not posts:
+        return analytics
+    
+    # Метрики контента
+    content_lengths = [len(post.content) for post in posts]
+    analytics["content_metrics"] = {
+        "total_posts": len(posts),
+        "total_words": sum(len(post.content.split()) for post in posts),
+        "average_length": round(sum(content_lengths) / len(content_lengths), 2),
+        "min_length": min(content_lengths),
+        "max_length": max(content_lengths),
+        "length_distribution": {
+            "0-500": len([l for l in content_lengths if l < 500]),
+            "500-1000": len([l for l in content_lengths if 500 <= l < 1000]),
+            "1000-2000": len([l for l in content_lengths if 1000 <= l < 2000]),
+            "2000+": len([l for l in content_lengths if l >= 2000])
+        }
+    }
+    
+    # Семантический анализ
+    all_content = " ".join([post.content for post in posts])
+    words = word_tokenize(all_content.lower())
+    words = [word for word in words if word.isalpha() and word not in RUSSIAN_STOP_WORDS]
+    
+    word_freq = defaultdict(int)
+    for word in words:
+        word_freq[word] += 1
+    
+    analytics["semantic_analysis"] = {
+        "unique_words": len(set(words)),
+        "total_words": len(words),
+        "lexical_diversity": len(set(words)) / len(words) if words else 0,
+        "top_keywords": [{"word": word, "frequency": freq} for word, freq in sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:20]]
+    }
+    
+    # Метрики качества
+    quality_scores = [post.content_quality_score for post in posts]
+    semantic_scores = [post.semantic_richness for post in posts]
+    
+    analytics["quality_metrics"] = {
+        "average_content_quality": round(sum(quality_scores) / len(quality_scores), 3),
+        "average_semantic_richness": round(sum(semantic_scores) / len(semantic_scores), 3),
+        "quality_distribution": {
+            "excellent": len([s for s in quality_scores if s >= 0.8]),
+            "good": len([s for s in quality_scores if 0.6 <= s < 0.8]),
+            "average": len([s for s in quality_scores if 0.4 <= s < 0.6]),
+            "poor": len([s for s in quality_scores if s < 0.4])
+        }
+    }
+    
+    # Потенциал вовлеченности
+    analytics["engagement_potential"] = {
+        "linkability_score": round(sum(post.linkability_score for post in posts) / len(posts), 3),
+        "content_types": {
+            "guides": len([p for p in posts if p.content_type == "guide"]),
+            "reviews": len([p for p in posts if p.content_type == "review"]),
+            "news": len([p for p in posts if p.content_type == "news"]),
+            "other": len([p for p in posts if not p.content_type])
+        },
+        "target_audience_diversity": len(set(p.target_audience for p in posts if p.target_audience))
+    }
+    
+    return analytics
+
+@app.post("/api/v1/test/setup")
+async def setup_test_user():
+    """Создание тестового пользователя для демонстрации."""
+    try:
+        from .auth import get_password_hash
+        
+        # Проверяем, есть ли уже тестовый пользователь
+        async with async_sessionmaker(engine)() as db:
+            existing_user = await db.execute(
+                select(User).where(User.username == "test_user")
+            )
+            existing_user = existing_user.scalar_one_or_none()
+            
+            if existing_user:
+                return {
+                    "status": "success",
+                    "message": "Тестовый пользователь уже существует",
+                    "user": {
+                        "id": existing_user.id,
+                        "username": existing_user.username,
+                        "email": existing_user.email
+                    }
+                }
+            
+            # Создаем тестового пользователя
+            test_user = User(
+                username="test_user",
+                email="test@example.com",
+                full_name="Тестовый пользователь",
+                hashed_password=get_password_hash("test123"),
+                is_active=True
+            )
+            db.add(test_user)
+            await db.commit()
+            await db.refresh(test_user)
+            
+            return {
+                "status": "success",
+                "message": "Тестовый пользователь создан",
+                "user": {
+                    "id": test_user.id,
+                    "username": test_user.username,
+                    "email": test_user.email
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Ошибка при создании тестового пользователя: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка создания пользователя: {str(e)}")
+
+@app.post("/api/v1/test/login")
+async def test_login():
+    """Быстрый логин тестового пользователя."""
+    try:
+        from .auth import create_access_token
+        
+        # Создаем токен для тестового пользователя
+        token_data = TokenData(username="test_user")
+        access_token = create_access_token(data=token_data.dict())
+        
+        return {
+            "status": "success",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "username": "test_user",
+                "email": "test@example.com"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка при логине тестового пользователя: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка логина: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

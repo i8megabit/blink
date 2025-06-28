@@ -66,6 +66,8 @@ RUN chown -R appuser:appuser /app && \
 
 # Копируем код приложения
 COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser alembic.ini ./alembic.ini
+COPY --chown=appuser:appuser migrations ./migrations
 RUN ls -l /app/app
 
 # Переключаемся на непривилегированного пользователя
