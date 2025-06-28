@@ -1,0 +1,356 @@
+version: '3.8'
+
+services:
+  # LLM Tuning микросервис - оптимизированный для Apple Silicon
+  llm-tuning:
+    build:
+      context: .
+      dockerfile: Dockerfile.apple-silicon
+    container_name: llm-tuning-apple-silicon
+    platform: linux/arm64
+    ports:
+      - "8001:8000"
+    environment:
+      # Основные настройки
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://llm_tuning_user:llm_tuning_pass@llm-tuning-db:5432/llm_tuning_db
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - API_KEY=apple-silicon-api-key-2024
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # Apple Silicon оптимизации для Ollama
+      - OLLAMA_METAL=1
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_CONTEXT_LENGTH=4096
+      - OLLAMA_BATCH_SIZE=512
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MEM_FRACTION=0.9
+      - OLLAMA_TIMEOUT=300
+      - OLLAMA_KEEP_ALIVE=2h
+      
+      # Производительность
+      - RATE_LIMIT_PER_MINUTE=200
+      - MAX_REQUEST_SIZE=20971520  # 20MB
+      - REQUEST_TIMEOUT=300
+      - KEEP_ALIVE_TIMEOUT=2
+      
+      # База данных
+      - DB_POOL_SIZE=20
+      - DB_MAX_OVERFLOW=40
+      
+      # CORS
+      - ALLOWED_ORIGINS=["http://localhost:3000", "http://localhost:8080", "https://relink.app"]
+      
+      # RAG настройки
+      - RAG_ENABLED=true
+      - RAG_MAX_CONTEXT=4000
+      - RAG_TOP_K=5
+      - RAG_RERANK=true
+      - RAG_HYBRID_SEARCH=true
+      
+      # Тюнинг настройки
+      - TUNING_ENABLED=true
+      - TUNING_STRATEGY=adaptive
+      - TUNING_LEARNING_RATE=0.001
+      - TUNING_BATCH_SIZE=32
+      - TUNING_EPOCHS=3
+      
+      # Маршрутизация
+      - ROUTER_ENABLED=true
+      - ROUTING_STRATEGY=smart
+      - ROUTE_CACHE_TTL=300
+      - ROUTE_CACHE_SIZE=10000
+      
+      # Мониторинг
+      - ENABLE_METRICS=true
+      - ENABLE_TRACING=true
+      - TRACK_RESPONSE_TIMES=true
+      - TRACK_QUALITY_METRICS=true
+      - TRACK_MODEL_PERFORMANCE=true
+      
+      # Безопасность
+      - SECRET_KEY=apple-silicon-secret-key-2024-change-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - ENABLE_API_KEYS=true
+      
+      # Векторная база данных
+      - VECTOR_DB_TYPE=chroma
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - VECTOR_CHUNK_SIZE=1000
+      - VECTOR_CHUNK_OVERLAP=200
+      - SIMILARITY_THRESHOLD=0.7
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_CACHE_TTL=3600
+      - REDIS_MAX_CONNECTIONS=50
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    depends_on:
+      - llm-tuning-db
+      - ollama
+      - chromadb
+      - redis
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # База данных PostgreSQL - оптимизированная для ARM64
+  llm-tuning-db:
+    image: postgres:15-alpine
+    platform: linux/arm64
+    container_name: llm-tuning-db-apple-silicon
+    environment:
+      - POSTGRES_DB=llm_tuning_db
+      - POSTGRES_USER=llm_tuning_user
+      - POSTGRES_PASSWORD=llm_tuning_pass
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    ports:
+      - "5433:5432"
+    volumes:
+      - llm-tuning-db-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llm_tuning_user -d llm_tuning_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama - оптимизированный для Apple Silicon
+  ollama:
+    image: ollama/ollama:latest
+    platform: linux/arm64
+    container_name: llm-tuning-ollama-apple-silicon
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_MODELS=/app/models
+      # Apple Silicon оптимизации
+      - OLLAMA_METAL=1
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_CONTEXT_LENGTH=4096
+      - OLLAMA_BATCH_SIZE=512
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MEM_FRACTION=0.9
+      - OLLAMA_KEEP_ALIVE=2h
+    volumes:
+      - ollama-models:/app/models
+      - ollama-data:/root/.ollama
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8.0'
+        reservations:
+          memory: 8G
+          cpus: '4.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ChromaDB - векторная база данных
+  chromadb:
+    image: chromadb/chroma:latest
+    platform: linux/arm64
+    container_name: llm-tuning-chromadb
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/app/chroma_auth.json
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthServer
+      - CHROMA_SERVER_AUTH_PROVIDER=token
+    volumes:
+      - chromadb-data:/chroma/chroma
+      - ./chroma_auth.json:/app/chroma_auth.json:ro
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis - кэширование и очереди
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+    container_name: llm-tuning-redis-apple-silicon
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Prometheus - мониторинг
+  prometheus:
+    image: prom/prometheus:latest
+    platform: linux/arm64
+    container_name: llm-tuning-prometheus-apple-silicon
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Grafana - визуализация
+  grafana:
+    image: grafana/grafana:latest
+    platform: linux/arm64
+    container_name: llm-tuning-grafana-apple-silicon
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Jaeger - трейсинг
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    platform: linux/arm64
+    container_name: llm-tuning-jaeger-apple-silicon
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+    networks:
+      - llm-tuning-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+volumes:
+  llm-tuning-db-data:
+    driver: local
+  ollama-models:
+    driver: local
+  ollama-data:
+    driver: local
+  chromadb-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  llm-tuning-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
