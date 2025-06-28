@@ -295,6 +295,8 @@ export interface Microservice {
   metrics_url?: string
   documentation_url?: string
   last_heartbeat: string
+  response_time_ms: number
+  uptime_percentage: number
 }
 
 export interface ServiceEndpoint {
