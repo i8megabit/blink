@@ -1,75 +1,58 @@
 import React from 'react'
 import { cn } from '../../lib/utils'
 
-export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
-  value?: number
+interface ProgressProps {
+  value: number
   max?: number
+  className?: string
+  color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple'
   size?: 'sm' | 'md' | 'lg'
-  variant?: 'default' | 'success' | 'warning' | 'destructive'
   showLabel?: boolean
   animated?: boolean
 }
 
-const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ 
-    className, 
-    value = 0, 
-    max = 100,
-    size = 'md',
-    variant = 'default',
-    showLabel = false,
-    animated = false,
-    ...props 
-  }, ref) => {
-    const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
-    
-    const baseClasses = 'relative overflow-hidden rounded-full bg-secondary'
-    
-    const sizes = {
-      sm: 'h-2',
-      md: 'h-3',
-      lg: 'h-4'
-    }
-    
-    const variants = {
-      default: 'bg-primary',
-      success: 'bg-green-500',
-      warning: 'bg-yellow-500',
-      destructive: 'bg-red-500'
-    }
-
-    return (
-      <div className="space-y-2">
-        <div
-          ref={ref}
-          className={cn(
-            baseClasses,
-            sizes[size],
-            className
-          )}
-          {...props}
-        >
-          <div
-            className={cn(
-              'h-full transition-all duration-300 ease-out',
-              variants[variant],
-              animated && 'animate-pulse'
-            )}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        
-        {showLabel && (
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Прогресс</span>
-            <span>{Math.round(percentage)}%</span>
-          </div>
-        )}
-      </div>
-    )
+export const Progress: React.FC<ProgressProps> = ({
+  value,
+  max = 100,
+  className = '',
+  color = 'blue',
+  size = 'md',
+  showLabel = false,
+  animated = false
+}) => {
+  const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
+  
+  const colorClasses = {
+    blue: 'bg-blue-600',
+    green: 'bg-green-600',
+    yellow: 'bg-yellow-600',
+    red: 'bg-red-600',
+    purple: 'bg-purple-600'
   }
-)
+  
+  const sizeClasses = {
+    sm: 'h-1',
+    md: 'h-2',
+    lg: 'h-3'
+  }
 
-Progress.displayName = 'Progress'
+  return (
+    <div className={`space-y-2 ${className}`}>
+      <div className={`w-full bg-gray-200 rounded-full ${sizeClasses[size]}`}>
+        <div
+          className={`${colorClasses[color]} rounded-full transition-all duration-300 ease-out`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      
+      {showLabel && (
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Прогресс</span>
+          <span>{Math.round(percentage)}%</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
-export { Progress } 
+Progress.displayName = 'Progress' 
