@@ -88,7 +88,7 @@ class RedisSettings(BaseSettings):
 class OllamaSettings(BaseSettings):
     """Настройки Ollama"""
     url: str = Field(default="http://localhost:11434", env="OLLAMA_URL")
-    model: str = Field(default="qwen2.5:7b-turbo", env="OLLAMA_MODEL")
+    model: str = Field(default="qwen2.5:7b-instruct-turbo", env="OLLAMA_MODEL")
     timeout: int = Field(default=300, env="OLLAMA_TIMEOUT")
     max_tokens: int = Field(default=4096, env="OLLAMA_MAX_TOKENS")
     temperature: float = Field(default=0.7, env="OLLAMA_TEMPERATURE")

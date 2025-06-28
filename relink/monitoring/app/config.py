@@ -29,7 +29,7 @@ class OllamaSettings(BaseSettings):
     """Настройки Ollama"""
     url: str = Field(default="http://ollama:11434", env="OLLAMA_URL")
     timeout: int = Field(default=300, env="OLLAMA_TIMEOUT")
-    models: List[str] = Field(default=["qwen2.5:7b-turbo"], env="OLLAMA_MODELS")
+    models: List[str] = Field(default=["qwen2.5:7b-instruct-turbo"], env="OLLAMA_MODELS")
 
 
 class PrometheusSettings(BaseSettings):

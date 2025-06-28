@@ -483,7 +483,7 @@ class TestingService:
             from .llm_router import llm_router
             
             prompt = test.test_metadata.get("prompt", "Привет, как дела?")
-            used_model = test.test_metadata.get("model", "qwen2.5:7b")
+            used_model = test.test_metadata.get("model", "qwen2.5:7b-instruct-turbo")
             
             response = await llm_router.generate_response(
                 prompt=prompt,

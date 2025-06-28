@@ -307,7 +307,7 @@ def sample_metrics():
             'evictions': 0
         },
         'ollama': {
-            'model': 'qwen2.5:7b-turbo',
+            'model': 'qwen2.5:7b-instruct-turbo',
             'response_time': 1.5,
             'tokens_per_second': 100.0,
             'memory_usage': 2048.0,

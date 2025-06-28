@@ -25,7 +25,7 @@ class LLMRequest:
     """Запрос к LLM"""
     id: str
     prompt: str
-    llm_model: str = "qwen2.5:7b"
+    llm_model: str = "qwen2.5:7b-instruct-turbo"
     priority: str = "normal"
     max_tokens: int = 100
     temperature: float = 0.7

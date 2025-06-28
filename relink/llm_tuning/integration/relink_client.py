@@ -218,7 +218,7 @@ class ReLinkIntegration:
             # Выполнение RAG запроса
             result = await self.llm_client.rag_query(
                 query=prompt,
-                model="qwen2.5:7b-turbo",
+                model="qwen2.5:7b-instruct-turbo",
                 top_k=5,
                 include_sources=True
             )
@@ -272,7 +272,7 @@ class ReLinkIntegration:
             result = await self.llm_client.route_request(
                 prompt=prompt,
                 context=context,
-                model="qwen2.5:7b-turbo"
+                model="qwen2.5:7b-instruct-turbo"
             )
             
             return {
@@ -311,7 +311,7 @@ class ReLinkIntegration:
             
             result = await self.llm_client.rag_query(
                 query=prompt,
-                model="qwen2.5:7b-turbo",
+                model="qwen2.5:7b-instruct-turbo",
                 top_k=3,
                 include_sources=True
             )

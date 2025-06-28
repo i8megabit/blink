@@ -115,7 +115,7 @@ class TestMetricsCollector:
             mock_response_tags = AsyncMock()
             mock_response_tags.status = 200
             mock_response_tags.json = AsyncMock(return_value={
-                'models': [{'name': 'qwen2.5:7b-turbo'}]
+                'models': [{'name': 'qwen2.5:7b-instruct-turbo'}]
             })
             
             # Мок для /api/show
@@ -131,7 +131,7 @@ class TestMetricsCollector:
             metrics = await collector.collect_ollama_metrics()
             
             assert isinstance(metrics, OllamaMetric)
-            assert metrics.model == 'qwen2.5:7b-turbo'
+            assert metrics.model == 'qwen2.5:7b-instruct-turbo'
             assert metrics.memory_usage == 2048.0
             assert metrics.value == 1  # количество моделей
     

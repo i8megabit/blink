@@ -342,7 +342,7 @@ class SystemAnalyzer:
         
         # Объединяем рекомендации
         optimal_config = {
-            "model": "qwen2.5:7b",
+            "model": "qwen2.5:7b-instruct-turbo",
             "num_gpu": llm_recommendation.get("num_gpu", 1 if specs.gpu_available else 0),
             "num_thread": llm_recommendation.get("num_thread", min(specs.cpu_count, 8)),
             "batch_size": llm_recommendation.get("batch_size", 512),
@@ -458,7 +458,7 @@ class LLMRequest:
     service_type: LLMServiceType
     prompt: str
     context: Optional[Dict[str, Any]] = None
-    llm_model: str = "qwen2.5:7b"  # Оптимизированная модель для Apple Silicon
+    llm_model: str = "qwen2.5:7b-instruct-turbo"  # Оптимизированная модель для Apple Silicon
     temperature: float = 0.7
     max_tokens: int = 2048
     use_rag: bool = True

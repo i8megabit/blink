@@ -9,7 +9,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
-      - OLLAMA_MODEL=qwen2.5:7b-turbo
+      - OLLAMA_MODEL=qwen2.5:7b-instruct-turbo
       - DB_HOST=db
       - DB_USER=seo_user
       - DB_PASSWORD=seo_pass
@@ -276,7 +276,7 @@ services:
       - OLLAMA_MMAP_ENABLED=1           # Memory mapping для быстрого доступа
       - OLLAMA_HUGE_PAGES=1             # Используем большие страницы памяти
       
-      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-turbo
+      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-instruct-turbo
       - OLLAMA_WORKERS=2
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-c"]
@@ -285,7 +285,8 @@ services:
       sleep 45 && 
       echo '🚀 Загружаем модели для A/B тестирования...' && 
       ollama pull qwen2.5:7b && 
-      ollama pull qwen2.5:7b-turbo && 
+      ollama pull qwen2.5:7b-instruct && 
+      ollama pull qwen2.5:7b-instruct-turbo && 
       echo '✅ Модели загружены!' && 
       wait"
 

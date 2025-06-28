@@ -11,7 +11,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
-      - OLLAMA_MODEL=qwen2.5:7b-turbo
+      - OLLAMA_MODEL=qwen2.5:7b-instruct-turbo
     depends_on:
       - db
       - ollama

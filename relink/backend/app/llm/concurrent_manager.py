@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class OllamaConfig:
     """Конфигурация Ollama для Apple M4"""
     base_url: str = "http://localhost:11434"
-    llm_model: str = "qwen2.5:7b"
+    llm_model: str = "qwen2.5:7b-instruct-turbo"
     max_concurrent_requests: int = 2  # Apple M4 оптимизация
     request_timeout: float = 300.0  # 5 минут
     keep_alive: str = "2h"  # Оптимизация для Apple Silicon
@@ -189,7 +189,7 @@ class ConcurrentOllamaManager:
         response = await self.process_request(request)
         return response.response
     
-    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b") -> List[float]:
+    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b-instruct-turbo") -> List[float]:
         """Получение эмбеддинга для текста"""
         # Проверяем кэш эмбеддингов
         cache_key = f"{llm_model}:{hash(text)}"

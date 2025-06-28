@@ -29,7 +29,7 @@ start_time=$(date +%s)
 response=$(curl -s -X POST http://localhost:11434/api/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen2.5:7b-optimized",
+    "model": "qwen2.5:7b-instruct-turbo",
     "prompt": "Скажи 'Привет'",
     "stream": false,
     "options": {

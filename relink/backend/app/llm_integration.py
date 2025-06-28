@@ -65,7 +65,7 @@ class LLMIntegrationService:
     async def process_llm_request(
         self,
         prompt: str,
-        llm_model: str = "qwen2.5:7b",
+        llm_model: str = "qwen2.5:7b-instruct-turbo",
         priority: str = "normal",
         max_tokens: int = 100,
         temperature: float = 0.7,
@@ -104,7 +104,7 @@ class LLMIntegrationService:
     async def generate_response(
         self,
         prompt: str,
-        llm_model: str = "qwen2.5:7b",
+        llm_model: str = "qwen2.5:7b-instruct-turbo",
         max_tokens: int = 100,
         temperature: float = 0.7
     ) -> str:
@@ -117,7 +117,7 @@ class LLMIntegrationService:
         )
         return response.response
     
-    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b") -> List[float]:
+    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b-instruct-turbo") -> List[float]:
         """Получение эмбеддинга для текста"""
         if not self._initialized:
             raise RuntimeError("LLMIntegrationService не инициализирован")

@@ -41,14 +41,14 @@ while [ $counter -lt $max_checks ]; do
     check_status
     
     # Проверяем готовность модели
-    if curl -s -m 5 http://localhost:11434/api/tags | grep -q "qwen2.5:7b-optimized"; then
-        echo "🎉 Модель qwen2.5:7b-optimized готова!"
+    if curl -s -m 5 http://localhost:11434/api/tags | grep -q "qwen2.5:7b-instruct-turbo"; then
+        echo "🎉 Модель qwen2.5:7b-instruct-turbo готова!"
         
         # Быстрый тест генерации
         echo "🧪 Тест генерации..."
         response=$(curl -s -m 30 -X POST http://localhost:11434/api/generate \
             -H "Content-Type: application/json" \
-            -d '{"model":"qwen2.5:7b-optimized","prompt":"Скажи привет","stream":false,"options":{"num_predict":5}}')
+            -d '{"model":"qwen2.5:7b-instruct-turbo","prompt":"Скажи привет","stream":false,"options":{"num_predict":5}}')
         
         if [ $? -eq 0 ] && [ ! -z "$response" ]; then
             echo "✅ Генерация работает!"
