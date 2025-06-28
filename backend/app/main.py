@@ -1487,7 +1487,9 @@ async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]
                             # Добавляем timezone info
                             if 'T' in date_str and 'Z' not in date_str:
                                 date_str += 'Z'
-                            date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            date_with_tz = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            # Убираем timezone info для сохранения в базу данных
+                            date = date_with_tz.replace(tzinfo=None)
                         except:
                             pass
                     
