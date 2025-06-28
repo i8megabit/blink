@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="800" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-family: 'Arial', sans-serif; font-size: 24px; font-weight: bold; fill: #1f2937; }
+      .subtitle { font-family: 'Arial', sans-serif; font-size: 16px; font-weight: bold; fill: #374151; }
+      .label { font-family: 'Arial', sans-serif; font-size: 12px; fill: #6b7280; }
+      .user-box { fill: #f59e0b; stroke: #d97706; stroke-width: 2; rx: 8; }
+      .user-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .component-box { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 2; rx: 8; }
+      .component-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .hook-box { fill: #10b981; stroke: #059669; stroke-width: 2; rx: 8; }
+      .hook-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .service-box { fill: #8b5cf6; stroke: #7c3aed; stroke-width: 2; rx: 8; }
+      .service-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .api-box { fill: #ef4444; stroke: #dc2626; stroke-width: 2; rx: 8; }
+      .api-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .arrow { stroke: #6b7280; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font-family: 'Arial', sans-serif; font-size: 11px; fill: #6b7280; }
+      .layer { fill: #f3f4f6; stroke: #d1d5db; stroke-width: 1; rx: 8; }
+      .layer-title { font-family: 'Arial', sans-serif; font-size: 12px; font-weight: bold; fill: #374151; }
+      .ui-component { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 1; rx: 4; }
+      .ui-text { font-family: 'Arial', sans-serif; font-size: 10px; fill: #374151; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#6b7280" />
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="800" fill="#ffffff"/>
+  
+  <!-- Title -->
+  <text x="600" y="30" text-anchor="middle" class="title">reLink Frontend - Архитектура React приложения</text>
+  
+  <!-- User Layer -->
+  <g>
+    <rect x="50" y="50" width="1100" height="80" class="layer"/>
+    <text x="600" y="70" text-anchor="middle" class="layer-title">Пользовательский интерфейс</text>
+    
+    <rect x="80" y="80" width="150" height="40" class="user-box"/>
+    <text x="155" y="105" text-anchor="middle" class="user-text">Dashboard</text>
+    
+    <rect x="250" y="80" width="150" height="40" class="user-box"/>
+    <text x="325" y="105" text-anchor="middle" class="user-text">LLM Models</text>
+    
+    <rect x="420" y="80" width="150" height="40" class="user-box"/>
+    <text x="495" y="105" text-anchor="middle" class="user-text">A/B Testing</text>
+    
+    <rect x="590" y="80" width="150" height="40" class="user-box"/>
+    <text x="665" y="105" text-anchor="middle" class="user-text">Benchmarks</text>
+    
+    <rect x="760" y="80" width="150" height="40" class="user-box"/>
+    <text x="835" y="105" text-anchor="middle" class="user-text">Monitoring</text>
+    
+    <rect x="930" y="80" width="150" height="40" class="user-box"/>
+    <text x="1005" y="105" text-anchor="middle" class="user-text">Global Search</text>
+  </g>
+  
+  <!-- Component Layer -->
+  <g>
+    <rect x="50" y="150" width="1100" height="120" class="layer"/>
+    <text x="600" y="170" text-anchor="middle" class="layer-title">React Components (TypeScript)</text>
+    
+    <rect x="80" y="180" width="200" height="80" class="component-box"/>
+    <text x="180" y="200" text-anchor="middle" class="component-text">Dashboard Component</text>
+    <text x="180" y="215" text-anchor="middle" class="label">• Sidebar Navigation</text>
+    <text x="180" y="230" text-anchor="middle" class="label">• Status Indicators</text>
+    <text x="180" y="245" text-anchor="middle" class="label">• Real-time Updates</text>
+    <text x="180" y="260" text-anchor="middle" class="label">• Responsive Layout</text>
+    
+    <rect x="300" y="180" width="200" height="80" class="component-box"/>
+    <text x="400" y="200" text-anchor="middle" class="component-text">LLM Models Component</text>
+    <text x="400" y="215" text-anchor="middle" class="label">• Model List</text>
+    <text x="400" y="230" text-anchor="middle" class="label">• Load/Unload Controls</text>
+    <text x="400" y="245" text-anchor="middle" class="label">• Performance Metrics</text>
+    <text x="400" y="260" text-anchor="middle" class="label">• Configuration Panel</text>
+    
+    <rect x="520" y="180" width="200" height="80" class="component-box"/>
+    <text x="620" y="200" text-anchor="middle" class="component-text">A/B Testing Component</text>
+    <text x="620" y="215" text-anchor="middle" class="label">• Experiment Setup</text>
+    <text x="620" y="230" text-anchor="middle" class="label">• Traffic Distribution</text>
+    <text x="620" y="245" text-anchor="middle" class="label">• Results Analysis</text>
+    <text x="620" y="260" text-anchor="middle" class="label">• Winner Selection</text>
+    
+    <rect x="740" y="180" width="200" height="80" class="component-box"/>
+    <text x="840" y="200" text-anchor="middle" class="component-text">Benchmarks Component</text>
+    <text x="840" y="215" text-anchor="middle" class="label">• Performance Tests</text>
+    <text x="840" y="230" text-anchor="middle" class="label">• Latency Charts</text>
+    <text x="840" y="245" text-anchor="middle" class="label">• Throughput Metrics</text>
+    <text x="840" y="260" text-anchor="middle" class="label">• Quality Assessment</text>
+    
+    <rect x="960" y="180" width="200" height="80" class="component-box"/>
+    <text x="1060" y="200" text-anchor="middle" class="component-text">Monitoring Component</text>
+    <text x="1060" y="215" text-anchor="middle" class="label">• System Health</text>
+    <text x="1060" y="230" text-anchor="middle" class="label">• Resource Usage</text>
+    <text x="1060" y="245" text-anchor="middle" class="label">• Alert Management</text>
+    <text x="1060" y="260" text-anchor="middle" class="label">• Log Viewer</text>
+  </g>
+  
+  <!-- UI Components -->
+  <g>
+    <rect x="50" y="290" width="1100" height="100" class="layer"/>
+    <text x="600" y="310" text-anchor="middle" class="layer-title">UI Components (Reusable)</text>
+    
+    <rect x="80" y="320" width="120" height="50" class="ui-component"/>
+    <text x="140" y="340" text-anchor="middle" class="ui-text">Progress Bar</text>
+    <text x="140" y="350" text-anchor="middle" class="ui-text">Status Indicator</text>
+    
+    <rect x="220" y="320" width="120" height="50" class="ui-component"/>
+    <text x="280" y="340" text-anchor="middle" class="ui-text">Data Table</text>
+    <text x="280" y="350" text-anchor="middle" class="ui-text">Sortable Columns</text>
+    
+    <rect x="360" y="320" width="120" height="50" class="ui-component"/>
+    <text x="420" y="340" text-anchor="middle" class="ui-text">Charts</text>
+    <text x="420" y="350" text-anchor="middle" class="ui-text">Line/Bar/Pie</text>
+    
+    <rect x="500" y="320" width="120" height="50" class="ui-component"/>
+    <text x="560" y="340" text-anchor="middle" class="ui-text">Forms</text>
+    <text x="560" y="350" text-anchor="middle" class="ui-text">Validation</text>
+    
+    <rect x="640" y="320" width="120" height="50" class="ui-component"/>
+    <text x="700" y="340" text-anchor="middle" class="ui-text">Modals</text>
+    <text x="700" y="350" text-anchor="middle" class="ui-text">Dialogs</text>
+    
+    <rect x="780" y="320" width="120" height="50" class="ui-component"/>
+    <text x="840" y="340" text-anchor="middle" class="ui-text">Notifications</text>
+    <text x="840" y="350" text-anchor="middle" class="ui-text">Toasts</text>
+    
+    <rect x="920" y="320" width="120" height="50" class="ui-component"/>
+    <text x="980" y="340" text-anchor="middle" class="ui-text">Search</text>
+    <text x="980" y="350" text-anchor="middle" class="ui-text">Filters</text>
+    
+    <rect x="1060" y="320" width="120" height="50" class="ui-component"/>
+    <text x="1120" y="340" text-anchor="middle" class="ui-text">Pagination</text>
+    <text x="1120" y="350" text-anchor="middle" class="ui-text">Navigation</text>
+  </g>
+  
+  <!-- Hooks Layer -->
+  <g>
+    <rect x="50" y="410" width="1100" height="120" class="layer"/>
+    <text x="600" y="430" text-anchor="middle" class="layer-title">React Hooks (Custom Logic)</text>
+    
+    <rect x="80" y="440" width="200" height="80" class="hook-box"/>
+    <text x="180" y="460" text-anchor="middle" class="hook-text">useMicroservices</text>
+    <text x="180" y="475" text-anchor="middle" class="label">• Service Discovery</text>
+    <text x="180" y="490" text-anchor="middle" class="label">• Health Checks</text>
+    <text x="180" y="505" text-anchor="middle" class="label">• Connection Management</text>
+    <text x="180" y="520" text-anchor="middle" class="label">• Error Handling</text>
+    
+    <rect x="300" y="440" width="200" height="80" class="hook-box"/>
+    <text x="400" y="460" text-anchor="middle" class="hook-text">useLLMModels</text>
+    <text x="400" y="475" text-anchor="middle" class="label">• Model Management</text>
+    <text x="400" y="490" text-anchor="middle" class="label">• Load/Unload Operations</text>
+    <text x="400" y="505" text-anchor="middle" class="label">• Status Monitoring</text>
+    <text x="400" y="520" text-anchor="middle" class="label">• Performance Tracking</text>
+    
+    <rect x="520" y="440" width="200" height="80" class="hook-box"/>
+    <text x="620" y="460" text-anchor="middle" class="hook-text">useABTesting</text>
+    <text x="620" y="475" text-anchor="middle" class="label">• Experiment Management</text>
+    <text x="620" y="490" text-anchor="middle" class="label">• Traffic Routing</text>
+    <text x="620" y="505" text-anchor="middle" class="label">• Results Analysis</text>
+    <text x="620" y="520" text-anchor="middle" class="label">• Statistical Testing</text>
+    
+    <rect x="740" y="440" width="200" height="80" class="hook-box"/>
+    <text x="840" y="460" text-anchor="middle" class="hook-text">useBenchmarks</text>
+    <text x="840" y="475" text-anchor="middle" class="label">• Performance Testing</text>
+    <text x="840" y="490" text-anchor="middle" class="label">• Metrics Collection</text>
+    <text x="840" y="505" text-anchor="middle" class="label">• Comparison Analysis</text>
+    <text x="840" y="520" text-anchor="middle" class="label">• Report Generation</text>
+    
+    <rect x="960" y="440" width="200" height="80" class="hook-box"/>
+    <text x="1060" y="460" text-anchor="middle" class="hook-text">useMonitoring</text>
+    <text x="1060" y="475" text-anchor="middle" class="label">• System Monitoring</text>
+    <text x="1060" y="490" text-anchor="middle" class="label">• Alert Management</text>
+    <text x="1060" y="505" text-anchor="middle" class="label">• Log Aggregation</text>
+    <text x="1060" y="520" text-anchor="middle" class="label">• Health Checks</text>
+  </g>
+  
+  <!-- Service Layer -->
+  <g>
+    <rect x="50" y="550" width="1100" height="120" class="layer"/>
+    <text x="600" y="570" text-anchor="middle" class="layer-title">Service Layer (API Integration)</text>
+    
+    <rect x="80" y="580" width="200" height="80" class="service-box"/>
+    <text x="180" y="600" text-anchor="middle" class="service-text">Microservices Client</text>
+    <text x="180" y="615" text-anchor="middle" class="label">• Service Discovery</text>
+    <text x="180" y="630" text-anchor="middle" class="label">• Load Balancing</text>
+    <text x="180" y="645" text-anchor="middle" class="label">• Circuit Breaker</text>
+    <text x="180" y="660" text-anchor="middle" class="label">• Retry Logic</text>
+    
+    <rect x="300" y="580" width="200" height="80" class="service-box"/>
+    <text x="400" y="600" text-anchor="middle" class="service-text">LLM Service Client</text>
+    <text x="400" y="615" text-anchor="middle" class="label">• Model Operations</text>
+    <text x="400" y="630" text-anchor="middle" class="label">• Tuning Management</text>
+    <text x="400" y="645" text-anchor="middle" class="label">• RAG Integration</text>
+    <text x="400" y="660" text-anchor="middle" class="label">• Performance Metrics</text>
+    
+    <rect x="520" y="580" width="200" height="80" class="service-box"/>
+    <text x="620" y="600" text-anchor="middle" class="service-text">Main Backend Client</text>
+    <text x="620" y="615" text-anchor="middle" class="label">• SEO Analysis</text>
+    <text x="620" y="630" text-anchor="middle" class="label">• User Management</text>
+    <text x="620" y="645" text-anchor="middle" class="label">• Data Processing</text>
+    <text x="620" y="660" text-anchor="middle" class="label">• Authentication</text>
+    
+    <rect x="740" y="580" width="200" height="80" class="service-box"/>
+    <text x="840" y="600" text-anchor="middle" class="service-text">WebSocket Client</text>
+    <text x="840" y="615" text-anchor="middle" class="label">• Real-time Updates</text>
+    <text x="840" y="630" text-anchor="middle" class="label">• Live Monitoring</text>
+    <text x="840" y="645" text-anchor="middle" class="label">• Event Streaming</text>
+    <text x="840" y="660" text-anchor="middle" class="label">• Connection Management</text>
+    
+    <rect x="960" y="580" width="200" height="80" class="service-box"/>
+    <text x="1060" y="600" text-anchor="middle" class="service-text">Cache Service</text>
+    <text x="1060" y="615" text-anchor="middle" class="label">• Local Storage</text>
+    <text x="1060" y="630" text-anchor="middle" class="label">• Session Management</text>
+    <text x="1060" y="645" text-anchor="middle" class="label">• State Persistence</text>
+    <text x="1060" y="660" text-anchor="middle" class="label">• Offline Support</text>
+  </g>
+  
+  <!-- API Layer -->
+  <g>
+    <rect x="50" y="690" width="1100" height="80" class="layer"/>
+    <text x="600" y="710" text-anchor="middle" class="layer-title">API Layer (HTTP/WebSocket)</text>
+    
+    <rect x="80" y="720" width="150" height="40" class="api-box"/>
+    <text x="155" y="745" text-anchor="middle" class="api-text">LLM Tuning API</text>
+    
+    <rect x="250" y="720" width="150" height="40" class="api-box"/>
+    <text x="325" y="745" text-anchor="middle" class="api-text">Main Backend API</text>
+    
+    <rect x="420" y="720" width="150" height="40" class="api-box"/>
+    <text x="495" y="745" text-anchor="middle" class="api-text">Monitoring API</text>
+    
+    <rect x="590" y="720" width="150" height="40" class="api-box"/>
+    <text x="665" y="745" text-anchor="middle" class="api-text">WebSocket Server</text>
+    
+    <rect x="760" y="720" width="150" height="40" class="api-box"/>
+    <text x="835" y="745" text-anchor="middle" class="api-text">File Upload API</text>
+    
+    <rect x="930" y="720" width="150" height="40" class="api-box"/>
+    <text x="1005" y="745" text-anchor="middle" class="api-text">Authentication API</text>
+  </g>
+  
+  <!-- Data Flow Arrows -->
+  <g>
+    <!-- User to Components -->
+    <line x1="155" y1="130" x2="180" y2="180" class="arrow"/>
+    <line x1="325" y1="130" x2="400" y2="180" class="arrow"/>
+    <line x1="495" y1="130" x2="620" y2="180" class="arrow"/>
+    <line x1="665" y1="130" x2="840" y2="180" class="arrow"/>
+    <line x1="835" y1="130" x2="1060" y2="180" class="arrow"/>
+    <line x1="1005" y1="130" x2="1060" y2="180" class="arrow"/>
+    
+    <!-- Components to UI -->
+    <line x1="180" y1="260" x2="140" y2="320" class="arrow"/>
+    <line x1="400" y1="260" x2="280" y2="320" class="arrow"/>
+    <line x1="620" y1="260" x2="420" y2="320" class="arrow"/>
+    <line x1="840" y1="260" x2="560" y2="320" class="arrow"/>
+    <line x1="1060" y1="260" x2="700" y2="320" class="arrow"/>
+    
+    <!-- Components to Hooks -->
+    <line x1="180" y1="260" x2="180" y2="440" class="arrow"/>
+    <line x1="400" y1="260" x2="400" y2="440" class="arrow"/>
+    <line x1="620" y1="260" x2="620" y2="440" class="arrow"/>
+    <line x1="840" y1="260" x2="840" y2="440" class="arrow"/>
+    <line x1="1060" y1="260" x2="1060" y2="440" class="arrow"/>
+    
+    <!-- Hooks to Services -->
+    <line x1="180" y1="520" x2="180" y2="580" class="arrow"/>
+    <line x1="400" y1="520" x2="400" y2="580" class="arrow"/>
+    <line x1="620" y1="520" x2="620" y2="580" class="arrow"/>
+    <line x1="840" y1="520" x2="840" y2="580" class="arrow"/>
+    <line x1="1060" y1="520" x2="1060" y2="580" class="arrow"/>
+    
+    <!-- Services to API -->
+    <line x1="180" y1="660" x2="155" y2="720" class="arrow"/>
+    <line x1="400" y1="660" x2="325" y2="720" class="arrow"/>
+    <line x1="620" y1="660" x2="495" y2="720" class="arrow"/>
+    <line x1="840" y1="660" x2="665" y2="720" class="arrow"/>
+    <line x1="1060" y1="660" x2="1005" y2="720" class="arrow"/>
+    
+    <!-- Cross-service communication -->
+    <line x1="280" y1="620" x2="520" y2="620" class="arrow"/>
+    <line x1="520" y1="620" x2="740" y2="620" class="arrow"/>
+    <line x1="740" y1="620" x2="960" y2="620" class="arrow"/>
+  </g>
+  
+  <!-- Legend -->
+  <g>
+    <rect x="50" y="790" width="1100" height="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" rx="4"/>
+    <text x="600" y="800" text-anchor="middle" class="subtitle">Легенда: User Interface | React Components | Custom Hooks | Service Layer | API Integration</text>
+  </g>
+</svg> 
