@@ -65,8 +65,6 @@ backups/
 # Тестовые файлы и моки
 tests/
 **/*_test.py
-**/*test*.py
-test_*.py
 mock_*/
 
 # CI/CD файлы

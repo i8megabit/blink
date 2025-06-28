@@ -4,20 +4,12 @@
 """
 
 import asyncio
-import os
-
-# Устанавливаем переменные окружения
-os.environ['DB_PASSWORD'] = 'G7p!x2Qw9z$Lk8vR3s@T1uY6b#N4eW5c'
-os.environ['DB_HOST'] = 'localhost'
-os.environ['DB_PORT'] = '5432'
-os.environ['DB_NAME'] = 'relink_db'
-os.environ['DB_USER'] = 'postgres'
 
 async def create_tables():
     """Создаёт все таблицы в базе данных"""
     try:
-        from database import engine
-        from models import Base
+        from app.database import engine
+        from app.models import Base
         
         print("Создаю таблицы в базе данных...")
         async with engine.begin() as conn:

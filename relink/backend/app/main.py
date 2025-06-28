@@ -64,6 +64,10 @@ from .auth import (
 )
 from .database import get_db, engine
 from .models import Base, User, Domain, WordPressPost, AnalysisHistory, Diagram, DiagramEmbedding
+from .models import (
+    TestRequest, TestResponse, TestSuiteRequest, TestSuiteResponse, TestExecutionResponse,
+    TestType, TestStatus, TestPriority, TestEnvironment
+)
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
 from .testing_service import testing_service

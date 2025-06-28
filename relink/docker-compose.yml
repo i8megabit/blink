@@ -10,6 +10,10 @@ services:
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
       - OLLAMA_MODEL=qwen2.5:7b-turbo
+      - DB_HOST=db
+      - DB_USER=seo_user
+      - DB_PASSWORD=seo_pass
+      - DB_NAME=seo_db
     deploy:
       resources:
         limits:
@@ -199,9 +203,9 @@ services:
     image: postgres:16
     restart: always
     environment:
-      POSTGRES_USER: seo_user
-      POSTGRES_PASSWORD: seo_pass
-      POSTGRES_DB: seo_db
+      - POSTGRES_USER=seo_user
+      - POSTGRES_PASSWORD=seo_pass
+      - POSTGRES_DB=seo_db
     deploy:
       resources:
         limits:
