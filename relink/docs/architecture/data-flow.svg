@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-family: 'Arial', sans-serif; font-size: 24px; font-weight: bold; fill: #1f2937; }
+      .subtitle { font-family: 'Arial', sans-serif; font-size: 16px; font-weight: bold; fill: #374151; }
+      .label { font-family: 'Arial', sans-serif; font-size: 12px; fill: #6b7280; }
+      .user-box { fill: #f59e0b; stroke: #d97706; stroke-width: 2; rx: 8; }
+      .user-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .frontend-box { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 2; rx: 8; }
+      .frontend-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .api-box { fill: #10b981; stroke: #059669; stroke-width: 2; rx: 8; }
+      .api-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .service-box { fill: #8b5cf6; stroke: #7c3aed; stroke-width: 2; rx: 8; }
+      .service-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .database-box { fill: #ef4444; stroke: #dc2626; stroke-width: 2; rx: 8; }
+      .database-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .arrow { stroke: #6b7280; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font-family: 'Arial', sans-serif; font-size: 11px; fill: #6b7280; }
+      .flow-step { font-family: 'Arial', sans-serif; font-size: 10px; fill: #374151; font-weight: bold; }
+      .step-box { fill: #f3f4f6; stroke: #d1d5db; stroke-width: 1; rx: 6; }
+      .step-text { font-family: 'Arial', sans-serif; font-size: 11px; fill: #374151; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#6b7280" />
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#ffffff"/>
+  
+  <!-- Title -->
+  <text x="600" y="30" text-anchor="middle" class="title">reLink - Потоки данных и взаимодействия</text>
+  
+  <!-- User Layer -->
+  <g>
+    <rect x="50" y="50" width="1100" height="80" class="step-box"/>
+    <text x="600" y="70" text-anchor="middle" class="subtitle">Пользовательский слой</text>
+    
+    <rect x="80" y="80" width="120" height="40" class="user-box"/>
+    <text x="140" y="105" text-anchor="middle" class="user-text">SEO Engineer</text>
+    
+    <rect x="220" y="80" width="120" height="40" class="user-box"/>
+    <text x="280" y="105" text-anchor="middle" class="user-text">Data Analyst</text>
+    
+    <rect x="360" y="80" width="120" height="40" class="user-box"/>
+    <text x="420" y="105" text-anchor="middle" class="user-text">ML Engineer</text>
+    
+    <rect x="500" y="80" width="120" height="40" class="user-box"/>
+    <text x="560" y="105" text-anchor="middle" class="user-text">DevOps Engineer</text>
+    
+    <rect x="640" y="80" width="120" height="40" class="user-box"/>
+    <text x="700" y="105" text-anchor="middle" class="user-text">Product Manager</text>
+    
+    <rect x="780" y="80" width="120" height="40" class="user-box"/>
+    <text x="840" y="105" text-anchor="middle" class="user-text">System Admin</text>
+    
+    <rect x="920" y="80" width="120" height="40" class="user-box"/>
+    <text x="980" y="105" text-anchor="middle" class="user-text">API Consumer</text>
+  </g>
+  
+  <!-- Frontend Layer -->
+  <g>
+    <rect x="50" y="150" width="1100" height="100" class="step-box"/>
+    <text x="600" y="170" text-anchor="middle" class="subtitle">Frontend Layer (React + TypeScript)</text>
+    
+    <rect x="80" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="155" y="205" text-anchor="middle" class="frontend-text">Dashboard</text>
+    <text x="155" y="220" text-anchor="middle" class="label">Главная панель</text>
+    
+    <rect x="250" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="325" y="205" text-anchor="middle" class="frontend-text">LLM Models</text>
+    <text x="325" y="220" text-anchor="middle" class="label">Управление моделями</text>
+    
+    <rect x="420" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="495" y="205" text-anchor="middle" class="frontend-text">A/B Testing</text>
+    <text x="495" y="220" text-anchor="middle" class="label">Эксперименты</text>
+    
+    <rect x="590" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="665" y="205" text-anchor="middle" class="frontend-text">Benchmarks</text>
+    <text x="665" y="220" text-anchor="middle" class="label">Тестирование</text>
+    
+    <rect x="760" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="835" y="205" text-anchor="middle" class="frontend-text">Monitoring</text>
+    <text x="835" y="220" text-anchor="middle" class="label">Мониторинг</text>
+    
+    <rect x="930" y="180" width="150" height="50" class="frontend-box"/>
+    <text x="1005" y="205" text-anchor="middle" class="frontend-text">Global Search</text>
+    <text x="1005" y="220" text-anchor="middle" class="label">Поиск</text>
+  </g>
+  
+  <!-- API Gateway -->
+  <g>
+    <rect x="50" y="270" width="1100" height="60" class="step-box"/>
+    <text x="600" y="290" text-anchor="middle" class="subtitle">API Gateway & Load Balancer</text>
+    
+    <rect x="400" y="300" width="400" height="20" class="api-box"/>
+    <text x="600" y="315" text-anchor="middle" class="api-text">Nginx / Traefik - Маршрутизация и балансировка</text>
+  </g>
+  
+  <!-- Main Backend -->
+  <g>
+    <rect x="50" y="350" width="500" height="120" class="step-box"/>
+    <text x="300" y="370" text-anchor="middle" class="subtitle">Main Backend (SEO Analysis)</text>
+    
+    <rect x="80" y="380" width="120" height="80" class="service-box"/>
+    <text x="140" y="405" text-anchor="middle" class="service-text">SEO Analysis</text>
+    <text x="140" y="420" text-anchor="middle" class="label">• Анализ сайтов</text>
+    <text x="140" y="435" text-anchor="middle" class="label">• Рекомендации</text>
+    <text x="140" y="450" text-anchor="middle" class="label">• Отчеты</text>
+    
+    <rect x="220" y="380" width="120" height="80" class="service-box"/>
+    <text x="280" y="405" text-anchor="middle" class="service-text">User Management</text>
+    <text x="280" y="420" text-anchor="middle" class="label">• Аутентификация</text>
+    <text x="280" y="435" text-anchor="middle" class="label">• Авторизация</text>
+    <text x="280" y="450" text-anchor="middle" class="label">• Профили</text>
+    
+    <rect x="360" y="380" width="120" height="80" class="service-box"/>
+    <text x="420" y="405" text-anchor="middle" class="service-text">Data Processing</text>
+    <text x="420" y="420" text-anchor="middle" class="label">• Обработка данных</text>
+    <text x="420" y="435" text-anchor="middle" class="label">• Валидация</text>
+    <text x="420" y="450" text-anchor="middle" class="label">• Трансформация</text>
+  </g>
+  
+  <!-- LLM Tuning Service -->
+  <g>
+    <rect x="570" y="350" width="580" height="120" class="step-box"/>
+    <text x="860" y="370" text-anchor="middle" class="subtitle">LLM Tuning Service</text>
+    
+    <rect x="600" y="380" width="120" height="80" class="service-box"/>
+    <text x="660" y="405" text-anchor="middle" class="service-text">Model Service</text>
+    <text x="660" y="420" text-anchor="middle" class="label">• Управление моделями</text>
+    <text x="660" y="435" text-anchor="middle" class="label">• Загрузка/выгрузка</text>
+    <text x="660" y="450" text-anchor="middle" class="label">• Статус</text>
+    
+    <rect x="740" y="380" width="120" height="80" class="service-box"/>
+    <text x="800" y="405" text-anchor="middle" class="service-text">Tuning Service</text>
+    <text x="800" y="420" text-anchor="middle" class="label">• Fine-tuning</text>
+    <text x="800" y="435" text-anchor="middle" class="label">• LoRA Training</text>
+    <text x="800" y="450" text-anchor="middle" class="label">• Гиперпараметры</text>
+    
+    <rect x="880" y="380" width="120" height="80" class="service-box"/>
+    <text x="940" y="405" text-anchor="middle" class="service-text">RAG Service</text>
+    <text x="940" y="420" text-anchor="middle" class="label">• Векторный поиск</text>
+    <text x="940" y="435" text-anchor="middle" class="label">• Индексация</text>
+    <text x="940" y="450" text-anchor="middle" class="label">• Контекст</text>
+    
+    <rect x="1020" y="380" width="120" height="80" class="service-box"/>
+    <text x="1080" y="405" text-anchor="middle" class="service-text">AB Testing</text>
+    <text x="1080" y="420" text-anchor="middle" class="label">• Эксперименты</text>
+    <text x="1080" y="435" text-anchor="middle" class="label">• Маршрутизация</text>
+    <text x="1080" y="450" text-anchor="middle" class="label">• Анализ</text>
+  </g>
+  
+  <!-- Data Layer -->
+  <g>
+    <rect x="50" y="490" width="1100" height="120" class="step-box"/>
+    <text x="600" y="510" text-anchor="middle" class="subtitle">Data Layer</text>
+    
+    <rect x="80" y="520" width="150" height="80" class="database-box"/>
+    <text x="155" y="545" text-anchor="middle" class="database-text">PostgreSQL</text>
+    <text x="155" y="560" text-anchor="middle" class="label">• Основные данные</text>
+    <text x="155" y="575" text-anchor="middle" class="label">• Пользователи</text>
+    <text x="155" y="590" text-anchor="middle" class="label">• Результаты</text>
+    
+    <rect x="250" y="520" width="150" height="80" class="database-box"/>
+    <text x="325" y="545" text-anchor="middle" class="database-text">Redis Cache</text>
+    <text x="325" y="560" text-anchor="middle" class="label">• Сессии</text>
+    <text x="325" y="575" text-anchor="middle" class="label">• Кэш</text>
+    <text x="325" y="590" text-anchor="middle" class="label">• Очереди</text>
+    
+    <rect x="420" y="520" width="150" height="80" class="database-box"/>
+    <text x="495" y="545" text-anchor="middle" class="database-text">ChromaDB</text>
+    <text x="495" y="560" text-anchor="middle" class="label">• Векторы</text>
+    <text x="495" y="575" text-anchor="middle" class="label">• Документы</text>
+    <text x="495" y="590" text-anchor="middle" class="label">• Поиск</text>
+    
+    <rect x="590" y="520" width="150" height="80" class="database-box"/>
+    <text x="665" y="545" text-anchor="middle" class="database-text">Ollama Models</text>
+    <text x="665" y="560" text-anchor="middle" class="label">• Локальные модели</text>
+    <text x="665" y="575" text-anchor="middle" class="label">• Веса</text>
+    <text x="665" y="590" text-anchor="middle" class="label">• Конфигурации</text>
+    
+    <rect x="760" y="520" width="150" height="80" class="database-box"/>
+    <text x="835" y="545" text-anchor="middle" class="database-text">Prometheus</text>
+    <text x="835" y="560" text-anchor="middle" class="label">• Метрики</text>
+    <text x="835" y="575" text-anchor="middle" class="label">• Мониторинг</text>
+    <text x="835" y="590" text-anchor="middle" class="label">• Алерты</text>
+    
+    <rect x="930" y="520" width="150" height="80" class="database-box"/>
+    <text x="1005" y="545" text-anchor="middle" class="database-text">File Storage</text>
+    <text x="1005" y="560" text-anchor="middle" class="label">• Файлы</text>
+    <text x="1005" y="575" text-anchor="middle" class="label">• Логи</text>
+    <text x="1005" y="590" text-anchor="middle" class="label">• Экспорты</text>
+  </g>
+  
+  <!-- Data Flow Steps -->
+  <g>
+    <rect x="50" y="630" width="1100" height="200" class="step-box"/>
+    <text x="600" y="650" text-anchor="middle" class="subtitle">Основные потоки данных</text>
+    
+    <!-- Flow 1: User Analysis -->
+    <rect x="80" y="660" width="200" height="80" class="step-box"/>
+    <text x="180" y="675" text-anchor="middle" class="flow-step">1. Анализ сайта</text>
+    <text x="180" y="690" text-anchor="middle" class="step-text">Пользователь → Frontend → API Gateway</text>
+    <text x="180" y="705" text-anchor="middle" class="step-text">→ Main Backend → PostgreSQL</text>
+    <text x="180" y="720" text-anchor="middle" class="step-text">→ LLM Tuning → Ollama → Результат</text>
+    <text x="180" y="735" text-anchor="middle" class="step-text">→ Frontend → Пользователь</text>
+    
+    <!-- Flow 2: Model Management -->
+    <rect x="300" y="660" width="200" height="80" class="step-box"/>
+    <text x="400" y="675" text-anchor="middle" class="flow-step">2. Управление моделями</text>
+    <text x="400" y="690" text-anchor="middle" class="step-text">ML Engineer → Frontend → API Gateway</text>
+    <text x="400" y="705" text-anchor="middle" class="step-text">→ LLM Tuning → Ollama Models</text>
+    <text x="400" y="720" text-anchor="middle" class="step-text">→ PostgreSQL (метаданные)</text>
+    <text x="400" y="735" text-anchor="middle" class="step-text">→ Redis (статус) → Frontend</text>
+    
+    <!-- Flow 3: A/B Testing -->
+    <rect x="520" y="660" width="200" height="80" class="step-box"/>
+    <text x="620" y="675" text-anchor="middle" class="flow-step">3. A/B Тестирование</text>
+    <text x="620" y="690" text-anchor="middle" class="step-text">Product Manager → Frontend → API Gateway</text>
+    <text x="620" y="705" text-anchor="middle" class="step-text">→ LLM Tuning → AB Testing Service</text>
+    <text x="620" y="720" text-anchor="middle" class="step-text">→ PostgreSQL (результаты)</text>
+    <text x="620" y="735" text-anchor="middle" class="step-text">→ Prometheus (метрики) → Grafana</text>
+    
+    <!-- Flow 4: RAG Processing -->
+    <rect x="740" y="660" width="200" height="80" class="step-box"/>
+    <text x="840" y="675" text-anchor="middle" class="flow-step">4. RAG Обработка</text>
+    <text x="840" y="690" text-anchor="middle" class="step-text">Data Analyst → Frontend → API Gateway</text>
+    <text x="840" y="705" text-anchor="middle" class="step-text">→ LLM Tuning → RAG Service</text>
+    <text x="840" y="720" text-anchor="middle" class="step-text">→ ChromaDB (векторы) → Ollama</text>
+    <text x="840" y="735" text-anchor="middle" class="step-text">→ Результат → Frontend</text>
+    
+    <!-- Flow 5: Monitoring -->
+    <rect x="960" y="660" width="200" height="80" class="step-box"/>
+    <text x="1060" y="675" text-anchor="middle" class="flow-step">5. Мониторинг</text>
+    <text x="1060" y="690" text-anchor="middle" class="step-text">System Admin → Grafana → Prometheus</text>
+    <text x="1060" y="705" text-anchor="middle" class="step-text">→ Все сервисы (метрики)</text>
+    <text x="1060" y="720" text-anchor="middle" class="step-text">→ Алерты → Slack/Email</text>
+    <text x="1060" y="735" text-anchor="middle" class="step-text">→ Автоматические действия</text>
+  </g>
+  
+  <!-- Data Flow Arrows -->
+  <g>
+    <!-- User to Frontend -->
+    <line x1="140" y1="130" x2="155" y2="180" class="arrow"/>
+    <line x1="280" y1="130" x2="325" y2="180" class="arrow"/>
+    <line x1="420" y1="130" x2="495" y2="180" class="arrow"/>
+    <line x1="560" y1="130" x2="665" y2="180" class="arrow"/>
+    <line x1="700" y1="130" x2="835" y2="180" class="arrow"/>
+    <line x1="840" y1="130" x2="1005" y2="180" class="arrow"/>
+    <line x1="980" y1="130" x2="1005" y2="180" class="arrow"/>
+    
+    <!-- Frontend to API Gateway -->
+    <line x1="155" y1="250" x2="600" y2="300" class="arrow"/>
+    <line x1="325" y1="250" x2="600" y2="300" class="arrow"/>
+    <line x1="495" y1="250" x2="600" y2="300" class="arrow"/>
+    <line x1="665" y1="250" x2="600" y2="300" class="arrow"/>
+    <line x1="835" y1="250" x2="600" y2="300" class="arrow"/>
+    <line x1="1005" y1="250" x2="600" y2="300" class="arrow"/>
+    
+    <!-- API Gateway to Services -->
+    <line x1="500" y1="330" x2="140" y2="380" class="arrow"/>
+    <line x1="500" y1="330" x2="280" y2="380" class="arrow"/>
+    <line x1="500" y1="330" x2="420" y2="380" class="arrow"/>
+    <line x1="700" y1="330" x2="660" y2="380" class="arrow"/>
+    <line x1="700" y1="330" x2="800" y2="380" class="arrow"/>
+    <line x1="700" y1="330" x2="940" y2="380" class="arrow"/>
+    <line x1="700" y1="330" x2="1080" y2="380" class="arrow"/>
+    
+    <!-- Services to Databases -->
+    <line x1="140" y1="460" x2="155" y2="520" class="arrow"/>
+    <line x1="280" y1="460" x2="325" y2="520" class="arrow"/>
+    <line x1="420" y1="460" x2="495" y2="520" class="arrow"/>
+    <line x1="660" y1="460" x2="665" y2="520" class="arrow"/>
+    <line x1="800" y1="460" x2="665" y2="520" class="arrow"/>
+    <line x1="940" y1="460" x2="495" y2="520" class="arrow"/>
+    <line x1="1080" y1="460" x2="835" y2="520" class="arrow"/>
+    
+    <!-- Cross-service communication -->
+    <line x1="200" y1="420" x2="600" y2="420" class="arrow"/>
+    <line x1="340" y1="420" x2="600" y2="420" class="arrow"/>
+    <line x1="480" y1="420" x2="600" y2="420" class="arrow"/>
+  </g>
+  
+  <!-- Legend -->
+  <g>
+    <rect x="50" y="850" width="1100" height="40" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" rx="4"/>
+    <text x="600" y="870" text-anchor="middle" class="subtitle">Легенда: Пользователи | Frontend | API Gateway | Сервисы | Базы данных | Потоки данных</text>
+  </g>
+</svg> 
