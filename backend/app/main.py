@@ -1349,7 +1349,7 @@ async def index_wordpress_site(
         
         # Обновляем статистику домена
         domain_obj.total_posts = len(saved_posts)
-        domain_obj.last_analysis_at = datetime.now(timezone.utc)
+        domain_obj.last_analysis_at = datetime.now().replace(tzinfo=None)
         await db.commit()
         
         return {
@@ -1415,7 +1415,7 @@ async def reindex_wordpress_site(
         
         # Обновляем статистику домена
         domain_obj.total_posts = len(saved_posts)
-        domain_obj.last_analysis_at = datetime.now(timezone.utc)
+        domain_obj.last_analysis_at = datetime.now().replace(tzinfo=None)
         await db.commit()
         
         return {
@@ -1479,7 +1479,7 @@ async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]
                     link = wp_post.get('link', '')
                     
                     # Парсим дату
-                    date = datetime.now(timezone.utc)
+                    date = datetime.now().replace(tzinfo=None)
                     date_str = wp_post.get('date', '')
                     if date_str:
                         try:
@@ -1536,7 +1536,7 @@ async def get_seo_recommendations(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Получение SEO рекомендаций на основе индексированных данных."""
+    """Получение SEO рекомендаций на основе анализа постов с использованием LLM Router."""
     try:
         domain = request_data.domain.strip().lower()
         if not domain.startswith(('http://', 'https://')):
@@ -1560,7 +1560,7 @@ async def get_seo_recommendations(
         if not posts:
             raise HTTPException(status_code=404, detail="Статьи не найдены. Сначала выполните индексацию.")
         
-        # Анализируем контент и генерируем рекомендации
+        # Генерируем SEO рекомендации
         recommendations = await generate_seo_recommendations(posts, domain, request_data.client_id)
         
         # Сохраняем анализ в историю
@@ -1602,12 +1602,33 @@ async def get_seo_recommendations(
         raise HTTPException(status_code=500, detail=f"Ошибка генерации рекомендаций: {str(e)}")
 
 async def generate_seo_recommendations(posts: List[WordPressPost], domain: str, client_id: str = None) -> List[dict]:
-    """Генерация SEO рекомендаций на основе анализа постов."""
+    """Генерация SEO рекомендаций на основе анализа постов с использованием LLM Router."""
     recommendations = []
     
     try:
         if client_id:
             await websocket_manager.send_ai_thinking(client_id, "Анализирую контент для SEO рекомендаций...", "analyzing", "🔍")
+        
+        # Подготавливаем данные для LLM анализа
+        posts_data = []
+        for post in posts:
+            posts_data.append({
+                'title': post.title,
+                'content': post.content,
+                'excerpt': post.excerpt,
+                'link': post.link,
+                'published_at': post.published_at.isoformat() if post.published_at else None,
+                'content_quality_score': post.content_quality_score,
+                'semantic_richness': post.semantic_richness
+            })
+        
+        # Анализ через LLM Router
+        llm_analysis = await analyze_content_with_llm(posts_data, domain, client_id)
+        recommendations.extend(llm_analysis)
+        
+        # Классический анализ (как fallback)
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, "Выполняю дополнительный анализ...", "analyzing", "📊")
         
         # Анализ внутренних ссылок
         internal_linking_recs = await analyze_internal_linking(posts, client_id)
@@ -1635,6 +1656,138 @@ async def generate_seo_recommendations(posts: List[WordPressPost], domain: str, 
         if client_id:
             await websocket_manager.send_error(client_id, "Ошибка генерации рекомендаций", str(e))
         raise
+
+async def analyze_content_with_llm(posts_data: List[dict], domain: str, client_id: str = None) -> List[dict]:
+    """Анализ контента с использованием LLM Router."""
+    try:
+        from .llm_router import llm_router, LLMServiceType, LLMRequest
+        
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, "Запускаю AI-анализ контента...", "analyzing", "🧠")
+        
+        # Подготавливаем контекст для LLM
+        context = {
+            "domain": domain,
+            "total_posts": len(posts_data),
+            "posts_summary": [
+                {
+                    "title": post['title'],
+                    "content_length": len(post['content']),
+                    "quality_score": post.get('content_quality_score', 0),
+                    "semantic_richness": post.get('semantic_richness', 0)
+                }
+                for post in posts_data[:10]  # Берем первые 10 постов для анализа
+            ],
+            "content_samples": [
+                {
+                    "title": post['title'],
+                    "excerpt": post['excerpt'][:200] if post['excerpt'] else post['content'][:200]
+                }
+                for post in posts_data[:5]  # Берем первые 5 постов для детального анализа
+            ]
+        }
+        
+        # Формируем промпт для SEO анализа
+        prompt = f"""
+        Проанализируй контент сайта {domain} и предоставь детальные SEO рекомендации.
+        
+        Данные для анализа:
+        - Всего статей: {len(posts_data)}
+        - Домены статей: {[post['title'] for post in posts_data[:5]]}
+        
+        Предоставь рекомендации в следующем формате JSON:
+        {{
+            "recommendations": [
+                {{
+                    "type": "content_optimization|technical_seo|semantic_optimization|user_experience",
+                    "priority": "high|medium|low",
+                    "title": "Краткий заголовок рекомендации",
+                    "description": "Подробное описание проблемы и решения",
+                    "impact_score": 0.0-1.0,
+                    "implementation_difficulty": "easy|medium|hard",
+                    "estimated_impact": "Описание ожидаемого эффекта",
+                    "specific_actions": ["Действие 1", "Действие 2", "Действие 3"]
+                }}
+            ]
+        }}
+        
+        Фокус на:
+        1. Качество и релевантность контента
+        2. Семантическую оптимизацию
+        3. Внутреннюю перелинковку
+        4. Технические аспекты SEO
+        5. Пользовательский опыт
+        """
+        
+        # Отправляем запрос в LLM Router
+        request = LLMRequest(
+            service_type=LLMServiceType.SEO_RECOMMENDATIONS,
+            prompt=prompt,
+            context=context,
+            priority="high",
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, "Обрабатываю запрос в LLM Router...", "processing", "⚡")
+        
+        response = await llm_router.process_request(request)
+        
+        if response.error:
+            logger.error(f"Ошибка LLM Router: {response.error}")
+            return []
+        
+        if client_id:
+            await websocket_manager.send_ai_thinking(client_id, "Анализирую AI-рекомендации...", "analyzing", "🔍")
+        
+        # Парсим ответ от LLM
+        try:
+            import json
+            import re
+            
+            # Ищем JSON в ответе
+            json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+            if json_match:
+                llm_result = json.loads(json_match.group())
+                recommendations = llm_result.get('recommendations', [])
+                
+                # Добавляем метаданные
+                for rec in recommendations:
+                    rec['source'] = 'llm_router'
+                    rec['model_used'] = response.model_used
+                    rec['processing_time'] = response.response_time
+                
+                return recommendations
+            else:
+                # Если JSON не найден, создаем общую рекомендацию
+                return [{
+                    "type": "ai_analysis",
+                    "priority": "medium",
+                    "title": "AI-анализ контента",
+                    "description": "AI проанализировал контент и предоставил рекомендации",
+                    "source": "llm_router",
+                    "model_used": response.model_used,
+                    "processing_time": response.response_time,
+                    "ai_insights": response.content[:500] + "..." if len(response.content) > 500 else response.content
+                }]
+                
+        except json.JSONDecodeError as e:
+            logger.warning(f"Ошибка парсинга JSON от LLM: {e}")
+            return [{
+                "type": "ai_analysis",
+                "priority": "medium",
+                "title": "AI-анализ контента",
+                "description": "AI проанализировал контент",
+                "source": "llm_router",
+                "model_used": response.model_used,
+                "processing_time": response.response_time,
+                "ai_insights": response.content[:500] + "..." if len(response.content) > 500 else response.content
+            }]
+        
+    except Exception as e:
+        logger.error(f"Ошибка при AI-анализе контента: {e}")
+        return []
 
 async def analyze_internal_linking(posts: List[WordPressPost], client_id: str = None) -> List[dict]:
     """Анализ внутренних ссылок."""

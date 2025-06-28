@@ -14,8 +14,8 @@ class Base(DeclarativeBase):
     pass
 
 def utc_now():
-    """Возвращает текущее время в UTC с timezone."""
-    return datetime.now(timezone.utc)
+    """Возвращает текущее время в UTC без timezone для совместимости с PostgreSQL."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class User(Base):
     """Модель пользователя для аутентификации."""
