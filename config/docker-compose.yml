@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ../backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -34,8 +34,8 @@ services:
 
   docs:
     build:
-      context: .
-      dockerfile: docs/Dockerfile
+      context: ../docs
+      dockerfile: Dockerfile
     ports:
       - "8001:8001"
     environment:
@@ -111,8 +111,8 @@ services:
 
   testing:
     build:
-      context: .
-      dockerfile: testing/Dockerfile
+      context: ../testing
+      dockerfile: Dockerfile
     ports:
       - "8003:8003"
     environment:
@@ -154,11 +154,10 @@ services:
       - redis
       - db
       - prometheus
-      - jaeger
 
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
     ports:
       - "3000:80"
@@ -351,14 +350,21 @@ services:
       - '--web.enable-lifecycle'
     restart: unless-stopped
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"
-      - "6831:6831/udp"
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    restart: unless-stopped
+#  jaeger:
+#    image: jaegertracing/all-in-one:1.41
+#    ports:
+#      - "6831:6831/udp"
+#      - "16686:16686"
+#    environment:
+#      - COLLECTOR_ZIPKIN_HOST_PORT=9411
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.347'
+#          memory: 433M
+#        reservations:
+#          cpus: '0.173'
+#          memory: 216M
 
 volumes:
   redis_data:

@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Копируем только requirements для лучшего использования кеша
-COPY backend/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 
 # Создаем виртуальное окружение и устанавливаем зависимости
 RUN python -m venv /opt/venv
@@ -65,7 +65,7 @@ RUN chown -R appuser:appuser /app && \
     chown -R appuser:appuser /home/appuser
 
 # Копируем код приложения
-COPY --chown=appuser:appuser backend/app ./app
+COPY --chown=appuser:appuser app ./app
 RUN ls -l /app/app
 
 # Переключаемся на непривилегированного пользователя

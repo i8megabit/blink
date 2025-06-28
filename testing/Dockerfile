@@ -13,7 +13,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Копирование и установка зависимостей
-COPY relink/testing/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -37,7 +37,7 @@ RUN groupadd -r testing && useradd -r -g testing testing
 WORKDIR /app
 
 # Копирование кода приложения
-COPY --chown=testing:testing testing/ .
+COPY --chown=testing:testing . .
 
 # Установка прав доступа
 RUN chown -R testing:testing /app

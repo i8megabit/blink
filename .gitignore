@@ -84,6 +84,9 @@ log/
 *.sqlite
 *.sqlite3
 postgres_data/
+data/relink_db/
+data/ollama_models/
+data/chroma_db/
 
 # 🐍 Ollama Models (большие файлы)
 ollama_models/
@@ -97,6 +100,7 @@ chromadb/
 
 # 🐍 reLinkDB
 relink/data/
+relink/data/r
 
 # 🐍 Cursor Rules
 .cursor/
