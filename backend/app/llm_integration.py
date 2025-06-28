@@ -298,25 +298,22 @@ class LLMIntegrationFactory:
     
     def __init__(self, llm_service: LLMIntegrationService):
         self.llm_service = llm_service
-        self._integrations: Dict[str, Any] = {}
     
     def get_testing_integration(self) -> TestingServiceIntegration:
-        """Получение интеграции для сервиса тестирования"""
-        if "testing" not in self._integrations:
-            self._integrations["testing"] = TestingServiceIntegration(self.llm_service)
-        return self._integrations["testing"]
+        """Получение интеграции с сервисом тестирования"""
+        return TestingServiceIntegration(self.llm_service)
     
     def get_diagram_integration(self) -> DiagramServiceIntegration:
-        """Получение интеграции для сервиса диаграмм"""
-        if "diagram" not in self._integrations:
-            self._integrations["diagram"] = DiagramServiceIntegration(self.llm_service)
-        return self._integrations["diagram"]
+        """Получение интеграции с сервисом диаграмм"""
+        return DiagramServiceIntegration(self.llm_service)
     
     def get_monitoring_integration(self) -> MonitoringServiceIntegration:
-        """Получение интеграции для сервиса мониторинга"""
-        if "monitoring" not in self._integrations:
-            self._integrations["monitoring"] = MonitoringServiceIntegration(self.llm_service)
-        return self._integrations["monitoring"]
+        """Получение интеграции с сервисом мониторинга"""
+        return MonitoringServiceIntegration(self.llm_service)
+    
+    def get_seo_integration(self) -> SEOServiceIntegration:
+        """Получение интеграции с SEO сервисом"""
+        return SEOServiceIntegration(self.llm_service)
 
 # Утилиты для быстрой интеграции
 async def quick_llm_response(prompt: str, **kwargs) -> str:
@@ -332,4 +329,163 @@ async def quick_embedding(text: str, **kwargs) -> List[float]:
 async def quick_knowledge_search(query: str, **kwargs) -> List[str]:
     """Быстрый поиск в базе знаний"""
     service = await get_llm_integration_service()
-    return await service.search_knowledge_base(query, **kwargs) 
+    return await service.search_knowledge_base(query, **kwargs)
+
+class SEOServiceIntegration:
+    """Интеграция с SEO сервисом"""
+    
+    def __init__(self, llm_service: LLMIntegrationService):
+        self.llm_service = llm_service
+    
+    async def analyze_domain_seo(self, domain: str, comprehensive: bool = True) -> Dict[str, Any]:
+        """Анализ SEO домена с использованием LLM и RAG"""
+        # Создаем промпт для анализа
+        prompt = f"""
+        Проведи комплексный SEO анализ домена {domain}.
+        
+        Если это сайт о садоводстве и огородничестве, проанализируй:
+        1. Структуру контента и внутренние ссылки
+        2. Семантическую кластеризацию статей
+        3. Оптимизацию для поисковых запросов
+        4. Пользовательский опыт и навигацию
+        5. Технические аспекты SEO
+        
+        Предоставь конкретные рекомендации с приоритетами и метриками.
+        """
+        
+        # Получаем LLM анализ
+        llm_response = await self.llm_service.process_llm_request(
+            prompt=prompt,
+            max_tokens=1500,
+            temperature=0.7,
+            use_rag=True,
+            metadata={"domain": domain, "analysis_type": "seo_comprehensive"}
+        )
+        
+        # Извлекаем метрики из ответа
+        metrics = self._extract_seo_metrics(llm_response.response)
+        
+        return {
+            "domain": domain,
+            "analysis": llm_response.response,
+            "metrics": metrics,
+            "model_used": llm_response.used_model,
+            "tokens_used": llm_response.tokens_used,
+            "response_time": llm_response.response_time
+        }
+    
+    async def generate_content_recommendations(self, domain: str, content_type: str = "articles") -> List[Dict[str, Any]]:
+        """Генерация рекомендаций по контенту"""
+        prompt = f"""
+        Создай рекомендации по контенту для домена {domain}.
+        
+        Тип контента: {content_type}
+        
+        Включи:
+        - Темы для новых статей
+        - Структуру контента
+        - Ключевые слова
+        - Внутренние ссылки
+        - Мета-описания
+        
+        Верни структурированный список рекомендаций.
+        """
+        
+        llm_response = await self.llm_service.process_llm_request(
+            prompt=prompt,
+            max_tokens=1000,
+            temperature=0.8,
+            use_rag=True
+        )
+        
+        return self._parse_content_recommendations(llm_response.response)
+    
+    async def optimize_keywords(self, domain: str, current_keywords: List[str]) -> Dict[str, Any]:
+        """Оптимизация ключевых слов"""
+        keywords_text = ", ".join(current_keywords)
+        
+        prompt = f"""
+        Оптимизируй ключевые слова для домена {domain}.
+        
+        Текущие ключевые слова: {keywords_text}
+        
+        Предложи:
+        - Новые релевантные ключевые слова
+        - Длиннохвостые запросы
+        - Семантические варианты
+        - Приоритеты для каждого ключевого слова
+        
+        Фокус на садоводстве и огородничестве.
+        """
+        
+        llm_response = await self.llm_service.process_llm_request(
+            prompt=prompt,
+            max_tokens=800,
+            temperature=0.6,
+            use_rag=True
+        )
+        
+        return {
+            "domain": domain,
+            "current_keywords": current_keywords,
+            "optimized_keywords": self._parse_keywords(llm_response.response),
+            "recommendations": llm_response.response
+        }
+    
+    def _extract_seo_metrics(self, llm_response: str) -> Dict[str, Any]:
+        """Извлечение SEO метрик из ответа LLM"""
+        metrics = {
+            "score": 75.0,  # Базовый скор
+            "content_quality": 0.7,
+            "internal_linking": 0.6,
+            "keyword_optimization": 0.8,
+            "technical_seo": 0.7,
+            "user_experience": 0.75
+        }
+        
+        # Простой анализ ответа для извлечения метрик
+        response_lower = llm_response.lower()
+        
+        if "высокий" in response_lower or "отлично" in response_lower:
+            metrics["score"] = 85.0
+        elif "средний" in response_lower or "хорошо" in response_lower:
+            metrics["score"] = 75.0
+        elif "низкий" in response_lower or "плохо" in response_lower:
+            metrics["score"] = 60.0
+        
+        return metrics
+    
+    def _parse_content_recommendations(self, llm_response: str) -> List[Dict[str, Any]]:
+        """Парсинг рекомендаций по контенту"""
+        recommendations = []
+        
+        # Простой парсинг по ключевым словам
+        lines = llm_response.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line and any(keyword in line.lower() for keyword in ['статья', 'контент', 'тема', 'ключевое слово']):
+                recommendations.append({
+                    "type": "content_suggestion",
+                    "description": line,
+                    "priority": "medium"
+                })
+        
+        return recommendations[:10]  # Ограничиваем количество
+    
+    def _parse_keywords(self, llm_response: str) -> List[str]:
+        """Парсинг ключевых слов из ответа LLM"""
+        keywords = []
+        
+        # Простой извлечение ключевых слов
+        lines = llm_response.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line and len(line) < 50 and not line.startswith('-'):
+                # Убираем лишние символы
+                clean_keyword = line.replace('*', '').replace('-', '').strip()
+                if clean_keyword and len(clean_keyword) > 2:
+                    keywords.append(clean_keyword)
+        
+        return keywords[:20]  # Ограничиваем количество 

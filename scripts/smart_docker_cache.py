@@ -317,6 +317,8 @@ class SmartDockerCache:
 
 def parse_docker_compose(compose_file: str) -> List[BuildContext]:
     """Парсинг docker-compose.yml для извлечения контекстов сборки"""
+    compose_dir = Path(compose_file).parent
+    
     with open(compose_file, 'r') as f:
         compose_data = yaml.safe_load(f)
     
@@ -329,6 +331,11 @@ def parse_docker_compose(compose_file: str) -> List[BuildContext]:
             if isinstance(build_config, dict):
                 context_path = build_config.get('context', '.')
                 dockerfile = build_config.get('dockerfile', 'Dockerfile')
+                
+                # Преобразуем относительные пути в абсолютные
+                if not Path(context_path).is_absolute():
+                    context_path = str(compose_dir / context_path)
+                
                 dockerfile_path = os.path.join(context_path, dockerfile)
                 target = build_config.get('target')
                 
