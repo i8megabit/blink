@@ -103,7 +103,7 @@ class TestCentralizedLLMArchitecture:
         response = LLMResponse(
             request_id="test-1",
             response="Тестовый ответ",
-            model_used="qwen2.5:7b",
+            model_used="qwen2.5:7b-instruct-turbo",
             tokens_used=10,
             response_time=1.0,
             rag_enhanced=False,
@@ -233,7 +233,7 @@ class TestPerformance:
         response = LLMResponse(
             request_id="perf-test",
             response="Тест производительности",
-            model_used="qwen2.5:7b",
+            model_used="qwen2.5:7b-instruct-turbo",
             tokens_used=5,
             response_time=0.1,
             rag_enhanced=False,

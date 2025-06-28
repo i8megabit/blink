@@ -196,7 +196,7 @@ class TestMonitoringDecorators:
     @pytest.mark.asyncio
     async def test_monitor_ollama_request_success(self):
         """Тест декоратора мониторинга Ollama - успешный случай"""
-        @monitor_ollama_request("qwen2.5:7b", "generate")
+        @monitor_ollama_request("qwen2.5:7b-instruct-turbo", "generate")
         async def test_ollama_request():
             return "generated_text"
         

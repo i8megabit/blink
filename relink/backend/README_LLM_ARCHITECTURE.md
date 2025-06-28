@@ -23,7 +23,7 @@
                                            ↓
                                     ConcurrentOllamaManager (семафор=2)
                                            ↓
-                                    Ollama (qwen2.5:7b)
+                                    Ollama (qwen2.5:7b-instruct-turbo)
                                            ↓
                                     DistributedRAGCache
                                            ↓
@@ -274,7 +274,7 @@ async def troubleshoot_ollama():
         print(f"   - {health['ollama_status']['error']}")
         print("🔧 Решения:")
         print("   1. Проверьте, что Ollama запущен")
-        print("   2. Проверьте модель qwen2.5:7b")
+        print("   2. Проверьте модель qwen2.5:7b-instruct-turbo")
         print("   3. Проверьте порт 11434")
 ```
 
@@ -351,7 +351,7 @@ class LLMIntegrationService:
 class LLMRequest:
     id: str
     prompt: str
-    model_name: str = "qwen2.5:7b"
+    model_name: str = "qwen2.5:7b-instruct-turbo"
     priority: str = "normal"
     max_tokens: int = 100
     temperature: float = 0.7

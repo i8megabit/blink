@@ -43,7 +43,7 @@ class BenchmarkSettings(BaseSettings):
     ollama_url: str = Field(default="http://localhost:11434", env="OLLAMA_URL")
     ollama_timeout: int = Field(default=120, env="OLLAMA_TIMEOUT")
     ollama_models: List[str] = Field(
-        default=["llama2", "mistral", "codellama", "neural-chat"],
+        default=["qwen2.5:7b-instruct-turbo", "llama2", "mistral", "codellama", "neural-chat"],
         env="OLLAMA_MODELS"
     )
     
