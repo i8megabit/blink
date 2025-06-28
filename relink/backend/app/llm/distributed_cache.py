@@ -95,7 +95,7 @@ class DistributedCache:
             response_data = {
                 "request_id": response.request_id,
                 "response": response.response,
-                "model_used": response.model_used,
+                "used_model": response.used_model,
                 "tokens_used": response.tokens_used,
                 "response_time": response.response_time,
                 "rag_enhanced": response.rag_enhanced,
@@ -148,7 +148,7 @@ class DistributedCache:
                 response = LLMResponse(
                     request_id=response_data["request_id"],
                     response=response_data["response"],
-                    model_used=response_data["model_used"],
+                    used_model=response_data["used_model"],
                     tokens_used=response_data["tokens_used"],
                     response_time=response_data["response_time"],
                     rag_enhanced=response_data["rag_enhanced"],

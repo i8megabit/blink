@@ -458,7 +458,7 @@ class LLMRequest:
     service_type: LLMServiceType
     prompt: str
     context: Optional[Dict[str, Any]] = None
-    model: str = "qwen2.5:7b"  # Оптимизированная модель для Apple Silicon
+    llm_model: str = "qwen2.5:7b"  # Оптимизированная модель для Apple Silicon
     temperature: float = 0.7
     max_tokens: int = 2048
     use_rag: bool = True
@@ -470,7 +470,7 @@ class LLMResponse:
     """Структура LLM-ответа"""
     content: str
     service_type: LLMServiceType
-    model_used: str
+    used_model: str
     tokens_used: int
     response_time: float
     cached: bool = False
@@ -531,7 +531,7 @@ class LLMRouter:
         key_parts = [
             request.service_type.value,
             request.prompt,
-            request.model,
+            request.llm_model,
             str(request.temperature),
             str(request.max_tokens),
             str(request.use_rag)
@@ -557,7 +557,7 @@ class LLMRouter:
             response_data = {
                 "content": response.content,
                 "service_type": response.service_type.value,
-                "model_used": response.model_used,
+                "used_model": response.used_model,
                 "tokens_used": response.tokens_used,
                 "response_time": response.response_time,
                 "cached": True,
@@ -647,7 +647,7 @@ class LLMRouter:
             # Отправляем запрос через централизованную архитектуру
             response = await self.llm_service.process_llm_request(
                 prompt=final_prompt,
-                model_name=request.model,
+                llm_model=request.llm_model,
                 priority=request.priority,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
@@ -671,7 +671,7 @@ class LLMRouter:
             llm_response = LLMResponse(
                 content=response.response,
                 service_type=request.service_type,
-                model_used=response.model_used,
+                used_model=response.model_used,
                 tokens_used=response.tokens_used,
                 response_time=response_time,
                 cached=False,
@@ -696,7 +696,7 @@ class LLMRouter:
             return LLMResponse(
                 content="",
                 service_type=request.service_type,
-                model_used=request.model,
+                used_model=request.llm_model,
                 tokens_used=0,
                 response_time=response_time,
                 error=str(e)

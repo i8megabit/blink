@@ -305,7 +305,7 @@ class BenchmarkRequest(BaseModel):
 
 class ModelConfigRequest(BaseModel):
     """Запрос для обновления конфигурации модели."""
-    model_name: str
+    llm_model: str
     display_name: Optional[str] = None
     description: Optional[str] = None
     default_parameters: Optional[dict] = None
@@ -629,7 +629,7 @@ async def get_optimization_report():
                 "optimization_effectiveness": "excellent" if report["performance_history"]["recent_avg_response_time"] < 2.0 else "good"
             },
             "llm_insights": {
-                "model_used": report["optimized_config"]["model"],
+                "used_model": report["optimized_config"]["model"],
                 "temperature_optimized": report["optimized_config"]["temperature"],
                 "context_length_optimized": report["optimized_config"]["context_length"],
                 "batch_size_optimized": report["optimized_config"]["batch_size"]
@@ -688,7 +688,7 @@ async def trigger_optimization():
         return {
             "message": "Оптимизация успешно запущена",
             "new_config": {
-                "model": new_config.model,
+                "used_model": new_config.model,
                 "num_gpu": new_config.num_gpu,
                 "num_thread": new_config.num_thread,
                 "batch_size": new_config.batch_size,
@@ -1112,7 +1112,7 @@ class DiagramGenerationResponseModel(BaseModel):
     svg_content: str
     quality_score: float
     generation_time: float
-    model_used: str
+    used_model: str
     confidence_score: float
     validation_result: Dict[str, Any]
 
@@ -1145,7 +1145,7 @@ async def generate_diagram(
             svg_content=result.svg_content,
             quality_score=result.quality_score,
             generation_time=result.generation_time,
-            model_used=result.model_used,
+            used_model=result.used_model,
             confidence_score=result.confidence_score,
             validation_result=result.validation_result
         )

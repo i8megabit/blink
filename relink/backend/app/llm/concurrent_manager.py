@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class OllamaConfig:
     """Конфигурация Ollama для Apple M4"""
     base_url: str = "http://localhost:11434"
-    model_name: str = "qwen2.5:7b"
+    llm_model: str = "qwen2.5:7b"
     max_concurrent_requests: int = 2  # Apple M4 оптимизация
     request_timeout: float = 300.0  # 5 минут
     keep_alive: str = "2h"  # Оптимизация для Apple Silicon
@@ -146,7 +146,7 @@ class ConcurrentOllamaManager:
                 response = LLMResponse(
                     request_id=request.id,
                     response=response_text,
-                    model_used=request.model_name,
+                    used_model=request.llm_model,
                     tokens_used=len(response_text.split()),  # Приблизительный подсчет
                     response_time=response_time,
                     rag_enhanced=False,
@@ -171,17 +171,17 @@ class ConcurrentOllamaManager:
     async def generate_response(
         self, 
         prompt: str, 
-        model_name: str = None, 
+        llm_model: str = None, 
         max_tokens: int = 100, 
         temperature: float = 0.7
     ) -> str:
         """Генерация ответа от Ollama"""
-        model_name = model_name or self.config.model_name
+        llm_model = llm_model or self.config.llm_model
         
         request = LLMRequest(
             id=str(uuid.uuid4()),
             prompt=prompt,
-            model_name=model_name,
+            llm_model=llm_model,
             max_tokens=max_tokens,
             temperature=temperature
         )
@@ -189,10 +189,10 @@ class ConcurrentOllamaManager:
         response = await self.process_request(request)
         return response.response
     
-    async def get_embedding(self, text: str, model_name: str = "qwen2.5:7b") -> List[float]:
+    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b") -> List[float]:
         """Получение эмбеддинга для текста"""
         # Проверяем кэш эмбеддингов
-        cache_key = f"{model_name}:{hash(text)}"
+        cache_key = f"{llm_model}:{hash(text)}"
         if cache_key in self.embedding_cache:
             return self.embedding_cache[cache_key]
         
@@ -204,7 +204,7 @@ class ConcurrentOllamaManager:
                 # Вызываем API эмбеддингов Ollama
                 url = f"{self.config.base_url}/api/embeddings"
                 payload = {
-                    "model": model_name,
+                    "model": llm_model,
                     "prompt": text
                 }
                 
@@ -255,7 +255,7 @@ class ConcurrentOllamaManager:
         
         # Формируем payload с оптимизациями для Apple M4
         payload = {
-            "model": request.model_name,
+            "model": request.llm_model,
             "prompt": request.prompt,
             "stream": False,
             "options": {
@@ -286,7 +286,7 @@ class ConcurrentOllamaManager:
         
         key_parts = [
             request.prompt,
-            request.model_name,
+            request.llm_model,
             str(request.max_tokens),
             str(request.temperature)
         ]

@@ -65,7 +65,7 @@ class LLMIntegrationService:
     async def process_llm_request(
         self,
         prompt: str,
-        model_name: str = "qwen2.5:7b",
+        llm_model: str = "qwen2.5:7b",
         priority: str = "normal",
         max_tokens: int = 100,
         temperature: float = 0.7,
@@ -81,7 +81,7 @@ class LLMIntegrationService:
         request = LLMRequest(
             id=str(uuid.uuid4()),
             prompt=prompt,
-            model_name=model_name,
+            llm_model=llm_model,
             priority=priority,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -104,25 +104,25 @@ class LLMIntegrationService:
     async def generate_response(
         self,
         prompt: str,
-        model_name: str = "qwen2.5:7b",
+        llm_model: str = "qwen2.5:7b",
         max_tokens: int = 100,
         temperature: float = 0.7
     ) -> str:
         """Простая генерация ответа"""
         response = await self.process_llm_request(
             prompt=prompt,
-            model_name=model_name,
+            llm_model=llm_model,
             max_tokens=max_tokens,
             temperature=temperature
         )
         return response.response
     
-    async def get_embedding(self, text: str, model_name: str = "qwen2.5:7b") -> List[float]:
+    async def get_embedding(self, text: str, llm_model: str = "qwen2.5:7b") -> List[float]:
         """Получение эмбеддинга для текста"""
         if not self._initialized:
             raise RuntimeError("LLMIntegrationService не инициализирован")
         
-        return await self.architecture.concurrent_manager.get_embedding(text, model_name)
+        return await self.architecture.concurrent_manager.get_embedding(text, llm_model)
     
     async def search_knowledge_base(self, query: str, limit: int = 5) -> List[str]:
         """Поиск в базе знаний"""

@@ -25,7 +25,7 @@ class LLMRequest:
     """Запрос к LLM"""
     id: str
     prompt: str
-    model_name: str = "qwen2.5:7b"
+    llm_model: str = "qwen2.5:7b"
     priority: str = "normal"
     max_tokens: int = 100
     temperature: float = 0.7
@@ -39,7 +39,7 @@ class LLMResponse:
     """Ответ от LLM"""
     request_id: str
     response: str
-    model_used: str
+    used_model: str
     tokens_used: int
     response_time: float
     rag_enhanced: bool
@@ -221,7 +221,7 @@ class CentralizedLLMArchitecture:
                 # Перегенерируем ответ с контекстом
                 enhanced_response = await self.concurrent_manager.generate_response(
                     enhanced_prompt,
-                    request.model_name,
+                    request.llm_model,
                     request.max_tokens,
                     request.temperature
                 )
@@ -259,7 +259,7 @@ class CentralizedLLMArchitecture:
         # Создаем хеш на основе параметров запроса
         key_parts = [
             request.prompt,
-            request.model_name,
+            request.llm_model,
             str(request.max_tokens),
             str(request.temperature),
             str(request.use_rag)

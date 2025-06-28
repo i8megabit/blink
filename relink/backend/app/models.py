@@ -698,7 +698,7 @@ class LLMRequest:
 class LLMResponse:
     content: str
     service_type: LLMServiceType
-    model_used: str
+    used_model: str
     tokens_used: int
     response_time: float
     cached: bool = False

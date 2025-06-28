@@ -41,7 +41,7 @@ class DiagramGenerationResult:
     svg_content: str
     quality_score: float
     generation_time: float
-    model_used: str
+    used_model: str
     confidence_score: float
     validation_result: Dict[str, Any]
 
@@ -103,7 +103,7 @@ class DiagramService:
                 svg_content=svg_content,
                 quality_score=validation_result["quality_score"],
                 generation_time=generation_time,
-                model_used=self.default_model,
+                used_model=self.default_model,
                 confidence_score=validation_result.get("confidence_score", 0.8),
                 validation_result=validation_result
             )
@@ -424,7 +424,7 @@ SVG должен быть оптимизирован для веб-отобра�
                 performance_score=validation_result["performance_score"],
                 validation_errors=validation_result["errors"],
                 optimization_suggestions=validation_result["warnings"],
-                llm_model_used=self.default_model,
+                used_model=self.default_model,
                 confidence_score=validation_result.get("confidence_score", 0.8),
                 components=request.components,
                 relationships=request.relationships,

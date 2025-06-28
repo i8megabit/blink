@@ -483,11 +483,11 @@ class TestingService:
             from .llm_router import llm_router
             
             prompt = test.test_metadata.get("prompt", "Привет, как дела?")
-            model = test.test_metadata.get("model", "qwen2.5:7b")
+            used_model = test.test_metadata.get("model", "qwen2.5:7b")
             
             response = await llm_router.generate_response(
                 prompt=prompt,
-                model_name=model,
+                model_name=used_model,
                 max_tokens=100
             )
             
@@ -499,7 +499,7 @@ class TestingService:
                     "duration": duration,
                     "message": "LLM тест пройден успешно",
                     "response_length": len(response["response"]),
-                    "model_used": model,
+                    "used_model": used_model,
                     "passed": 1,
                     "failed": 0,
                     "total": 1
@@ -509,7 +509,7 @@ class TestingService:
                     "status": "failed",
                     "duration": duration,
                     "error": "LLM не вернул ответ",
-                    "model_used": model,
+                    "used_model": used_model,
                     "passed": 0,
                     "failed": 1,
                     "total": 1
