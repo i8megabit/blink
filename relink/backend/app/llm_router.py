@@ -1,7 +1,7 @@
 """
 🧠 Единый LLM-маршрутизатор для всех микросервисов reLink
 
-Основан на проверенном RAG-подходе, разработанном в сервисе SEO-рекомендаций.
+Обновлен для использования централизованной LLM архитектуры с конкурентным доступом к Ollama.
 Обеспечивает стабильное, конкурентное и масштабируемое взаимодействие с Ollama.
 """
 
@@ -23,10 +23,11 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .database import get_db
-from .models import LLMRequest, LLMResponse, LLMEmbedding
+from .models import LLMRequest as DBLLMRequest, LLMResponse as DBLLMResponse, LLMEmbedding
 from .cache import cache_manager
 from .exceptions import LLMServiceError, OllamaConnectionError
 from .monitoring import rag_monitor
+from .llm_integration import get_llm_integration_service, LLMIntegrationService
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class SystemAnalyzer:
                     "batch_size": 1024,
                     "f16_kv": True,
                     "context_length": 8192,
-                    "semaphore_limit": 8
+                    "semaphore_limit": 2  # Оптимизировано для централизованной архитектуры
                 },
                 "performance_notes": "Apple Silicon M1/M2/M4 показывает лучшую производительность с GPU acceleration и большими batch sizes",
                 "memory_optimization": "Использует Unified Memory Architecture для эффективного распределения ресурсов"
@@ -108,7 +109,7 @@ class SystemAnalyzer:
                     "batch_size": 768,
                     "f16_kv": True,
                     "context_length": 6144,
-                    "semaphore_limit": 6
+                    "semaphore_limit": 2
                 },
                 "performance_notes": "Общие Apple Silicon процессоры хорошо работают с Metal acceleration",
                 "memory_optimization": "Оптимизированное использование GPU memory"
@@ -121,7 +122,7 @@ class SystemAnalyzer:
                     "batch_size": 1024,
                     "f16_kv": True,
                     "context_length": 8192,
-                    "semaphore_limit": 6
+                    "semaphore_limit": 2
                 },
                 "performance_notes": "NVIDIA GPU обеспечивает высокую производительность с CUDA acceleration",
                 "memory_optimization": "Использует GPU memory для KV cache"
@@ -134,7 +135,7 @@ class SystemAnalyzer:
                     "batch_size": 768,
                     "f16_kv": True,
                     "context_length": 6144,
-                    "semaphore_limit": 6
+                    "semaphore_limit": 2
                 },
                 "performance_notes": "AMD GPU работает с ROCm acceleration",
                 "memory_optimization": "Оптимизированное использование VRAM"
@@ -147,7 +148,7 @@ class SystemAnalyzer:
                     "batch_size": 512,
                     "f16_kv": False,
                     "context_length": 8192,
-                    "semaphore_limit": 6
+                    "semaphore_limit": 2
                 },
                 "performance_notes": "CPU-only системы с большим объемом памяти могут использовать большие контексты",
                 "memory_optimization": "Использует RAM для всех операций"
@@ -160,7 +161,7 @@ class SystemAnalyzer:
                     "batch_size": 256,
                     "f16_kv": False,
                     "context_length": 2048,
-                    "semaphore_limit": 3
+                    "semaphore_limit": 1
                 },
                 "performance_notes": "Системы с ограниченной памятью требуют консервативных настроек",
                 "memory_optimization": "Минимизирует использование памяти"
@@ -199,24 +200,20 @@ class SystemAnalyzer:
         gpu_available = False
         gpu_type = None
         
-        if apple_silicon:
-            gpu_available = True
-            gpu_type = "Apple Silicon GPU"
-        else:
-            try:
-                # Проверка NVIDIA GPU
-                result = subprocess.run(["nvidia-smi"], capture_output=True)
+        try:
+            # Проверка NVIDIA GPU
+            result = subprocess.run(["nvidia-smi"], capture_output=True)
+            if result.returncode == 0:
+                gpu_available = True
+                gpu_type = "nvidia"
+            else:
+                # Проверка AMD GPU
+                result = subprocess.run(["rocm-smi"], capture_output=True)
                 if result.returncode == 0:
                     gpu_available = True
-                    gpu_type = "NVIDIA"
-                else:
-                    # Проверка AMD GPU
-                    result = subprocess.run(["rocm-smi"], capture_output=True)
-                    if result.returncode == 0:
-                        gpu_available = True
-                        gpu_type = "AMD"
-            except:
-                pass
+                    gpu_type = "amd"
+        except:
+            pass
         
         self.specs = SystemSpecs(
             platform=platform_name,
@@ -229,270 +226,198 @@ class SystemAnalyzer:
             m1_m2_m4=m1_m2_m4
         )
         
-        logger.info(f"🔍 System analysis completed: {self.specs}")
+        logger.info(f"Система проанализирована: {self.specs}")
         return self.specs
     
     async def _get_llm_recommendation(self, specs: SystemSpecs, performance_data: List[Dict]) -> Dict[str, Any]:
-        """
-        🧠 Получение рекомендаций от LLM для оптимизации конфигурации
-        
-        Использует RAG с базой знаний и историей производительности
-        """
+        """Получение рекомендации от LLM для оптимизации конфигурации"""
         try:
-            # Формирование контекста для LLM
-            context_parts = [
-                f"Системные характеристики:",
-                f"- Платформа: {specs.platform}",
-                f"- Архитектура: {specs.architecture}",
-                f"- CPU ядер: {specs.cpu_count}",
-                f"- Память: {specs.memory_gb:.1f} GB",
-                f"- GPU доступен: {specs.gpu_available}",
-                f"- Тип GPU: {specs.gpu_type}",
-                f"- Apple Silicon: {specs.apple_silicon}",
-                f"- M1/M2/M4: {specs.m1_m2_m4}"
-            ]
+            llm_service = await get_llm_integration_service()
             
-            if performance_data:
-                context_parts.append("\nИстория производительности:")
-                for perf in performance_data[-3:]:  # Последние 3 записи
-                    context_parts.append(f"- {perf['timestamp']}: {perf['avg_response_time']:.2f}s, {perf['success_rate']:.1%}")
-            
-            context_parts.append("\nБаза знаний о производительности:")
-            for kb in self.knowledge_base:
-                context_parts.append(f"- {kb['system_type']}: {kb['performance_notes']}")
-            
-            context = "\n".join(context_parts)
-            
-            # Промпт для LLM
+            # Формируем промпт для LLM
             prompt = f"""
-            Ты эксперт по оптимизации LLM систем. Проанализируй характеристики системы и историю производительности, чтобы дать рекомендации по оптимальной конфигурации Ollama.
-
-            Контекст:
-            {context}
-
-            Задача: Определи оптимальные параметры для максимальной производительности и стабильности.
-
-            Ответь в формате JSON с параметрами:
+            Проанализируй системные характеристики и историю производительности для оптимизации конфигурации Ollama:
+            
+            Системные характеристики:
+            - Платформа: {specs.platform}
+            - Архитектура: {specs.architecture}
+            - CPU ядер: {specs.cpu_count}
+            - Память: {specs.memory_gb:.1f} GB
+            - GPU доступен: {specs.gpu_available}
+            - GPU тип: {specs.gpu_type}
+            - Apple Silicon: {specs.apple_silicon}
+            - M1/M2/M4: {specs.m1_m2_m4}
+            
+            История производительности (последние 10 записей):
+            {performance_data[-10:] if performance_data else "Нет данных"}
+            
+            Предложи оптимальную конфигурацию для Ollama в формате JSON:
             {{
-                "num_gpu": <0 или 1>,
+                "num_gpu": <количество GPU>,
                 "num_thread": <количество потоков>,
                 "batch_size": <размер батча>,
-                "f16_kv": <true/false>,
+                "f16_kv": <использовать f16 для KV cache>,
                 "context_length": <длина контекста>,
-                "semaphore_limit": <лимит одновременных запросов>,
-                "temperature": <температура для генерации>,
-                "max_tokens": <максимум токенов>,
-                "keep_alive": <время жизни модели>,
-                "request_timeout": <таймаут запроса в секундах>,
-                "cache_ttl": <время жизни кэша в секундах>,
-                "reasoning": "<объяснение выбора параметров>"
+                "semaphore_limit": <лимит семафора>
             }}
+            
+            Учти, что используется централизованная архитектура с конкурентным доступом к одной модели Ollama.
             """
             
-            # Создание временного LLM роутера для получения рекомендаций
-            temp_router = LLMRouter()
-            await temp_router.start()
-            
-            request = LLMRequest(
-                service_type=LLMServiceType.LLM_TUNING,
+            response = await llm_service.generate_response(
                 prompt=prompt,
-                context={"task": "system_optimization"},
-                model="qwen2.5:7b-instruct-turbo",
-                temperature=0.3,  # Низкая температура для консистентности
-                max_tokens=1024,
-                use_rag=False  # Отключаем RAG для этого запроса
+                max_tokens=500,
+                temperature=0.3
             )
             
-            response = await temp_router.process_request(request)
-            await temp_router.stop()
-            
-            # Парсинг JSON ответа
+            # Парсим JSON ответ
             try:
                 import re
-                json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
                 if json_match:
-                    recommendation = json.loads(json_match.group())
-                    logger.info(f"🧠 LLM recommendation: {recommendation['reasoning']}")
-                    return recommendation
-            except Exception as e:
-                logger.warning(f"Failed to parse LLM recommendation: {e}")
+                    return json.loads(json_match.group())
+            except:
+                pass
+            
+            # Возвращаем дефолтную конфигурацию если парсинг не удался
+            return {
+                "num_gpu": 1 if specs.gpu_available else 0,
+                "num_thread": min(specs.cpu_count, 8),
+                "batch_size": 512,
+                "f16_kv": specs.gpu_available,
+                "context_length": 4096,
+                "semaphore_limit": 2
+            }
             
         except Exception as e:
-            logger.error(f"LLM recommendation failed: {e}")
-        
-        # Fallback к базовым настройкам
-        return None
+            logger.error(f"Ошибка получения LLM рекомендации: {e}")
+            # Возвращаем безопасную конфигурацию
+            return {
+                "num_gpu": 1 if specs.gpu_available else 0,
+                "num_thread": min(specs.cpu_count, 4),
+                "batch_size": 256,
+                "f16_kv": specs.gpu_available,
+                "context_length": 2048,
+                "semaphore_limit": 2
+            }
     
     async def _search_knowledge_base(self, specs: SystemSpecs) -> List[Dict[str, Any]]:
-        """Поиск релевантных знаний в базе знаний"""
-        relevant_knowledge = []
+        """Поиск в базе знаний на основе характеристик системы"""
+        relevant_configs = []
         
-        # Определение типа системы
+        # Определяем тип системы
         if specs.apple_silicon and specs.m1_m2_m4:
             system_type = "apple_silicon_m1_m2_m4"
         elif specs.apple_silicon:
             system_type = "apple_silicon_generic"
-        elif specs.gpu_available and specs.gpu_type == "NVIDIA":
+        elif specs.gpu_type == "nvidia":
             system_type = "nvidia_gpu"
-        elif specs.gpu_available and specs.gpu_type == "AMD":
+        elif specs.gpu_type == "amd":
             system_type = "amd_gpu"
         elif specs.memory_gb >= 16:
             system_type = "cpu_only_high_memory"
         else:
             system_type = "cpu_only_low_memory"
         
-        # Поиск соответствующих знаний
-        for kb in self.knowledge_base:
-            if kb["system_type"] == system_type:
-                relevant_knowledge.append(kb)
-                break
+        # Ищем соответствующие конфигурации
+        for config in self.knowledge_base:
+            if config["system_type"] == system_type:
+                relevant_configs.append(config)
         
-        return relevant_knowledge
+        return relevant_configs
     
     async def optimize_config(self) -> OptimizedConfig:
-        """Интеллектуальная оптимизация конфигурации с использованием LLM"""
+        """Оптимизация конфигурации на основе анализа системы"""
         if self.optimized_config:
             return self.optimized_config
         
+        # Анализируем систему
         specs = await self.analyze_system()
         
-        # Базовые настройки
-        config = OptimizedConfig(
-            model="qwen2.5:7b-instruct-turbo",
-            num_gpu=0,
-            num_thread=4,
-            batch_size=512,
-            f16_kv=True,
-            temperature=0.7,
-            max_tokens=2048,
-            context_length=4096,
-            keep_alive="2h",
-            request_timeout=300,
-            semaphore_limit=5,
-            cache_ttl=3600
-        )
+        # Ищем в базе знаний
+        knowledge_configs = await self._search_knowledge_base(specs)
         
-        # Получение рекомендаций от LLM
+        # Получаем рекомендацию от LLM
         llm_recommendation = await self._get_llm_recommendation(specs, self.performance_history)
         
-        if llm_recommendation:
-            # Применение рекомендаций LLM
-            config.num_gpu = llm_recommendation.get("num_gpu", config.num_gpu)
-            config.num_thread = llm_recommendation.get("num_thread", config.num_thread)
-            config.batch_size = llm_recommendation.get("batch_size", config.batch_size)
-            config.f16_kv = llm_recommendation.get("f16_kv", config.f16_kv)
-            config.context_length = llm_recommendation.get("context_length", config.context_length)
-            config.semaphore_limit = llm_recommendation.get("semaphore_limit", config.semaphore_limit)
-            config.temperature = llm_recommendation.get("temperature", config.temperature)
-            config.max_tokens = llm_recommendation.get("max_tokens", config.max_tokens)
-            config.keep_alive = llm_recommendation.get("keep_alive", config.keep_alive)
-            config.request_timeout = llm_recommendation.get("request_timeout", config.request_timeout)
-            config.cache_ttl = llm_recommendation.get("cache_ttl", config.cache_ttl)
-            
-            logger.info(f"🧠 Applied LLM recommendations: {llm_recommendation.get('reasoning', 'No reasoning provided')}")
-        else:
-            # Fallback к правилам на основе знаний
-            relevant_knowledge = await self._search_knowledge_base(specs)
-            
-            if relevant_knowledge:
-                kb_config = relevant_knowledge[0]["optimal_config"]
-                config.num_gpu = kb_config.get("num_gpu", config.num_gpu)
-                config.num_thread = min(kb_config.get("num_thread", config.num_thread), specs.cpu_count)
-                config.batch_size = kb_config.get("batch_size", config.batch_size)
-                config.f16_kv = kb_config.get("f16_kv", config.f16_kv)
-                config.context_length = kb_config.get("context_length", config.context_length)
-                config.semaphore_limit = kb_config.get("semaphore_limit", config.semaphore_limit)
-                
-                logger.info(f"📚 Applied knowledge base config: {relevant_knowledge[0]['system_type']}")
+        # Объединяем рекомендации
+        optimal_config = {
+            "model": "qwen2.5:7b",
+            "num_gpu": llm_recommendation.get("num_gpu", 1 if specs.gpu_available else 0),
+            "num_thread": llm_recommendation.get("num_thread", min(specs.cpu_count, 8)),
+            "batch_size": llm_recommendation.get("batch_size", 512),
+            "f16_kv": llm_recommendation.get("f16_kv", specs.gpu_available),
+            "temperature": 0.7,
+            "max_tokens": 2048,
+            "context_length": llm_recommendation.get("context_length", 4096),
+            "keep_alive": "2h",
+            "request_timeout": 300,
+            "semaphore_limit": llm_recommendation.get("semaphore_limit", 2),
+            "cache_ttl": 3600
+        }
         
-        # Дополнительная оптимизация по памяти
-        if specs.memory_gb >= 32:
-            config.context_length = min(config.context_length * 2, 16384)
-            config.batch_size = min(config.batch_size * 1.5, 2048)
-            config.semaphore_limit = min(config.semaphore_limit + 2, 10)
-            logger.info("💾 High memory optimization applied")
-        elif specs.memory_gb < 8:
-            config.context_length = min(config.context_length // 2, 2048)
-            config.batch_size = min(config.batch_size // 2, 256)
-            config.semaphore_limit = max(config.semaphore_limit - 2, 2)
-            logger.info("💾 Low memory optimization applied")
+        self.optimized_config = OptimizedConfig(**optimal_config)
         
-        self.optimized_config = config
-        logger.info(f"⚙️ Optimized config: {config}")
-        return config
+        logger.info(f"Конфигурация оптимизирована: {self.optimized_config}")
+        return self.optimized_config
     
     async def record_performance(self, response_time: float, success: bool, tokens_used: int):
-        """Запись производительности для адаптивной оптимизации"""
+        """Запись метрик производительности"""
         performance_record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow(),
             "response_time": response_time,
             "success": success,
             "tokens_used": tokens_used,
-            "config_snapshot": {
-                "num_gpu": self.optimized_config.num_gpu if self.optimized_config else 0,
-                "num_thread": self.optimized_config.num_thread if self.optimized_config else 4,
-                "batch_size": self.optimized_config.batch_size if self.optimized_config else 512,
-                "context_length": self.optimized_config.context_length if self.optimized_config else 4096
-            }
+            "system_load": psutil.cpu_percent(),
+            "memory_usage": psutil.virtual_memory().percent
         }
         
         self.performance_history.append(performance_record)
         
-        # Ограничиваем историю последними 100 записями
+        # Ограничиваем размер истории
         if len(self.performance_history) > 100:
             self.performance_history = self.performance_history[-100:]
-        
-        # Анализируем производительность и при необходимости переоптимизируем
-        await self._analyze_and_adapt()
     
     async def _analyze_and_adapt(self):
-        """Анализ производительности и адаптивная оптимизация"""
+        """Анализ производительности и адаптация конфигурации"""
         if len(self.performance_history) < 10:
             return
         
+        # Анализируем последние метрики
         recent_performance = self.performance_history[-10:]
         avg_response_time = sum(p["response_time"] for p in recent_performance) / len(recent_performance)
         success_rate = sum(1 for p in recent_performance if p["success"]) / len(recent_performance)
         
-        # Если производительность ухудшилась, переоптимизируем
-        if avg_response_time > 5.0 or success_rate < 0.8:
-            logger.warning(f"Performance degradation detected: avg_time={avg_response_time:.2f}s, success_rate={success_rate:.1%}")
-            logger.info("🔄 Triggering adaptive reoptimization...")
-            
-            # Сбрасываем оптимизированную конфигурацию для пересчета
-            self.optimized_config = None
-            await self.optimize_config()
+        # Если производительность ухудшилась, пересматриваем конфигурацию
+        if avg_response_time > 10.0 or success_rate < 0.9:
+            logger.warning(f"Производительность ухудшилась: avg_time={avg_response_time:.2f}s, success_rate={success_rate:.2f}")
+            self.optimized_config = None  # Сбрасываем для переоптимизации
     
     async def get_environment_variables(self) -> Dict[str, str]:
         """Получение переменных окружения для Ollama"""
         config = await self.optimize_config()
         
         env_vars = {
-            "OLLAMA_HOST": "0.0.0.0",
-            "OLLAMA_ORIGINS": "*",
+            "OLLAMA_HOST": "0.0.0.0:11434",
+            "OLLAMA_MODELS": "/root/.ollama/models",
             "OLLAMA_KEEP_ALIVE": config.keep_alive,
-            "OLLAMA_CONTEXT_LENGTH": str(config.context_length),
-            "OLLAMA_BATCH_SIZE": str(config.batch_size),
+            "OLLAMA_ORIGINS": "*",
             "OLLAMA_NUM_PARALLEL": str(config.semaphore_limit),
-            "REQUEST_TIMEOUT": str(config.request_timeout)
         }
         
-        # Специальные настройки для Apple Silicon
-        specs = await self.analyze_system()
-        if specs.apple_silicon:
-            env_vars.update({
-                "OLLAMA_METAL": "1",
-                "OLLAMA_FLASH_ATTENTION": "1",
-                "OLLAMA_KV_CACHE_TYPE": "q8_0",
-                "OLLAMA_MEM_FRACTION": "0.9"
-            })
+        # Добавляем специфичные для GPU переменные
+        if config.num_gpu > 0:
+            if platform.system() == "Darwin":
+                env_vars["OLLAMA_GPU_LAYERS"] = str(config.num_gpu)
+            else:
+                env_vars["CUDA_VISIBLE_DEVICES"] = "0"
         
         return env_vars
     
     async def get_optimization_report(self) -> Dict[str, Any]:
         """Получение отчета об оптимизации"""
-        specs = await self.analyze_system()
         config = await self.optimize_config()
+        specs = await self.analyze_system()
         
         return {
             "system_specs": {
@@ -521,14 +446,11 @@ class SystemAnalyzer:
             },
             "performance_history": {
                 "total_records": len(self.performance_history),
-                "recent_avg_response_time": sum(p["response_time"] for p in self.performance_history[-10:]) / min(10, len(self.performance_history)) if self.performance_history else 0,
-                "recent_success_rate": sum(1 for p in self.performance_history[-10:] if p["success"]) / min(10, len(self.performance_history)) if self.performance_history else 0
+                "avg_response_time": sum(p["response_time"] for p in self.performance_history) / len(self.performance_history) if self.performance_history else 0,
+                "success_rate": sum(1 for p in self.performance_history if p["success"]) / len(self.performance_history) if self.performance_history else 1.0
             },
-            "knowledge_base_entries": len(self.knowledge_base)
+            "knowledge_base_size": len(self.knowledge_base)
         }
-
-# Глобальный экземпляр анализатора
-system_analyzer = SystemAnalyzer()
 
 @dataclass
 class LLMRequest:
@@ -536,12 +458,12 @@ class LLMRequest:
     service_type: LLMServiceType
     prompt: str
     context: Optional[Dict[str, Any]] = None
-    model: str = "qwen2.5:7b-instruct-turbo"  # Оптимизированная модель для Apple Silicon
+    model: str = "qwen2.5:7b"  # Оптимизированная модель для Apple Silicon
     temperature: float = 0.7
     max_tokens: int = 2048
     use_rag: bool = True
     cache_ttl: int = 3600  # 1 час
-    priority: int = 1  # 1-10, где 10 - высший приоритет
+    priority: str = "normal"  # critical, high, normal, low, background
 
 @dataclass
 class LLMResponse:
@@ -557,31 +479,19 @@ class LLMResponse:
 
 class LLMRouter:
     """
-    🧠 Единый маршрутизатор LLM с RAG-подходом
+    🚀 Обновленный LLM-маршрутизатор с централизованной архитектурой
     
-    Основан на успешном опыте SEO-рекомендаций:
-    - Конкурентная обработка запросов
-    - RAG с векторной базой знаний
-    - Кэширование и оптимизация
-    - Обработка ошибок и fallback
-    - Автоопределение оптимальной конфигурации
+    Использует централизованную LLM архитектуру для конкурентного доступа к Ollama.
+    Обеспечивает RAG-обогащение, кэширование и мониторинг производительности.
     """
     
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.semaphore: Optional[asyncio.Semaphore] = None
-        self.request_queue = asyncio.Queue()
-        self.processing = False
+        self.system_analyzer = SystemAnalyzer()
+        self.llm_service: Optional[LLMIntegrationService] = None
         self.optimized_config: Optional[OptimizedConfig] = None
-        self.stats = {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "cached_responses": 0,
-            "avg_response_time": 0.0,
-            "system_specs": None,
-            "optimization_applied": False
-        }
+        self._initialized = False
+        
+        logger.info("LLMRouter инициализирован")
     
     async def __aenter__(self):
         """Асинхронный контекстный менеджер"""
@@ -589,173 +499,109 @@ class LLMRouter:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Закрытие соединений"""
+        """Завершение работы"""
         await self.stop()
     
     async def start(self):
-        """Запуск маршрутизатора с автоопределением конфигурации"""
-        if not self.session:
-            # Получение оптимизированной конфигурации
-            self.optimized_config = await system_analyzer.optimize_config()
-            specs = await system_analyzer.analyze_system()
+        """Запуск роутера"""
+        if self._initialized:
+            return
+        
+        try:
+            # Инициализируем LLM сервис
+            self.llm_service = await get_llm_integration_service()
             
-            # Обновление статистики
-            self.stats["system_specs"] = {
-                "platform": specs.platform,
-                "architecture": specs.architecture,
-                "cpu_count": specs.cpu_count,
-                "memory_gb": specs.memory_gb,
-                "gpu_available": specs.gpu_available,
-                "gpu_type": specs.gpu_type,
-                "apple_silicon": specs.apple_silicon,
-                "m1_m2_m4": specs.m1_m2_m4
-            }
-            self.stats["optimization_applied"] = True
+            # Оптимизируем конфигурацию
+            self.optimized_config = await self.system_analyzer.optimize_config()
             
-            # Создание семафора с оптимизированным лимитом
-            self.semaphore = asyncio.Semaphore(self.optimized_config.semaphore_limit)
+            self._initialized = True
+            logger.info("LLMRouter запущен с централизованной архитектурой")
             
-            # Создание сессии с оптимизированным таймаутом
-            timeout = aiohttp.ClientTimeout(total=self.optimized_config.request_timeout)
-            self.session = aiohttp.ClientSession(
-                timeout=timeout,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            logger.info(f"🚀 LLM Router started with optimized config: {self.optimized_config}")
-            logger.info(f"🔍 System specs: {self.stats['system_specs']}")
+        except Exception as e:
+            logger.error(f"Ошибка запуска LLMRouter: {e}")
+            raise
     
     async def stop(self):
-        """Остановка маршрутизатора"""
-        if self.session:
-            await self.session.close()
-            self.session = None
-            logger.info("🛑 LLM Router stopped")
+        """Остановка роутера"""
+        self._initialized = False
+        logger.info("LLMRouter остановлен")
     
     def _generate_cache_key(self, request: LLMRequest) -> str:
-        """Генерация ключа кэша для запроса"""
-        content = f"{request.service_type.value}:{request.prompt}:{request.model}:{request.temperature}"
-        if request.context:
-            content += f":{json.dumps(request.context, sort_keys=True)}"
-        return hashlib.sha256(content.encode()).hexdigest()
+        """Генерация ключа кэша"""
+        key_parts = [
+            request.service_type.value,
+            request.prompt,
+            request.model,
+            str(request.temperature),
+            str(request.max_tokens),
+            str(request.use_rag)
+        ]
+        
+        key_string = "|".join(key_parts)
+        return hashlib.md5(key_string.encode()).hexdigest()
     
     async def _get_cached_response(self, cache_key: str) -> Optional[LLMResponse]:
         """Получение кэшированного ответа"""
         try:
-            cached_data = await cache_manager.get(f"llm:{cache_key}")
+            cached_data = await cache_manager.get(f"llm_response:{cache_key}")
             if cached_data:
-                logger.info(f"📦 Cache hit for {cache_key[:16]}...")
-                return LLMResponse(**cached_data, cached=True)
+                return LLMResponse(**cached_data)
         except Exception as e:
-            logger.warning(f"Cache error: {e}")
+            logger.error(f"Ошибка получения кэша: {e}")
+        
         return None
     
     async def _cache_response(self, cache_key: str, response: LLMResponse, ttl: int):
         """Кэширование ответа"""
         try:
-            cache_data = {
+            response_data = {
                 "content": response.content,
                 "service_type": response.service_type.value,
                 "model_used": response.model_used,
                 "tokens_used": response.tokens_used,
                 "response_time": response.response_time,
+                "cached": True,
+                "error": response.error,
                 "metadata": response.metadata
             }
-            await cache_manager.set(f"llm:{cache_key}", cache_data, ttl)
-            logger.info(f"💾 Cached response for {cache_key[:16]}...")
+            
+            await cache_manager.set(f"llm_response:{cache_key}", response_data, ttl)
+            
         except Exception as e:
-            logger.warning(f"Cache error: {e}")
+            logger.error(f"Ошибка кэширования: {e}")
     
     async def _generate_rag_context(self, request: LLMRequest) -> str:
-        """
-        🔍 Генерация RAG-контекста
-        
-        Основано на успешном подходе SEO-рекомендаций:
-        - Поиск релевантных знаний в векторной БД
-        - Обогащение промпта контекстом
-        - Улучшение качества ответов
-        """
-        if not request.use_rag:
-            return request.prompt
-        
+        """Генерация RAG контекста"""
         try:
-            # Получение эмбеддингов для промпта
-            embedding = await self._get_embedding(request.prompt)
+            if not request.use_rag:
+                return ""
             
-            # Поиск релевантных знаний
-            relevant_knowledge = await self._search_knowledge_base(
-                embedding, 
-                request.service_type,
+            # Получаем эмбеддинг для промпта
+            embedding = await self.llm_service.get_embedding(request.prompt)
+            
+            # Ищем релевантные документы
+            relevant_docs = await self.llm_service.search_knowledge_base(
+                request.prompt, 
                 limit=3
             )
             
-            if relevant_knowledge:
-                context_parts = [request.prompt]
-                context_parts.append("\n\nРелевантная информация:")
-                for knowledge in relevant_knowledge:
-                    context_parts.append(f"- {knowledge['content']}")
-                
-                enhanced_prompt = "\n".join(context_parts)
-                logger.info(f"🧠 RAG enhanced prompt for {request.service_type.value}")
-                return enhanced_prompt
+            if relevant_docs:
+                context = "\n".join(relevant_docs)
+                logger.info(f"RAG контекст сгенерирован для {request.service_type.value}")
+                return context
+            
+            return ""
             
         except Exception as e:
-            logger.warning(f"RAG error: {e}")
-        
-        return request.prompt
+            logger.error(f"Ошибка генерации RAG контекста: {e}")
+            return ""
     
     async def _get_embedding(self, text: str) -> List[float]:
-        """Получение эмбеддинга для текста с кэшированием"""
+        """Получение эмбеддинга для текста"""
         try:
-            # Проверяем кэш эмбеддингов
-            cached_embedding = await cache_manager.get_rag_embedding(text)
-            if cached_embedding:
-                rag_monitor.record_cache_hit("embedding")
-                logger.info(f"🧠 Embedding cache hit for text: {text[:50]}...")
-                return cached_embedding
-            
-            rag_monitor.record_cache_miss("embedding")
-            
-            # Генерируем новый эмбеддинг
-            start_time = time.time()
-            async with self.semaphore:
-                async with self.session.post(
-                    f"{settings.OLLAMA_URL}/api/embeddings",
-                    json={"model": "qwen2.5:7b-instruct-turbo", "prompt": text}
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        embedding = data.get("embedding", [])
-                        
-                        # Кэшируем эмбеддинг
-                        await cache_manager.set_rag_embedding(text, embedding)
-                        
-                        # Записываем метрики
-                        duration = time.time() - start_time
-                        rag_monitor.record_embedding_generation(
-                            model="qwen2.5:7b-instruct-turbo",
-                            duration=duration,
-                            success=True
-                        )
-                        rag_monitor.record_embedding_dimension("qwen2.5:7b-instruct-turbo", len(embedding))
-                        
-                        logger.info(f"🧠 Generated embedding ({len(embedding)}d) in {duration:.3f}s")
-                        return embedding
-                    else:
-                        logger.error(f"Embedding error: {response.status}")
-                        rag_monitor.record_embedding_generation(
-                            model="qwen2.5:7b-instruct-turbo",
-                            duration=time.time() - start_time,
-                            success=False
-                        )
-                        return []
+            return await self.llm_service.get_embedding(text)
         except Exception as e:
-            logger.error(f"Embedding request failed: {e}")
-            rag_monitor.record_embedding_generation(
-                model="qwen2.5:7b-instruct-turbo",
-                duration=time.time() - start_time if 'start_time' in locals() else 0,
-                success=False
-            )
+            logger.error(f"Ошибка получения эмбеддинга: {e}")
             return []
     
     async def _search_knowledge_base(
@@ -764,304 +610,245 @@ class LLMRouter:
         service_type: LLMServiceType,
         limit: int = 3
     ) -> List[Dict[str, Any]]:
-        """Поиск в векторной базе знаний с кэшированием"""
+        """Поиск в базе знаний"""
         try:
-            # Создаем ключ для кэширования результатов поиска
-            search_key = f"{service_type.value}:{hash(tuple(embedding[:10]))}:{limit}"
+            # Используем централизованную архитектуру для поиска
+            query = f"service_type:{service_type.value}"
+            relevant_docs = await self.llm_service.search_knowledge_base(query, limit)
             
-            # Проверяем кэш результатов поиска
-            cached_results = await cache_manager.get_rag_similarity(search_key, limit)
-            if cached_results:
-                rag_monitor.record_cache_hit("similarity_search")
-                logger.info(f"🔍 Similarity search cache hit for {service_type.value}")
-                return cached_results
-            
-            rag_monitor.record_cache_miss("similarity_search")
-            
-            # Выполняем поиск в векторной БД
-            start_time = time.time()
-            # Здесь должна быть интеграция с векторной БД (Chroma, Pinecone, etc.)
-            # Пока возвращаем пустой список
-            results = []
-            
-            # Кэшируем результаты поиска
-            await cache_manager.set_rag_similarity(search_key, results, limit)
-            
-            # Записываем метрики
-            duration = time.time() - start_time
-            rag_monitor.record_similarity_search(
-                vector_db="chromadb",
-                duration=duration,
-                success=True,
-                results_count=len(results)
-            )
-            rag_monitor.record_vector_db_operation("search", True, duration)
-            
-            logger.info(f"🔍 Vector search completed in {duration:.3f}s, found {len(results)} results")
-            return results
+            return [{"content": doc, "relevance": 0.8} for doc in relevant_docs]
             
         except Exception as e:
-            logger.error(f"Knowledge base search failed: {e}")
-            rag_monitor.record_similarity_search(
-                vector_db="chromadb",
-                duration=time.time() - start_time if 'start_time' in locals() else 0,
-                success=False,
-                results_count=0
-            )
-            rag_monitor.record_vector_db_operation("search", False)
+            logger.error(f"Ошибка поиска в базе знаний: {e}")
             return []
     
     async def _make_ollama_request(self, request: LLMRequest) -> LLMResponse:
-        """
-        🔄 Выполнение запроса к Ollama с интеллектуальной оптимизацией
-        
-        Использует автоопределенную конфигурацию и записывает производительность
-        для адаптивной оптимизации
-        """
+        """Выполнение запроса к Ollama через централизованную архитектуру"""
         start_time = time.time()
         
         try:
-            async with self.semaphore:
-                # Подготовка промпта с RAG
-                enhanced_prompt = await self._generate_rag_context(request)
+            # Генерируем RAG контекст
+            rag_context = await self._generate_rag_context(request)
+            
+            # Формируем финальный промпт
+            if rag_context:
+                final_prompt = f"""
+                Контекст для ответа:
+                {rag_context}
                 
-                # Получение оптимизированной конфигурации
-                config = await system_analyzer.optimize_config()
+                Запрос пользователя:
+                {request.prompt}
                 
-                # Формирование запроса к Ollama с интеллектуальными оптимизациями
-                ollama_request = {
-                    "model": request.model,
-                    "prompt": enhanced_prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": request.temperature,
-                        "num_predict": request.max_tokens,
-                        # 🧠 ИНТЕЛЛЕКТУАЛЬНЫЕ ОПТИМИЗАЦИИ
-                        "num_gpu": config.num_gpu,           # Автоопределенное количество GPU
-                        "num_thread": config.num_thread,     # Оптимальное количество потоков
-                        "num_ctx": config.context_length,    # Оптимизированный размер контекста
-                        "batch_size": config.batch_size,     # Оптимальный размер батча
-                        "f16_kv": config.f16_kv,             # 16-битные ключи-значения
-                        "use_mmap": True,                    # Memory mapping для быстрого доступа
-                        "use_mlock": True,                   # Блокировка памяти
-                        "rope_freq_base": 10000,             # RoPE базовая частота
-                        "rope_freq_scale": 0.5,              # RoPE масштаб частоты
-                        "top_p": 0.9,                        # Top-p sampling
-                        "top_k": 40,                         # Top-k sampling
-                        "repeat_penalty": 1.1,               # Штраф за повторения
-                        "seed": 42                           # Фиксированный seed для воспроизводимости
-                    }
+                Ответь на основе предоставленного контекста:
+                """
+            else:
+                final_prompt = request.prompt
+            
+            # Отправляем запрос через централизованную архитектуру
+            response = await self.llm_service.process_llm_request(
+                prompt=final_prompt,
+                model_name=request.model,
+                priority=request.priority,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                use_rag=request.use_rag,
+                metadata={
+                    "service_type": request.service_type.value,
+                    "context": request.context
                 }
-                
-                # Выполнение запроса
-                async with self.session.post(
-                    f"{settings.OLLAMA_URL}/api/generate",
-                    json=ollama_request
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        response_time = time.time() - start_time
-                        tokens_used = data.get("eval_count", 0)
-                        
-                        # Запись производительности для адаптивной оптимизации
-                        await system_analyzer.record_performance(
-                            response_time=response_time,
-                            success=True,
-                            tokens_used=tokens_used
-                        )
-                        
-                        return LLMResponse(
-                            content=data.get("response", ""),
-                            service_type=request.service_type,
-                            model_used=request.model,
-                            tokens_used=tokens_used,
-                            response_time=response_time,
-                            metadata={
-                                "prompt_tokens": data.get("prompt_eval_count", 0),
-                                "total_duration": data.get("total_duration", 0),
-                                "intelligent_optimization": True,
-                                "gpu_used": config.num_gpu > 0,
-                                "batch_size": config.batch_size,
-                                "context_length": config.context_length,
-                                "num_threads": config.num_thread,
-                                "f16_kv": config.f16_kv,
-                                "optimization_source": "llm_recommendation" if hasattr(system_analyzer, '_llm_recommendation_applied') else "knowledge_base"
-                            }
-                        )
-                    else:
-                        error_text = await response.text()
-                        response_time = time.time() - start_time
-                        
-                        # Запись неудачной производительности
-                        await system_analyzer.record_performance(
-                            response_time=response_time,
-                            success=False,
-                            tokens_used=0
-                        )
-                        
-                        raise OllamaConnectionError(f"Ollama error {response.status}: {error_text}")
-                        
-        except asyncio.TimeoutError:
-            response_time = time.time() - start_time
-            await system_analyzer.record_performance(
-                response_time=response_time,
-                success=False,
-                tokens_used=0
             )
-            raise LLMServiceError("Request timeout")
+            
+            response_time = time.time() - start_time
+            
+            # Записываем метрики производительности
+            await self.system_analyzer.record_performance(
+                response_time, 
+                True, 
+                response.tokens_used
+            )
+            
+            # Создаем ответ в старом формате для совместимости
+            llm_response = LLMResponse(
+                content=response.response,
+                service_type=request.service_type,
+                model_used=response.model_used,
+                tokens_used=response.tokens_used,
+                response_time=response_time,
+                cached=False,
+                metadata={
+                    "rag_enhanced": response.rag_enhanced,
+                    "cache_hit": response.cache_hit,
+                    "original_request_id": response.request_id
+                }
+            )
+            
+            logger.info(f"Запрос {request.service_type.value} обработан за {response_time:.2f}s")
+            return llm_response
+            
         except Exception as e:
             response_time = time.time() - start_time
-            await system_analyzer.record_performance(
-                response_time=response_time,
-                success=False,
-                tokens_used=0
-            )
-            raise LLMServiceError(f"Request failed: {e}")
-    
-    async def process_request(self, request: LLMRequest) -> LLMResponse:
-        """
-        🎯 Основной метод обработки LLM-запросов
-        
-        Реализует полный pipeline:
-        1. Проверка кэша
-        2. RAG-обогащение
-        3. Запрос к Ollama
-        4. Кэширование результата
-        5. Логирование и мониторинг
-        """
-        self.stats["total_requests"] += 1
-        start_time = time.time()
-        
-        try:
-            # Генерация ключа кэша
-            cache_key = self._generate_cache_key(request)
             
-            # Проверка кэша
-            if request.cache_ttl > 0:
-                cached_response = await self._get_cached_response(cache_key)
-                if cached_response:
-                    self.stats["cached_responses"] += 1
-                    return cached_response
+            # Записываем ошибку
+            await self.system_analyzer.record_performance(response_time, False, 0)
             
-            # Выполнение запроса к Ollama
-            response = await self._make_ollama_request(request)
+            logger.error(f"Ошибка обработки запроса {request.service_type.value}: {e}")
             
-            # Кэширование результата
-            if request.cache_ttl > 0:
-                await self._cache_response(cache_key, response, request.cache_ttl)
-            
-            # Обновление статистики
-            self.stats["successful_requests"] += 1
-            self.stats["avg_response_time"] = (
-                (self.stats["avg_response_time"] * (self.stats["successful_requests"] - 1) + 
-                 response.response_time) / self.stats["successful_requests"]
-            )
-            
-            # Логирование успешного запроса
-            logger.info(
-                f"✅ {request.service_type.value} completed in {response.response_time:.2f}s "
-                f"(tokens: {response.tokens_used})"
-            )
-            
-            return response
-            
-        except Exception as e:
-            self.stats["failed_requests"] += 1
-            logger.error(f"❌ {request.service_type.value} failed: {e}")
-            
-            # Fallback: возвращаем базовый ответ
             return LLMResponse(
-                content=f"Извините, произошла ошибка при обработке запроса: {str(e)}",
+                content="",
                 service_type=request.service_type,
                 model_used=request.model,
                 tokens_used=0,
-                response_time=time.time() - start_time,
+                response_time=response_time,
                 error=str(e)
             )
     
+    async def process_request(self, request: LLMRequest) -> LLMResponse:
+        """Обработка LLM запроса"""
+        if not self._initialized:
+            raise RuntimeError("LLMRouter не инициализирован")
+        
+        # Проверяем кэш
+        cache_key = self._generate_cache_key(request)
+        cached_response = await self._get_cached_response(cache_key)
+        
+        if cached_response:
+            logger.info(f"Кэш-хит для {request.service_type.value}")
+            return cached_response
+        
+        # Обрабатываем запрос
+        response = await self._make_ollama_request(request)
+        
+        # Кэшируем успешный ответ
+        if not response.error:
+            await self._cache_response(cache_key, response, request.cache_ttl)
+        
+        return response
+    
     async def get_stats(self) -> Dict[str, Any]:
-        """Получение статистики маршрутизатора"""
+        """Получение статистики роутера"""
+        if not self._initialized:
+            return {"error": "LLMRouter не инициализирован"}
+        
+        # Получаем метрики централизованной архитектуры
+        llm_metrics = await self.llm_service.get_metrics()
+        
+        # Получаем отчет об оптимизации
+        optimization_report = await self.system_analyzer.get_optimization_report()
+        
         return {
-            **self.stats,
-            "active_connections": self.semaphore._value,
-            "queue_size": self.request_queue.qsize() if hasattr(self.request_queue, 'qsize') else 0
+            "llm_metrics": llm_metrics,
+            "optimization_report": optimization_report,
+            "initialized": self._initialized
         }
     
     async def health_check(self) -> bool:
-        """Проверка здоровья Ollama"""
+        """Проверка здоровья роутера"""
+        if not self._initialized:
+            return False
+        
         try:
-            async with self.session.get(f"{settings.OLLAMA_URL}/api/tags") as response:
-                return response.status == 200
+            health_status = await self.llm_service.health_check()
+            return health_status.get("status") == "healthy"
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error(f"Ошибка проверки здоровья: {e}")
             return False
 
-# Глобальный экземпляр маршрутизатора
-llm_router = LLMRouter()
+# Глобальный экземпляр роутера
+_llm_router: Optional[LLMRouter] = None
 
-# Утилитарные функции для удобства использования
+async def get_llm_router() -> LLMRouter:
+    """Получение глобального экземпляра LLM роутера"""
+    global _llm_router
+    
+    if _llm_router is None:
+        _llm_router = LLMRouter()
+        await _llm_router.start()
+    
+    return _llm_router
+
+# Утилиты для быстрого доступа к функциям
 async def generate_seo_recommendations(prompt: str, context: Optional[Dict] = None) -> str:
-    """Генерация SEO-рекомендаций с оптимизированной моделью"""
+    """Генерация SEO рекомендаций"""
+    router = await get_llm_router()
+    
     request = LLMRequest(
         service_type=LLMServiceType.SEO_RECOMMENDATIONS,
         prompt=prompt,
         context=context,
-        model="qwen2.5:7b-instruct-turbo",
-        temperature=0.6,  # Более низкая температура для SEO задач
-        max_tokens=2048
+        priority="high"
     )
-    response = await llm_router.process_request(request)
+    
+    response = await router.process_request(request)
+    
+    if response.error:
+        raise LLMServiceError(f"Ошибка генерации SEO рекомендаций: {response.error}")
+    
     return response.content
 
 async def generate_diagram(prompt: str, diagram_type: str = "architecture") -> str:
-    """Генерация SVG диаграммы с оптимизированной моделью"""
+    """Генерация диаграммы"""
+    router = await get_llm_router()
+    
     request = LLMRequest(
         service_type=LLMServiceType.DIAGRAM_GENERATION,
-        prompt=f"Создай SVG диаграмму типа '{diagram_type}': {prompt}",
-        context={"diagram_type": diagram_type},
-        model="qwen2.5:7b-instruct-turbo",
-        temperature=0.8,  # Высокая креативность для диаграмм
-        max_tokens=4096   # Больше токенов для SVG
+        prompt=f"Создай {diagram_type} диаграмму: {prompt}",
+        priority="normal"
     )
-    response = await llm_router.process_request(request)
+    
+    response = await router.process_request(request)
+    
+    if response.error:
+        raise LLMServiceError(f"Ошибка генерации диаграммы: {response.error}")
+    
     return response.content
 
 async def analyze_content(content: str, analysis_type: str = "general") -> str:
-    """Анализ контента с оптимизированной моделью"""
+    """Анализ контента"""
+    router = await get_llm_router()
+    
     request = LLMRequest(
         service_type=LLMServiceType.CONTENT_ANALYSIS,
-        prompt=f"Проанализируй контент (тип анализа: {analysis_type}): {content}",
-        context={"analysis_type": analysis_type},
-        model="qwen2.5:7b-instruct-turbo",
-        temperature=0.5,  # Умеренная температура для анализа
-        max_tokens=2048
+        prompt=f"Проанализируй контент ({analysis_type}): {content}",
+        priority="normal"
     )
-    response = await llm_router.process_request(request)
+    
+    response = await router.process_request(request)
+    
+    if response.error:
+        raise LLMServiceError(f"Ошибка анализа контента: {response.error}")
+    
     return response.content
 
 async def run_benchmark(benchmark_type: str, parameters: Dict[str, Any]) -> str:
-    """Запуск бенчмарка с оптимизированной моделью"""
+    """Запуск бенчмарка"""
+    router = await get_llm_router()
+    
     request = LLMRequest(
         service_type=LLMServiceType.BENCHMARK_SERVICE,
-        prompt=f"Выполни бенчмарк типа '{benchmark_type}' с параметрами: {json.dumps(parameters)}",
-        context={"benchmark_type": benchmark_type, "parameters": parameters},
-        model="qwen2.5:7b-instruct-turbo",
-        temperature=0.3,  # Низкая температура для точных результатов
-        max_tokens=2048
+        prompt=f"Запусти {benchmark_type} бенчмарк с параметрами: {parameters}",
+        priority="low"
     )
-    response = await llm_router.process_request(request)
+    
+    response = await router.process_request(request)
+    
+    if response.error:
+        raise LLMServiceError(f"Ошибка запуска бенчмарка: {response.error}")
+    
     return response.content
 
 async def tune_llm_model(model_config: Dict[str, Any], tuning_params: Dict[str, Any]) -> str:
-    """Настройка LLM модели с оптимизированной моделью"""
+    """Тюнинг LLM модели"""
+    router = await get_llm_router()
+    
     request = LLMRequest(
         service_type=LLMServiceType.LLM_TUNING,
-        prompt=f"Настрой модель с конфигурацией: {json.dumps(model_config)} и параметрами: {json.dumps(tuning_params)}",
-        context={"model_config": model_config, "tuning_params": tuning_params},
-        model="qwen2.5:7b-instruct-turbo",
-        temperature=0.4,  # Умеренная температура для настройки
-        max_tokens=2048
+        prompt=f"Настрой модель с конфигурацией {model_config} и параметрами {tuning_params}",
+        priority="background"
     )
-    response = await llm_router.process_request(request)
+    
+    response = await router.process_request(request)
+    
+    if response.error:
+        raise LLMServiceError(f"Ошибка тюнинга модели: {response.error}")
+    
     return response.content 
