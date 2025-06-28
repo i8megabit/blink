@@ -113,6 +113,55 @@ SYSTEM_CPU = Gauge(
     'System CPU usage percentage'
 )
 
+# RAG-специфичные метрики
+RAG_QUERIES = Counter(
+    'rag_queries_total',
+    'Total number of RAG queries',
+    ['service_type', 'status']
+)
+
+RAG_EMBEDDING_GENERATION = Counter(
+    'rag_embedding_generation_total',
+    'Total number of embedding generations',
+    ['model', 'status']
+)
+
+RAG_SIMILARITY_SEARCH = Counter(
+    'rag_similarity_search_total',
+    'Total number of similarity searches',
+    ['vector_db', 'status']
+)
+
+RAG_CONTEXT_LENGTH = Histogram(
+    'rag_context_length_chars',
+    'RAG context length in characters',
+    ['service_type']
+)
+
+RAG_RESPONSE_QUALITY = Histogram(
+    'rag_response_quality_score',
+    'RAG response quality score',
+    ['service_type', 'model']
+)
+
+RAG_CACHE_HIT_RATIO = Gauge(
+    'rag_cache_hit_ratio',
+    'RAG cache hit ratio',
+    ['cache_type']
+)
+
+VECTOR_DB_OPERATIONS = Counter(
+    'vector_db_operations_total',
+    'Total number of vector database operations',
+    ['operation', 'status']
+)
+
+EMBEDDING_DIMENSION = Gauge(
+    'embedding_dimension',
+    'Embedding vector dimension',
+    ['model']
+)
+
 
 class MonitoringMiddleware:
     """Middleware для мониторинга HTTP запросов"""
@@ -251,6 +300,100 @@ class PerformanceMonitor:
     def get_metrics(self) -> Dict[str, Any]:
         """Получение всех метрик"""
         return self.metrics.copy()
+
+
+class RAGMonitor:
+    """Мониторинг RAG операций"""
+    
+    def __init__(self):
+        self.embedding_times = []
+        self.search_times = []
+        self.context_qualities = []
+        self.cache_hits = 0
+        self.cache_misses = 0
+    
+    def record_embedding_generation(self, model: str, duration: float, success: bool):
+        """Запись метрик генерации эмбеддингов"""
+        RAG_EMBEDDING_GENERATION.labels(
+            model=model,
+            status="success" if success else "error"
+        ).inc()
+        
+        if success:
+            self.embedding_times.append(duration)
+    
+    def record_similarity_search(self, vector_db: str, duration: float, success: bool, results_count: int):
+        """Запись метрик поиска похожести"""
+        RAG_SIMILARITY_SEARCH.labels(
+            vector_db=vector_db,
+            status="success" if success else "error"
+        ).inc()
+        
+        if success:
+            self.search_times.append(duration)
+    
+    def record_context_generation(self, service_type: str, context_length: int, quality_score: float):
+        """Запись метрик генерации контекста"""
+        RAG_CONTEXT_LENGTH.labels(service_type=service_type).observe(context_length)
+        RAG_RESPONSE_QUALITY.labels(service_type=service_type, model="default").observe(quality_score)
+        
+        self.context_qualities.append(quality_score)
+    
+    def record_cache_hit(self, cache_type: str):
+        """Запись попадания в кэш"""
+        self.cache_hits += 1
+        self._update_cache_ratio(cache_type)
+    
+    def record_cache_miss(self, cache_type: str):
+        """Запись промаха кэша"""
+        self.cache_misses += 1
+        self._update_cache_ratio(cache_type)
+    
+    def _update_cache_ratio(self, cache_type: str):
+        """Обновление соотношения попаданий в кэш"""
+        total = self.cache_hits + self.cache_misses
+        if total > 0:
+            ratio = self.cache_hits / total
+            RAG_CACHE_HIT_RATIO.labels(cache_type=cache_type).set(ratio)
+    
+    def record_vector_db_operation(self, operation: str, success: bool, duration: float = None):
+        """Запись операций с векторной БД"""
+        VECTOR_DB_OPERATIONS.labels(
+            operation=operation,
+            status="success" if success else "error"
+        ).inc()
+    
+    def record_embedding_dimension(self, model: str, dimension: int):
+        """Запись размерности эмбеддингов"""
+        EMBEDDING_DIMENSION.labels(model=model).set(dimension)
+    
+    def get_rag_metrics(self) -> Dict[str, Any]:
+        """Получение RAG метрик"""
+        return {
+            "embedding_generation": {
+                "total_requests": len(self.embedding_times),
+                "average_time": sum(self.embedding_times) / len(self.embedding_times) if self.embedding_times else 0,
+                "min_time": min(self.embedding_times) if self.embedding_times else 0,
+                "max_time": max(self.embedding_times) if self.embedding_times else 0
+            },
+            "similarity_search": {
+                "total_requests": len(self.search_times),
+                "average_time": sum(self.search_times) / len(self.search_times) if self.search_times else 0,
+                "min_time": min(self.search_times) if self.search_times else 0,
+                "max_time": max(self.search_times) if self.search_times else 0
+            },
+            "context_quality": {
+                "total_contexts": len(self.context_qualities),
+                "average_quality": sum(self.context_qualities) / len(self.context_qualities) if self.context_qualities else 0,
+                "min_quality": min(self.context_qualities) if self.context_qualities else 0,
+                "max_quality": max(self.context_qualities) if self.context_qualities else 0
+            },
+            "cache_performance": {
+                "hits": self.cache_hits,
+                "misses": self.cache_misses,
+                "hit_ratio": self.cache_hits / (self.cache_hits + self.cache_misses) if (self.cache_hits + self.cache_misses) > 0 else 0
+            }
+        }
 
 
 # Декораторы для мониторинга
@@ -402,6 +545,9 @@ def get_health_status() -> Dict[str, Any]:
 metrics_collector = MetricsCollector()
 performance_monitor = PerformanceMonitor()
 
+# Глобальный экземпляр RAG монитора
+rag_monitor = RAGMonitor()
+
 # Экспорт для обратной совместимости
 RelinkMonitoring = {
     "logger": logger,
@@ -409,4 +555,105 @@ RelinkMonitoring = {
     "performance_monitor": performance_monitor,
     "get_metrics": get_metrics,
     "get_health_status": get_health_status,
-} 
+}
+
+def monitor_rag_operation(operation_type: str, service_type: str = "default"):
+    """Декоратор для мониторинга RAG операций"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            start_time = time.time()
+            success = False
+            
+            try:
+                result = await func(*args, **kwargs)
+                success = True
+                
+                # Запись метрик в зависимости от типа операции
+                duration = time.time() - start_time
+                
+                if operation_type == "embedding_generation":
+                    rag_monitor.record_embedding_generation(
+                        model=kwargs.get("model", "default"),
+                        duration=duration,
+                        success=success
+                    )
+                elif operation_type == "similarity_search":
+                    rag_monitor.record_similarity_search(
+                        vector_db=kwargs.get("vector_db", "default"),
+                        duration=duration,
+                        success=success,
+                        results_count=len(result) if isinstance(result, list) else 0
+                    )
+                elif operation_type == "context_generation":
+                    rag_monitor.record_context_generation(
+                        service_type=service_type,
+                        context_length=len(result) if isinstance(result, str) else 0,
+                        quality_score=kwargs.get("quality_score", 0.8)
+                    )
+                
+                # Общая метрика RAG запросов
+                RAG_QUERIES.labels(
+                    service_type=service_type,
+                    status="success"
+                ).inc()
+                
+                return result
+                
+            except Exception as e:
+                # Запись ошибки
+                RAG_QUERIES.labels(
+                    service_type=service_type,
+                    status="error"
+                ).inc()
+                
+                logger.error(f"RAG operation failed: {operation_type} - {e}")
+                raise
+                
+        return wrapper
+    return decorator
+
+def get_rag_health_status() -> Dict[str, Any]:
+    """Получение статуса здоровья RAG системы"""
+    try:
+        rag_metrics = rag_monitor.get_rag_metrics()
+        
+        # Определение статуса на основе метрик
+        health_status = "healthy"
+        issues = []
+        
+        # Проверка времени ответа эмбеддингов
+        if rag_metrics["embedding_generation"]["average_time"] > 5.0:
+            health_status = "degraded"
+            issues.append("Slow embedding generation")
+        
+        # Проверка времени поиска
+        if rag_metrics["similarity_search"]["average_time"] > 2.0:
+            health_status = "degraded"
+            issues.append("Slow similarity search")
+        
+        # Проверка качества контекста
+        if rag_metrics["context_quality"]["average_quality"] < 0.6:
+            health_status = "degraded"
+            issues.append("Low context quality")
+        
+        # Проверка кэша
+        if rag_metrics["cache_performance"]["hit_ratio"] < 0.3:
+            health_status = "degraded"
+            issues.append("Low cache hit ratio")
+        
+        return {
+            "status": health_status,
+            "issues": issues,
+            "metrics": rag_metrics,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting RAG health status: {e}")
+        return {
+            "status": "error",
+            "issues": [f"Health check failed: {e}"],
+            "metrics": {},
+            "timestamp": datetime.utcnow().isoformat()
+        } 

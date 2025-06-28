@@ -271,20 +271,154 @@ class RedisCache:
             self._client = None
 
 
+class RAGCache:
+    """RAG-специфичный кэш для векторных операций"""
+    
+    def __init__(self, ttl: int = 7200):  # 2 часа для эмбеддингов
+        self.ttl = ttl
+        self.embedding_cache = {}
+        self.similarity_cache = {}
+        self.context_cache = {}
+    
+    async def get_embedding(self, text: str) -> Optional[List[float]]:
+        """Получение эмбеддинга из кэша"""
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        cache_key = f"embedding:{text_hash}"
+        
+        # Проверяем in-memory кэш
+        if cache_key in self.embedding_cache:
+            item = self.embedding_cache[cache_key]
+            if not self._is_expired(item):
+                return item['value']
+            else:
+                del self.embedding_cache[cache_key]
+        
+        return None
+    
+    async def set_embedding(self, text: str, embedding: List[float]) -> bool:
+        """Сохранение эмбеддинга в кэш"""
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        cache_key = f"embedding:{text_hash}"
+        
+        expires_at = datetime.utcnow() + timedelta(seconds=self.ttl)
+        self.embedding_cache[cache_key] = {
+            'value': embedding,
+            'expires_at': expires_at,
+            'created_at': datetime.utcnow()
+        }
+        
+        return True
+    
+    async def get_similarity_results(self, query: str, top_k: int = 5) -> Optional[List[Dict[str, Any]]]:
+        """Получение результатов поиска похожести"""
+        query_hash = hashlib.md5(f"{query}:{top_k}".encode()).hexdigest()
+        cache_key = f"similarity:{query_hash}"
+        
+        if cache_key in self.similarity_cache:
+            item = self.similarity_cache[cache_key]
+            if not self._is_expired(item):
+                return item['value']
+            else:
+                del self.similarity_cache[cache_key]
+        
+        return None
+    
+    async def set_similarity_results(self, query: str, results: List[Dict[str, Any]], top_k: int = 5) -> bool:
+        """Сохранение результатов поиска похожести"""
+        query_hash = hashlib.md5(f"{query}:{top_k}".encode()).hexdigest()
+        cache_key = f"similarity:{query_hash}"
+        
+        expires_at = datetime.utcnow() + timedelta(seconds=self.ttl // 2)  # 1 час для результатов
+        self.similarity_cache[cache_key] = {
+            'value': results,
+            'expires_at': expires_at,
+            'created_at': datetime.utcnow()
+        }
+        
+        return True
+    
+    async def get_context(self, prompt: str, service_type: str) -> Optional[str]:
+        """Получение RAG контекста из кэша"""
+        prompt_hash = hashlib.md5(f"{prompt}:{service_type}".encode()).hexdigest()
+        cache_key = f"context:{prompt_hash}"
+        
+        if cache_key in self.context_cache:
+            item = self.context_cache[cache_key]
+            if not self._is_expired(item):
+                return item['value']
+            else:
+                del self.context_cache[cache_key]
+        
+        return None
+    
+    async def set_context(self, prompt: str, context: str, service_type: str) -> bool:
+        """Сохранение RAG контекста в кэш"""
+        prompt_hash = hashlib.md5(f"{prompt}:{service_type}".encode()).hexdigest()
+        cache_key = f"context:{prompt_hash}"
+        
+        expires_at = datetime.utcnow() + timedelta(seconds=self.ttl // 4)  # 30 минут для контекста
+        self.context_cache[cache_key] = {
+            'value': context,
+            'expires_at': expires_at,
+            'created_at': datetime.utcnow()
+        }
+        
+        return True
+    
+    def _is_expired(self, item: Dict[str, Any]) -> bool:
+        """Проверка истечения срока действия"""
+        if 'expires_at' not in item:
+            return False
+        return datetime.utcnow() > item['expires_at']
+    
+    async def clear_expired(self):
+        """Очистка истекших элементов"""
+        current_time = datetime.utcnow()
+        
+        # Очистка эмбеддингов
+        expired_keys = [
+            key for key, item in self.embedding_cache.items()
+            if self._is_expired(item)
+        ]
+        for key in expired_keys:
+            del self.embedding_cache[key]
+        
+        # Очистка результатов поиска
+        expired_keys = [
+            key for key, item in self.similarity_cache.items()
+            if self._is_expired(item)
+        ]
+        for key in expired_keys:
+            del self.similarity_cache[key]
+        
+        # Очистка контекстов
+        expired_keys = [
+            key for key, item in self.context_cache.items()
+            if self._is_expired(item)
+        ]
+        for key in expired_keys:
+            del self.context_cache[key]
+    
+    async def get_stats(self) -> Dict[str, Any]:
+        """Получение статистики RAG кэша"""
+        await self.clear_expired()
+        
+        return {
+            "embedding_cache_size": len(self.embedding_cache),
+            "similarity_cache_size": len(self.similarity_cache),
+            "context_cache_size": len(self.context_cache),
+            "total_items": len(self.embedding_cache) + len(self.similarity_cache) + len(self.context_cache)
+        }
+
+
 class CacheManager:
-    """Менеджер кэширования"""
+    """Универсальный менеджер кэша с поддержкой RAG"""
     
     def __init__(self):
-        self.memory_cache = MemoryCache(settings.cache.max_size)
-        self.redis_cache = None
+        self.memory_cache = MemoryCache()
+        self.redis_cache = RedisCache(settings.REDIS_URL) if settings.REDIS_URL else None
+        self.rag_cache = RAGCache()  # Новый RAG-специфичный кэш
         
-        if settings.cache.enable_redis:
-            try:
-                self.redis_cache = RedisCache(settings.redis.url)
-                logger.info("Redis cache initialized")
-            except Exception as e:
-                logger.warning(f"Redis cache initialization failed: {e}")
-    
     async def get(self, key: str, use_redis: bool = True) -> Optional[Any]:
         """Получение значения из кэша"""
         # Сначала проверяем memory cache
@@ -395,6 +529,34 @@ class CacheManager:
         """Закрытие соединений"""
         if self.redis_cache:
             await self.redis_cache.close()
+    
+    async def get_rag_embedding(self, text: str) -> Optional[List[float]]:
+        """Получение эмбеддинга из RAG кэша"""
+        return await self.rag_cache.get_embedding(text)
+    
+    async def set_rag_embedding(self, text: str, embedding: List[float]) -> bool:
+        """Сохранение эмбеддинга в RAG кэш"""
+        return await self.rag_cache.set_embedding(text, embedding)
+    
+    async def get_rag_similarity(self, query: str, top_k: int = 5) -> Optional[List[Dict[str, Any]]]:
+        """Получение результатов поиска похожести из RAG кэша"""
+        return await self.rag_cache.get_similarity_results(query, top_k)
+    
+    async def set_rag_similarity(self, query: str, results: List[Dict[str, Any]], top_k: int = 5) -> bool:
+        """Сохранение результатов поиска похожести в RAG кэш"""
+        return await self.rag_cache.set_similarity_results(query, results, top_k)
+    
+    async def get_rag_context(self, prompt: str, service_type: str) -> Optional[str]:
+        """Получение RAG контекста из кэша"""
+        return await self.rag_cache.get_context(prompt, service_type)
+    
+    async def set_rag_context(self, prompt: str, context: str, service_type: str) -> bool:
+        """Сохранение RAG контекста в кэш"""
+        return await self.rag_cache.set_context(prompt, context, service_type)
+    
+    async def get_rag_stats(self) -> Dict[str, Any]:
+        """Получение статистики RAG кэша"""
+        return await self.rag_cache.get_stats()
 
 
 # Глобальный экземпляр менеджера кэша

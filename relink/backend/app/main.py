@@ -1018,6 +1018,61 @@ async def startup_event():
     
     print("🚀 reLink SEO Platform v1.0.0 запущен!")
 
+@app.get("/api/v1/rag/cache/stats")
+async def get_rag_cache_stats():
+    """Получение статистики RAG кэша"""
+    try:
+        stats = await cache_manager.get_rag_stats()
+        return {
+            "status": "success",
+            "data": stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting RAG cache stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/rag/cache/clear")
+async def clear_rag_cache():
+    """Очистка RAG кэша"""
+    try:
+        # Очищаем все типы RAG кэша
+        await cache_manager.rag_cache.clear_expired()
+        return {
+            "status": "success",
+            "message": "RAG cache cleared",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error clearing RAG cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/rag/monitoring/metrics")
+async def get_rag_monitoring_metrics():
+    """Получение RAG метрик мониторинга"""
+    try:
+        from .monitoring import rag_monitor
+        metrics = rag_monitor.get_rag_metrics()
+        return {
+            "status": "success",
+            "data": metrics,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting RAG monitoring metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/rag/monitoring/health")
+async def get_rag_health():
+    """Получение статуса здоровья RAG системы"""
+    try:
+        from .monitoring import get_rag_health_status
+        health_status = get_rag_health_status()
+        return health_status
+    except Exception as e:
+        logger.error(f"Error getting RAG health status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

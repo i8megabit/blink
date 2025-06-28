@@ -26,6 +26,7 @@ from .database import get_db
 from .models import LLMRequest, LLMResponse, LLMEmbedding
 from .cache import cache_manager
 from .exceptions import LLMServiceError, OllamaConnectionError
+from .monitoring import rag_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -704,8 +705,19 @@ class LLMRouter:
         return request.prompt
     
     async def _get_embedding(self, text: str) -> List[float]:
-        """Получение эмбеддинга для текста"""
+        """Получение эмбеддинга для текста с кэшированием"""
         try:
+            # Проверяем кэш эмбеддингов
+            cached_embedding = await cache_manager.get_rag_embedding(text)
+            if cached_embedding:
+                rag_monitor.record_cache_hit("embedding")
+                logger.info(f"🧠 Embedding cache hit for text: {text[:50]}...")
+                return cached_embedding
+            
+            rag_monitor.record_cache_miss("embedding")
+            
+            # Генерируем новый эмбеддинг
+            start_time = time.time()
             async with self.semaphore:
                 async with self.session.post(
                     f"{settings.OLLAMA_URL}/api/embeddings",
@@ -713,12 +725,37 @@ class LLMRouter:
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data.get("embedding", [])
+                        embedding = data.get("embedding", [])
+                        
+                        # Кэшируем эмбеддинг
+                        await cache_manager.set_rag_embedding(text, embedding)
+                        
+                        # Записываем метрики
+                        duration = time.time() - start_time
+                        rag_monitor.record_embedding_generation(
+                            model="qwen2.5:7b-instruct-turbo",
+                            duration=duration,
+                            success=True
+                        )
+                        rag_monitor.record_embedding_dimension("qwen2.5:7b-instruct-turbo", len(embedding))
+                        
+                        logger.info(f"🧠 Generated embedding ({len(embedding)}d) in {duration:.3f}s")
+                        return embedding
                     else:
                         logger.error(f"Embedding error: {response.status}")
+                        rag_monitor.record_embedding_generation(
+                            model="qwen2.5:7b-instruct-turbo",
+                            duration=time.time() - start_time,
+                            success=False
+                        )
                         return []
         except Exception as e:
             logger.error(f"Embedding request failed: {e}")
+            rag_monitor.record_embedding_generation(
+                model="qwen2.5:7b-instruct-turbo",
+                duration=time.time() - start_time if 'start_time' in locals() else 0,
+                success=False
+            )
             return []
     
     async def _search_knowledge_base(
@@ -727,13 +764,51 @@ class LLMRouter:
         service_type: LLMServiceType,
         limit: int = 3
     ) -> List[Dict[str, Any]]:
-        """Поиск в векторной базе знаний"""
+        """Поиск в векторной базе знаний с кэшированием"""
         try:
+            # Создаем ключ для кэширования результатов поиска
+            search_key = f"{service_type.value}:{hash(tuple(embedding[:10]))}:{limit}"
+            
+            # Проверяем кэш результатов поиска
+            cached_results = await cache_manager.get_rag_similarity(search_key, limit)
+            if cached_results:
+                rag_monitor.record_cache_hit("similarity_search")
+                logger.info(f"🔍 Similarity search cache hit for {service_type.value}")
+                return cached_results
+            
+            rag_monitor.record_cache_miss("similarity_search")
+            
+            # Выполняем поиск в векторной БД
+            start_time = time.time()
             # Здесь должна быть интеграция с векторной БД (Chroma, Pinecone, etc.)
             # Пока возвращаем пустой список
-            return []
+            results = []
+            
+            # Кэшируем результаты поиска
+            await cache_manager.set_rag_similarity(search_key, results, limit)
+            
+            # Записываем метрики
+            duration = time.time() - start_time
+            rag_monitor.record_similarity_search(
+                vector_db="chromadb",
+                duration=duration,
+                success=True,
+                results_count=len(results)
+            )
+            rag_monitor.record_vector_db_operation("search", True, duration)
+            
+            logger.info(f"🔍 Vector search completed in {duration:.3f}s, found {len(results)} results")
+            return results
+            
         except Exception as e:
             logger.error(f"Knowledge base search failed: {e}")
+            rag_monitor.record_similarity_search(
+                vector_db="chromadb",
+                duration=time.time() - start_time if 'start_time' in locals() else 0,
+                success=False,
+                results_count=0
+            )
+            rag_monitor.record_vector_db_operation("search", False)
             return []
     
     async def _make_ollama_request(self, request: LLMRequest) -> LLMResponse:
