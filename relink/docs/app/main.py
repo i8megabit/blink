@@ -14,11 +14,13 @@ import structlog
 
 from .config import settings
 from .cache import cache
-from .services import docs_service
+from .services import docs_service, microservice_docs_service
 from .models import (
     HealthResponse, VersionInfo, ReadmeInfo, RoadmapInfo,
     FAQEntry, AboutInfo, HowItWorksInfo, CacheStats,
-    APIResponse, ErrorResponse
+    APIResponse, ErrorResponse,
+    MicroserviceInfo, ServiceDocumentation, DocumentationSync,
+    DocumentationSearch, DocumentationSearchResult
 )
 
 # Настройка логирования
@@ -73,39 +75,41 @@ start_time = time.time()
 @app.on_event("startup")
 async def startup_event():
     """Событие запуска приложения"""
-    logger.info("Starting documentation service", version=settings.app_version)
+    logger.info("Documentation service starting up")
     
-    # Подключаемся к Redis
-    await cache.connect()
+    # Инициализация сервиса микросервисов
+    await microservice_docs_service.initialize()
+    
     logger.info("Documentation service started successfully")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Событие остановки приложения"""
-    logger.info("Shutting down documentation service")
+    logger.info("Documentation service shutting down")
     
-    # Отключаемся от Redis
-    await cache.disconnect()
-    logger.info("Documentation service shutdown complete")
+    # Очистка ресурсов
+    await microservice_docs_service.cleanup()
+    
+    logger.info("Documentation service stopped")
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
 async def health_check():
     """Проверка здоровья сервиса"""
-    uptime = time.time() - start_time
-    
-    # Проверяем статус кэша
-    cache_stats = await cache.get_stats()
-    cache_status = "connected" if cache_stats.get("connected", False) else "disconnected"
-    
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.utcnow(),
-        version=settings.app_version,
-        cache_status=cache_status,
-        uptime=uptime
-    )
+    try:
+        cache_status = "connected" if await cache.ping() else "disconnected"
+        
+        return HealthResponse(
+            status="healthy",
+            timestamp=datetime.utcnow(),
+            version=settings.app_version,
+            cache_status=cache_status,
+            uptime=time.time() - start_time
+        )
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 
 @app.get("/api/v1/version", response_model=APIResponse)
@@ -255,7 +259,7 @@ async def get_cache_stats():
         
         return APIResponse(
             success=True,
-            message="Cache statistics retrieved successfully",
+            message="Cache stats retrieved successfully",
             data=stats
         )
         
@@ -264,51 +268,271 @@ async def get_cache_stats():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.delete("/api/v1/cache/clear", response_model=APIResponse)
+@app.delete("/api/v1/cache/clear")
 async def clear_cache():
     """Очистка кэша"""
     try:
-        success = await cache.clear()
+        await cache.clear()
         
-        if success:
-            return APIResponse(
-                success=True,
-                message="Cache cleared successfully"
-            )
-        else:
-            raise HTTPException(status_code=500, detail="Failed to clear cache")
+        return APIResponse(
+            success=True,
+            message="Cache cleared successfully"
+        )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error("Error clearing cache", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+# 🚀 НОВЫЕ ЭНДПОИНТЫ ДЛЯ АВТОМАТИЧЕСКОЙ ДОКУМЕНТАЦИИ МИКРОСЕРВИСОВ
+
+@app.get("/api/v1/services/discover", response_model=APIResponse)
+async def discover_services():
+    """Обнаружение доступных микросервисов"""
+    try:
+        services = await microservice_docs_service.discover_services()
+        
+        return APIResponse(
+            success=True,
+            message=f"Discovered {len(services)} services",
+            data=[service.dict() for service in services]
+        )
+        
+    except Exception as e:
+        logger.error("Error discovering services", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/services", response_model=APIResponse)
+async def get_all_services():
+    """Получение списка всех известных сервисов"""
+    try:
+        services = await microservice_docs_service.get_all_services()
+        
+        return APIResponse(
+            success=True,
+            message=f"Retrieved {len(services)} services",
+            data=[service.dict() for service in services]
+        )
+        
+    except Exception as e:
+        logger.error("Error getting services", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/services/{service_name}", response_model=APIResponse)
+async def get_service_documentation(service_name: str):
+    """Получение документации конкретного сервиса"""
+    try:
+        service_doc = await microservice_docs_service.get_service_documentation(service_name)
+        
+        if not service_doc:
+            raise HTTPException(status_code=404, detail=f"Service {service_name} not found")
+        
+        return APIResponse(
+            success=True,
+            message=f"Service documentation retrieved successfully",
+            data=service_doc.dict()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting service documentation for {service_name}", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/v1/services/{service_name}/sync", response_model=APIResponse)
+async def sync_service_documentation(service_name: str):
+    """Синхронизация документации конкретного сервиса"""
+    try:
+        sync_result = await microservice_docs_service.sync_service_documentation(service_name)
+        
+        return APIResponse(
+            success=sync_result.status == "completed",
+            message=f"Service documentation sync {sync_result.status}",
+            data=sync_result.dict()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error syncing service documentation for {service_name}", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/v1/services/sync-all", response_model=APIResponse)
+async def sync_all_services():
+    """Синхронизация документации всех сервисов"""
+    try:
+        sync_results = []
+        
+        for service_name in microservice_docs_service.discovered_services.keys():
+            sync_result = await microservice_docs_service.sync_service_documentation(service_name)
+            sync_results.append(sync_result)
+        
+        completed = sum(1 for result in sync_results if result.status == "completed")
+        failed = len(sync_results) - completed
+        
+        return APIResponse(
+            success=completed > 0,
+            message=f"Synced {completed} services, {failed} failed",
+            data=[result.dict() for result in sync_results]
+        )
+        
+    except Exception as e:
+        logger.error("Error syncing all services", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/v1/docs/search", response_model=APIResponse)
+async def search_documentation(search: DocumentationSearch):
+    """Поиск по документации всех сервисов"""
+    try:
+        search_result = await microservice_docs_service.search_documentation(search)
+        
+        return APIResponse(
+            success=True,
+            message=f"Found {search_result.total} results",
+            data=search_result.dict()
+        )
+        
+    except Exception as e:
+        logger.error("Error searching documentation", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/services/{service_name}/health", response_model=APIResponse)
+async def get_service_health(service_name: str):
+    """Проверка здоровья конкретного сервиса"""
+    try:
+        discovery = microservice_docs_service.discovered_services.get(service_name)
+        
+        if not discovery:
+            raise HTTPException(status_code=404, detail=f"Service {service_name} not found")
+        
+        health_url = f"{discovery.base_url}{discovery.health_endpoint}"
+        
+        async with microservice_docs_service.session.get(health_url) as response:
+            health_data = await response.json()
+            
+            return APIResponse(
+                success=response.status == 200,
+                message=f"Service health check completed",
+                data={
+                    "service_name": service_name,
+                    "status": "healthy" if response.status == 200 else "unhealthy",
+                    "response_time_ms": response.headers.get("X-Process-Time", "N/A"),
+                    "health_data": health_data
+                }
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking service health for {service_name}", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/services/{service_name}/api-docs", response_model=APIResponse)
+async def get_service_api_docs(service_name: str):
+    """Получение API документации конкретного сервиса"""
+    try:
+        discovery = microservice_docs_service.discovered_services.get(service_name)
+        
+        if not discovery:
+            raise HTTPException(status_code=404, detail=f"Service {service_name} not found")
+        
+        if not discovery.openapi_endpoint:
+            raise HTTPException(status_code=404, detail=f"OpenAPI endpoint not configured for {service_name}")
+        
+        openapi_url = f"{discovery.base_url}{discovery.openapi_endpoint}"
+        
+        async with microservice_docs_service.session.get(openapi_url) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=response.status, detail="Failed to fetch OpenAPI spec")
+            
+            openapi_data = await response.json()
+            endpoints = microservice_docs_service._parse_openapi_spec(openapi_data)
+            
+            return APIResponse(
+                success=True,
+                message=f"API documentation retrieved successfully",
+                data={
+                    "service_name": service_name,
+                    "endpoints": [endpoint.dict() for endpoint in endpoints],
+                    "openapi_spec": openapi_data
+                }
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting API docs for {service_name}", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/v1/sync/history", response_model=APIResponse)
+async def get_sync_history(
+    limit: int = Query(50, description="Количество записей"),
+    offset: int = Query(0, description="Смещение")
+):
+    """Получение истории синхронизации"""
+    try:
+        history = microservice_docs_service.sync_history
+        total = len(history)
+        
+        # Пагинация
+        paginated_history = history[offset:offset + limit]
+        
+        return APIResponse(
+            success=True,
+            message=f"Sync history retrieved successfully",
+            data={
+                "history": [record.dict() for record in paginated_history],
+                "total": total,
+                "limit": limit,
+                "offset": offset
+            }
+        )
+        
+    except Exception as e:
+        logger.error("Error getting sync history", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# MIDDLEWARE - ПРОМЕЖУТОЧНОЕ ПО
+@app.middleware("http")
+async def add_process_time_header(request, call_next):
+    """Добавление времени обработки в заголовки"""
+    import time
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+
+
+# ERROR HANDLERS - ОБРАБОТЧИКИ ОШИБОК
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     """Обработчик HTTP исключений"""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error=exc.detail,
-            error_code=str(exc.status_code)
-        ).dict()
-    )
+    return {
+        "error": {
+            "code": exc.status_code,
+            "message": exc.detail,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    }
 
 
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    """Обработчик общих исключений"""
-    logger.error("Unhandled exception", error=str(exc), exc_info=True)
-    
-    return JSONResponse(
-        status_code=500,
-        content=ErrorResponse(
-            error="Internal server error",
-            error_code="INTERNAL_ERROR"
-        ).dict()
-    )
+# HEALTH CHECK - ПРОВЕРКА ЗДОРОВЬЯ
+@app.get("/health")
+async def health_check():
+    """Проверка здоровья приложения"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    }
 
 
 if __name__ == "__main__":

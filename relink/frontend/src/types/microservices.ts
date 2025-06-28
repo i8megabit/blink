@@ -207,17 +207,18 @@ export interface DocumentationPage {
 
 export interface DocumentationSearch {
   query: string
-  category?: string
+  services?: string[]
+  categories?: string[]
   tags?: string[]
-  version?: string
   limit: number
   offset: number
 }
 
 export interface DocumentationSearchResult {
-  pages: DocumentationPage[]
+  query: string
+  results: any[]
   total: number
-  query_time_ms: number
+  search_time_ms: number
   suggestions: string[]
 }
 
@@ -529,4 +530,17 @@ export interface ServiceBranding {
   capabilities: string[]
   documentation_url?: string
   support_url?: string
+}
+
+export interface ServiceDocumentation {
+  service: Microservice;
+  readme?: string;
+  api_docs: ServiceEndpoint[];
+  architecture?: string;
+  deployment?: string;
+  configuration?: Record<string, any>;
+  examples: Record<string, any>[];
+  troubleshooting?: string;
+  changelog: any[];
+  last_sync: string;
 } 

@@ -24,7 +24,9 @@ import {
   GlobalSearchQuery,
   GlobalSearchResult,
   Workflow,
-  WorkflowExecution
+  WorkflowExecution,
+  ServiceDocumentation,
+  DocumentationSearch
 } from '../types/microservices'
 
 // 🚀 ХУК ДЛЯ МОНИТОРИНГА СЕРВИСОВ
@@ -532,3 +534,85 @@ export const useRAG = () => {
     generateWithRAG
   }
 }
+
+interface UseMicroservicesReturn {
+  services: Microservice[];
+  loading: boolean;
+  error: string | null;
+  discoverServices: () => Promise<void>;
+  syncServiceDocumentation: (serviceName: string) => Promise<void>;
+  searchDocumentation: (search: DocumentationSearch) => Promise<any>;
+}
+
+export const useMicroservices = (): UseMicroservicesReturn => {
+  const [services, setServices] = useState<Microservice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const discoverServices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/v1/services/discover');
+      if (response.ok) {
+        const data = await response.json();
+        setServices(data.data || []);
+      } else {
+        throw new Error('Failed to discover services');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const syncServiceDocumentation = useCallback(async (serviceName: string) => {
+    try {
+      const response = await fetch(`/api/v1/services/${serviceName}/sync`, {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to sync service documentation');
+      }
+      
+      // Обновляем список сервисов после синхронизации
+      await discoverServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  }, [discoverServices]);
+
+  const searchDocumentation = useCallback(async (search: DocumentationSearch) => {
+    try {
+      const response = await fetch('/api/v1/docs/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(search)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.data;
+      } else {
+        throw new Error('Failed to search documentation');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      throw err;
+    }
+  }, []);
+
+  return {
+    services,
+    loading,
+    error,
+    discoverServices,
+    syncServiceDocumentation,
+    searchDocumentation
+  };
+};
