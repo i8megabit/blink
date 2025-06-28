@@ -1,6 +1,6 @@
 // Экспорт всех хуков
 export { useApi } from './useApi';
-export { useNotifications } from './useNotifications.js';
+export { useNotifications } from './useNotifications';
 export { useTheme } from './useTheme';
 export { useAnalysisHistory } from './useAnalysisHistory';
 export { useWebSocket } from './useWebSocket';
