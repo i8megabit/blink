@@ -1,0 +1,7 @@
+{
+  "chroma_client_auth_provider": "chromadb.auth.token.TokenAuthServerProvider",
+  "chroma_client_auth_credentials": "chroma-token-2024",
+  "chroma_server_auth_provider": "chromadb.auth.token.TokenAuthServer",
+  "chroma_server_auth_credentials_file": "/app/chroma_auth.json",
+  "chroma_server_auth_credentials_provider": "chromadb.auth.token.TokenAuthServer"
+} 

@@ -1,0 +1,110 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # LLM Tuning API метрики
+  - job_name: 'llm-tuning-api'
+    static_configs:
+      - targets: ['llm-tuning:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Ollama метрики
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['ollama:11434']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # ChromaDB метрики
+  - job_name: 'chromadb'
+    static_configs:
+      - targets: ['chromadb:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL метрики
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['llm-tuning-db:5432']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Redis метрики
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Docker контейнеры
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['host.docker.internal:9323']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node Exporter (системные метрики)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # cAdvisor (контейнерные метрики)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Jaeger метрики
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:16686']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Grafana метрики
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+# Настройки хранения
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 15d
+    retention.size: 50GB
+
+# Настройки WAL
+wal:
+  dir: /prometheus/wal
+
+# Настройки удаленного чтения/записи
+remote_read:
+  - url: "http://remote-storage:9201/read"
+
+remote_write:
+  - url: "http://remote-storage:9201/write"
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500 
