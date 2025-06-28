@@ -696,8 +696,11 @@ class SVGGeneratorService:
             # Формируем промпт
             prompt = self._format_prompt(request, template)
             
+            # Улучшаем промпт примерами
+            enhanced_prompt = self._enhance_prompt_with_examples(prompt, request.diagram_type)
+            
             # Генерируем SVG с помощью LLM
-            svg_content = await self._generate_svg_with_llm(prompt)
+            svg_content = await self._generate_svg_with_llm(enhanced_prompt)
             
             # Оптимизируем SVG
             optimized_svg = await self._optimize_svg(svg_content, request)
@@ -1037,43 +1040,471 @@ class SVGGeneratorService:
         ]
     
     async def validate_svg(self, svg_content: str) -> Dict[str, Any]:
-        """Валидация SVG"""
+        """Валидация и оценка качества SVG"""
+        validation_result = {
+            "is_valid": False,
+            "errors": [],
+            "warnings": [],
+            "quality_score": 0.0,
+            "optimization_suggestions": [],
+            "accessibility_score": 0.0,
+            "performance_score": 0.0
+        }
+        
         try:
-            root = ET.fromstring(svg_content)
+            # Проверяем базовую структуру SVG
+            if not svg_content.strip().startswith('<svg'):
+                validation_result["errors"].append("SVG должен начинаться с тега <svg>")
+                return validation_result
             
-            # Проверяем базовые атрибуты
-            width = root.get('width', '0')
-            height = root.get('height', '0')
-            viewbox = root.get('viewBox', '')
+            # Парсим SVG
+            try:
+                root = ET.fromstring(svg_content)
+            except ET.ParseError as e:
+                validation_result["errors"].append(f"Ошибка парсинга SVG: {e}")
+                return validation_result
             
-            # Подсчитываем элементы
-            elements = {
-                'rect': len(root.findall('.//rect')),
-                'circle': len(root.findall('.//circle')),
-                'line': len(root.findall('.//line')),
-                'path': len(root.findall('.//path')),
-                'text': len(root.findall('.//text')),
-                'g': len(root.findall('.//g'))
-            }
+            # Проверяем обязательные атрибуты
+            if not root.get('xmlns'):
+                validation_result["warnings"].append("Отсутствует xmlns атрибут")
             
-            return {
-                "valid": True,
-                "width": width,
-                "height": height,
-                "viewbox": viewbox,
-                "elements": elements,
-                "total_elements": sum(elements.values())
-            }
+            if not root.get('viewBox'):
+                validation_result["warnings"].append("Отсутствует viewBox для масштабируемости")
             
-        except ET.ParseError as e:
-            return {
-                "valid": False,
-                "error": str(e)
-            }
+            # Проверяем структуру
+            required_sections = ['components', 'relationships', 'legend']
+            for section in required_sections:
+                if not root.find(f".//g[@id='{section}']"):
+                    validation_result["warnings"].append(f"Отсутствует секция {section}")
+            
+            # Проверяем accessibility
+            accessibility_score = self._check_accessibility(root)
+            validation_result["accessibility_score"] = accessibility_score
+            
+            # Проверяем производительность
+            performance_score = self._check_performance(root)
+            validation_result["performance_score"] = performance_score
+            
+            # Проверяем наличие анимаций
+            animations = root.findall(".//animate") + root.findall(".//animateTransform") + root.findall(".//animateMotion")
+            if not animations:
+                validation_result["warnings"].append("Отсутствуют анимации")
+            
+            # Проверяем интерактивность
+            if not root.find(".//style") and not root.find(".//script"):
+                validation_result["warnings"].append("Отсутствуют стили или скрипты для интерактивности")
+            
+            # Проверяем метаданные
+            if not root.find(".//title") and not root.find(".//desc"):
+                validation_result["warnings"].append("Отсутствуют метаданные (title/desc)")
+            
+            # Рассчитываем общий score
+            total_score = 0.0
+            max_score = 100.0
+            
+            # Базовые проверки (30 баллов)
+            if not validation_result["errors"]:
+                total_score += 30
+            
+            # Accessibility (25 баллов)
+            total_score += accessibility_score * 25
+            
+            # Performance (25 баллов)
+            total_score += performance_score * 25
+            
+            # Дополнительные функции (20 баллов)
+            feature_score = 0.0
+            if animations:
+                feature_score += 0.5
+            if root.find(".//style") or root.find(".//script"):
+                feature_score += 0.3
+            if root.find(".//title") or root.find(".//desc"):
+                feature_score += 0.2
+            total_score += feature_score * 20
+            
+            validation_result["quality_score"] = min(total_score, max_score) / max_score
+            validation_result["is_valid"] = len(validation_result["errors"]) == 0
+            
+            # Генерируем предложения по оптимизации
+            validation_result["optimization_suggestions"] = self._generate_optimization_suggestions(
+                validation_result, root
+            )
+            
+        except Exception as e:
+            validation_result["errors"].append(f"Ошибка валидации: {e}")
+        
+        return validation_result
+    
+    def _check_accessibility(self, root: ET.Element) -> float:
+        """Проверка accessibility"""
+        score = 0.0
+        checks = 0
+        
+        # Проверяем наличие title
+        if root.find(".//title") is not None:
+            score += 1.0
+        checks += 1
+        
+        # Проверяем наличие desc
+        if root.find(".//desc") is not None:
+            score += 1.0
+        checks += 1
+        
+        # Проверяем aria-label
+        aria_labels = root.findall(".//*[@aria-label]")
+        if aria_labels:
+            score += 1.0
+        checks += 1
+        
+        # Проверяем role атрибуты
+        roles = root.findall(".//*[@role]")
+        if roles:
+            score += 1.0
+        checks += 1
+        
+        return score / checks if checks > 0 else 0.0
+    
+    def _check_performance(self, root: ET.Element) -> float:
+        """Проверка производительности"""
+        score = 0.0
+        checks = 0
+        
+        # Проверяем количество элементов
+        total_elements = len(root.findall(".//*"))
+        if total_elements < 100:
+            score += 1.0
+        elif total_elements < 200:
+            score += 0.5
+        checks += 1
+        
+        # Проверяем использование defs
+        if root.find(".//defs") is not None:
+            score += 1.0
+        checks += 1
+        
+        # Проверяем оптимизацию path
+        paths = root.findall(".//path")
+        if paths:
+            # Проверяем сложность path
+            complex_paths = 0
+            for path in paths:
+                d_attr = path.get('d', '')
+                if len(d_attr) > 100:  # Слишком сложный path
+                    complex_paths += 1
+            
+            if complex_paths == 0:
+                score += 1.0
+            elif complex_paths < len(paths) * 0.3:
+                score += 0.5
+        checks += 1
+        
+        # Проверяем использование групп
+        groups = root.findall(".//g")
+        if groups:
+            score += 1.0
+        checks += 1
+        
+        return score / checks if checks > 0 else 0.0
+    
+    def _generate_optimization_suggestions(self, validation_result: Dict[str, Any], root: ET.Element) -> List[str]:
+        """Генерация предложений по оптимизации"""
+        suggestions = []
+        
+        # Предложения на основе ошибок
+        for error in validation_result["errors"]:
+            if "xmlns" in error:
+                suggestions.append("Добавьте xmlns='http://www.w3.org/2000/svg' в тег svg")
+            elif "viewBox" in error:
+                suggestions.append("Добавьте viewBox для обеспечения масштабируемости")
+        
+        # Предложения на основе предупреждений
+        for warning in validation_result["warnings"]:
+            if "анимации" in warning:
+                suggestions.append("Добавьте анимации для улучшения пользовательского опыта")
+            elif "интерактивности" in warning:
+                suggestions.append("Добавьте CSS стили и JavaScript для интерактивности")
+            elif "метаданные" in warning:
+                suggestions.append("Добавьте title и desc для улучшения accessibility")
+        
+        # Предложения на основе производительности
+        if validation_result["performance_score"] < 0.7:
+            suggestions.append("Оптимизируйте количество элементов для улучшения производительности")
+            suggestions.append("Используйте defs для переиспользуемых элементов")
+        
+        # Предложения на основе accessibility
+        if validation_result["accessibility_score"] < 0.7:
+            suggestions.append("Добавьте aria-label атрибуты для улучшения accessibility")
+            suggestions.append("Используйте семантические role атрибуты")
+        
+        return suggestions[:5]  # Ограничиваем количество предложений
     
     async def close(self):
         """Закрытие соединений"""
         await self.client.aclose()
+
+    def _get_example_svg_templates(self) -> Dict[str, str]:
+        """Получение примеров SVG шаблонов для улучшения качества"""
+        return {
+            "system_architecture": """
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="componentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#45a049;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <title>System Architecture Example</title>
+  <desc>Professional system architecture diagram with modern design</desc>
+  
+  <g id="components">
+    <rect x="50" y="50" width="120" height="80" rx="10" fill="url(#componentGradient)" 
+          filter="url(#shadow)" class="component" data-type="frontend" aria-label="Frontend Application"/>
+    <text x="110" y="95" text-anchor="middle" fill="white" font-size="12">Frontend</text>
+    
+    <rect x="250" y="50" width="120" height="80" rx="10" fill="url(#componentGradient)" 
+          filter="url(#shadow)" class="component" data-type="api" aria-label="API Gateway"/>
+    <text x="310" y="95" text-anchor="middle" fill="white" font-size="12">API Gateway</text>
+    
+    <rect x="450" y="50" width="120" height="80" rx="10" fill="url(#componentGradient)" 
+          filter="url(#shadow)" class="component" data-type="backend" aria-label="Backend Service"/>
+    <text x="510" y="95" text-anchor="middle" fill="white" font-size="12">Backend</text>
+    
+    <rect x="650" y="50" width="120" height="80" rx="10" fill="url(#componentGradient)" 
+          filter="url(#shadow)" class="component" data-type="database" aria-label="Database"/>
+    <text x="710" y="95" text-anchor="middle" fill="white" font-size="12">Database</text>
+  </g>
+  
+  <g id="relationships">
+    <line x1="170" y1="90" x2="250" y2="90" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+    <line x1="370" y1="90" x2="450" y2="90" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+    <line x1="570" y1="90" x2="650" y2="90" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+  </g>
+  
+  <g id="legend">
+    <rect x="50" y="200" width="200" height="100" fill="#f5f5f5" stroke="#ddd"/>
+    <text x="150" y="220" text-anchor="middle" font-weight="bold">Legend</text>
+    <rect x="70" y="240" width="20" height="15" fill="url(#componentGradient)"/>
+    <text x="100" y="252" font-size="12">Component</text>
+    <line x1="70" y1="270" x2="90" y2="270" stroke="#666" stroke-width="3" marker-end="url(#arrowhead)"/>
+    <text x="100" y="275" font-size="12">Connection</text>
+  </g>
+  
+  <style>
+    .component { cursor: pointer; transition: all 0.3s; }
+    .component:hover { filter: brightness(1.2) drop-shadow(0 0 10px rgba(0,0,0,0.3)); }
+  </style>
+  
+  <script>
+    document.querySelectorAll('.component').forEach(el => {
+      el.addEventListener('click', () => {
+        const type = el.getAttribute('data-type');
+        alert(`Clicked on ${type} component`);
+      });
+    });
+  </script>
+</svg>
+""",
+            "data_flow": """
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+    </marker>
+    <linearGradient id="dataGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#45a049;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <title>Data Flow Example</title>
+  <desc>Interactive data flow diagram with animations</desc>
+  
+  <g id="nodes">
+    <circle cx="150" cy="150" r="40" fill="url(#dataGradient)" class="node" data-type="input">
+      <animate attributeName="r" values="40;45;40" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="150" y="155" text-anchor="middle" fill="white" font-size="12">Input</text>
+    
+    <circle cx="350" cy="150" r="40" fill="url(#dataGradient)" class="node" data-type="process">
+      <animate attributeName="r" values="40;45;40" dur="2s" repeatCount="indefinite" begin="0.5s"/>
+    </circle>
+    <text x="350" y="155" text-anchor="middle" fill="white" font-size="12">Process</text>
+    
+    <circle cx="550" cy="150" r="40" fill="url(#dataGradient)" class="node" data-type="output">
+      <animate attributeName="r" values="40;45;40" dur="2s" repeatCount="indefinite" begin="1s"/>
+    </circle>
+    <text x="550" y="155" text-anchor="middle" fill="white" font-size="12">Output</text>
+  </g>
+  
+  <g id="connections">
+    <line x1="190" y1="150" x2="310" y2="150" stroke="#666" stroke-width="3" 
+          stroke-dasharray="5,5" marker-end="url(#arrowhead)" class="connection">
+      <animate attributeName="stroke-dashoffset" values="0;-10" dur="1s" repeatCount="indefinite"/>
+    </line>
+    <line x1="390" y1="150" x2="510" y2="150" stroke="#666" stroke-width="3" 
+          stroke-dasharray="5,5" marker-end="url(#arrowhead)" class="connection">
+      <animate attributeName="stroke-dashoffset" values="0;-10" dur="1s" repeatCount="indefinite" begin="0.5s"/>
+    </line>
+  </g>
+  
+  <g id="legend">
+    <rect x="50" y="250" width="200" height="120" fill="#f5f5f5" stroke="#ddd"/>
+    <text x="150" y="270" text-anchor="middle" font-weight="bold">Data Types</text>
+    <circle cx="70" cy="290" r="15" fill="#4CAF50"/>
+    <text x="95" y="295" font-size="12">JSON Data</text>
+    <circle cx="70" cy="315" r="15" fill="#2196F3"/>
+    <text x="95" y="320" font-size="12">XML Data</text>
+    <circle cx="70" cy="340" r="15" fill="#FF9800"/>
+    <text x="95" y="345" font-size="12">Binary Data</text>
+  </g>
+  
+  <style>
+    .node { cursor: pointer; }
+    .node:hover { filter: brightness(1.2); }
+    .connection { animation: flow 2s linear infinite; }
+  </style>
+  
+  <script>
+    document.querySelectorAll('.node').forEach(el => {
+      el.addEventListener('click', () => {
+        const type = el.getAttribute('data-type');
+        alert(`Data flow: ${type} node`);
+      });
+    });
+  </script>
+</svg>
+""",
+            "microservices": """
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="gatewayGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D63031;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="serviceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ECDC4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#44A08D;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <title>Microservices Architecture Example</title>
+  <desc>Professional microservices architecture with API Gateway</desc>
+  
+  <g id="gateway">
+    <polygon points="400,50 450,80 450,120 400,150 350,120 350,80" 
+             fill="url(#gatewayGradient)" filter="url(#glow)" class="gateway" aria-label="API Gateway">
+      <animate attributeName="opacity" values="1;0.8;1" dur="3s" repeatCount="indefinite"/>
+    </polygon>
+    <text x="400" y="105" text-anchor="middle" fill="white" font-size="12">API Gateway</text>
+  </g>
+  
+  <g id="services">
+    <rect x="100" y="200" width="120" height="80" rx="10" fill="url(#serviceGradient)" 
+          class="service" data-service="user" aria-label="User Service"/>
+    <text x="160" y="245" text-anchor="middle" fill="white" font-size="12">User Service</text>
+    
+    <rect x="300" y="200" width="120" height="80" rx="10" fill="url(#serviceGradient)" 
+          class="service" data-service="order" aria-label="Order Service"/>
+    <text x="360" y="245" text-anchor="middle" fill="white" font-size="12">Order Service</text>
+    
+    <rect x="500" y="200" width="120" height="80" rx="10" fill="url(#serviceGradient)" 
+          class="service" data-service="payment" aria-label="Payment Service"/>
+    <text x="560" y="245" text-anchor="middle" fill="white" font-size="12">Payment Service</text>
+  </g>
+  
+  <g id="databases">
+    <ellipse cx="160" cy="350" rx="40" ry="20" fill="#45B7D1" class="database" aria-label="User Database"/>
+    <text x="160" y="355" text-anchor="middle" fill="white" font-size="10">User DB</text>
+    
+    <ellipse cx="360" cy="350" rx="40" ry="20" fill="#45B7D1" class="database" aria-label="Order Database"/>
+    <text x="360" y="355" text-anchor="middle" fill="white" font-size="10">Order DB</text>
+    
+    <ellipse cx="560" cy="350" rx="40" ry="20" fill="#45B7D1" class="database" aria-label="Payment Database"/>
+    <text x="560" y="355" text-anchor="middle" fill="white" font-size="10">Payment DB</text>
+  </g>
+  
+  <g id="connections">
+    <line x1="400" y1="150" x2="160" y2="200" stroke="#666" stroke-width="2" 
+          stroke-dasharray="5,5" class="connection"/>
+    <line x1="400" y1="150" x2="360" y2="200" stroke="#666" stroke-width="2" 
+          stroke-dasharray="5,5" class="connection"/>
+    <line x1="400" y1="150" x2="560" y2="200" stroke="#666" stroke-width="2" 
+          stroke-dasharray="5,5" class="connection"/>
+    
+    <line x1="160" y1="280" x2="160" y2="330" stroke="#666" stroke-width="2" class="connection"/>
+    <line x1="360" y1="280" x2="360" y2="330" stroke="#666" stroke-width="2" class="connection"/>
+    <line x1="560" y1="280" x2="560" y2="330" stroke="#666" stroke-width="2" class="connection"/>
+  </g>
+  
+  <g id="legend">
+    <rect x="50" y="400" width="250" height="150" fill="#f5f5f5" stroke="#ddd"/>
+    <text x="175" y="420" text-anchor="middle" font-weight="bold">Microservices Legend</text>
+    <polygon points="70,440 80,450 80,470 70,480 60,470 60,450" fill="url(#gatewayGradient)"/>
+    <text x="90" y="465" font-size="12">API Gateway</text>
+    <rect x="70" y="480" width="20" height="15" fill="url(#serviceGradient)"/>
+    <text x="100" y="492" font-size="12">Microservice</text>
+    <ellipse cx="80" cy="510" rx="10" ry="5" fill="#45B7D1"/>
+    <text x="100" y="515" font-size="12">Database</text>
+  </g>
+  
+  <style>
+    .service { cursor: pointer; transition: all 0.3s; }
+    .service:hover { filter: brightness(1.2) drop-shadow(0 0 10px rgba(0,0,0,0.3)); }
+    .connection { animation: flow 2s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -10; } }
+  </style>
+  
+  <script>
+    document.querySelectorAll('.service').forEach(el => {
+      el.addEventListener('click', () => {
+        const service = el.getAttribute('data-service');
+        alert(`Microservice: ${service}`);
+      });
+    });
+  </script>
+</svg>
+"""
+        }
+    
+    def _enhance_prompt_with_examples(self, prompt: str, diagram_type: str) -> str:
+        """Улучшение промпта примерами"""
+        examples = self._get_example_svg_templates()
+        example = examples.get(diagram_type, "")
+        
+        if example:
+            enhanced_prompt = f"""
+{prompt}
+
+## ПРИМЕР КАЧЕСТВЕННОГО SVG ДЛЯ ДАННОГО ТИПА ДИАГРАММЫ:
+
+```svg
+{example}
+```
+
+## ТРЕБОВАНИЯ К КАЧЕСТВУ:
+1. Следуй структуре примера выше
+2. Используй аналогичные градиенты и эффекты
+3. Добавь анимации как в примере
+4. Обеспечь интерактивность
+5. Включи accessibility атрибуты
+6. Оптимизируй для производительности
+
+Создай диаграмму того же качества, что и в примере, но для указанных компонентов и связей.
+"""
+            return enhanced_prompt
+        
+        return prompt
 
 
 # Глобальный экземпляр сервиса
