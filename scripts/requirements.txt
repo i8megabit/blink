@@ -1,0 +1,4 @@
+# Зависимости для умной системы управления Docker кешем
+docker>=6.0.0
+pyyaml>=6.0
+pathlib2>=2.3.7; python_version < "3.4" 
