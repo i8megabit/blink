@@ -1,27 +1,30 @@
 """
 🧠 Модели данных для LLM Tuning микросервиса
-Поддержка моделей, маршрутизации, RAG и динамического тюнинга
+Расширенные модели с поддержкой A/B тестирования, автоматической оптимизации
+и детального мониторинга качества
 """
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, JSON, ForeignKey, Index
+from sqlalchemy import (
+    Column, Integer, String, Text, Boolean, DateTime, Float, 
+    ForeignKey, JSON, Enum as SQLEnum, Index, UniqueConstraint
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 Base = declarative_base()
 
 
 class ModelStatus(str, Enum):
-    """Статусы моделей"""
+    """Статусы моделей LLM"""
     ACTIVE = "active"
     INACTIVE = "inactive"
-    LOADING = "loading"
+    TRAINING = "training"
     ERROR = "error"
-    TUNING = "tuning"
+    OPTIMIZING = "optimizing"
 
 
 class RouteStrategy(str, Enum):
@@ -30,85 +33,114 @@ class RouteStrategy(str, Enum):
     ROUND_ROBIN = "round_robin"
     LOAD_BASED = "load_based"
     QUALITY_BASED = "quality_based"
-    CONTEXT_AWARE = "context_aware"
+    AB_TESTING = "ab_testing"
 
 
-class TuningStatus(str, Enum):
-    """Статусы тюнинга"""
-    PENDING = "pending"
-    RUNNING = "running"
+class TuningStrategy(str, Enum):
+    """Стратегии тюнинга"""
+    ADAPTIVE = "adaptive"
+    AGGREGATE = "aggregate"
+    HYBRID = "hybrid"
+    MANUAL = "manual"
+    CONTINUOUS = "continuous"
+
+
+class ABTestStatus(str, Enum):
+    """Статусы A/B тестов"""
+    ACTIVE = "active"
+    PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
-# SQLAlchemy модели
+class OptimizationType(str, Enum):
+    """Типы оптимизации"""
+    PERFORMANCE = "performance"
+    QUALITY = "quality"
+    MEMORY = "memory"
+    LATENCY = "latency"
+    HYBRID = "hybrid"
+
+
+class QualityMetric(str, Enum):
+    """Метрики качества"""
+    RELEVANCE = "relevance"
+    ACCURACY = "accuracy"
+    COHERENCE = "coherence"
+    FLUENCY = "fluency"
+    COMPLETENESS = "completeness"
+    RESPONSE_TIME = "response_time"
+
+
 class LLMModel(Base):
-    """Модель LLM в системе"""
+    """Модель LLM"""
     __tablename__ = "llm_models"
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, index=True, nullable=False)
-    provider = Column(String(50), nullable=False)  # ollama, openai, anthropic
-    model_id = Column(String(255), nullable=False)  # qwen2.5:7b-turbo
-    status = Column(String(20), default=ModelStatus.INACTIVE.value)
+    provider = Column(String(50), nullable=False, default="ollama")
+    version = Column(String(50), nullable=False, default="latest")
+    description = Column(Text)
     
-    # Конфигурация
-    temperature = Column(Float, default=0.7)
-    max_tokens = Column(Integer, default=4096)
+    # Параметры модели
+    parameters = Column(JSON, default={})
     context_length = Column(Integer, default=4096)
-    batch_size = Column(Integer, default=512)
+    max_tokens = Column(Integer, default=2048)
+    temperature = Column(Float, default=0.7)
+    top_p = Column(Float, default=0.9)
+    
+    # Статус и доступность
+    status = Column(SQLEnum(ModelStatus), default=ModelStatus.ACTIVE)
+    is_available = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
     
     # Производительность
     avg_response_time = Column(Float, default=0.0)
-    avg_quality_score = Column(Float, default=0.0)
-    total_requests = Column(Integer, default=0)
-    error_rate = Column(Float, default=0.0)
+    success_rate = Column(Float, default=1.0)
+    quality_score = Column(Float, default=0.0)
     
     # Метаданные
-    description = Column(Text, nullable=True)
-    tags = Column(JSON, default=list)
-    config = Column(JSON, default=dict)
-    
-    # Временные метки
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    last_used = Column(DateTime(timezone=True), nullable=True)
     
     # Связи
-    routes = relationship("ModelRoute", back_populates="model")
-    tuning_sessions = relationship("TuningSession", back_populates="model")
-    performance_metrics = relationship("PerformanceMetric", back_populates="model")
+    routes = relationship("ModelRoute", back_populates="model", cascade="all, delete-orphan")
+    tuning_sessions = relationship("TuningSession", back_populates="model", cascade="all, delete-orphan")
+    metrics = relationship("PerformanceMetrics", back_populates="model", cascade="all, delete-orphan")
+    ab_tests = relationship("ABTest", back_populates="model", cascade="all, delete-orphan")
+    optimizations = relationship("ModelOptimization", back_populates="model", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_model_provider_status', 'provider', 'status'),
-        Index('idx_model_performance', 'avg_response_time', 'avg_quality_score'),
+        Index('idx_model_quality', 'quality_score'),
+        Index('idx_model_response_time', 'avg_response_time'),
     )
 
 
 class ModelRoute(Base):
-    """Маршруты для моделей"""
+    """Маршрут для модели"""
     __tablename__ = "model_routes"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(255), unique=True, nullable=False)
     model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
-    strategy = Column(String(50), default=RouteStrategy.SMART.value)
     
-    # Условия маршрутизации
-    conditions = Column(JSON, default=dict)  # {"context_type": "seo", "complexity": "high"}
+    # Стратегия маршрутизации
+    strategy = Column(SQLEnum(RouteStrategy), default=RouteStrategy.SMART)
     priority = Column(Integer, default=1)
     weight = Column(Float, default=1.0)
     
-    # Статистика
-    total_requests = Column(Integer, default=0)
-    success_rate = Column(Float, default=0.0)
-    avg_response_time = Column(Float, default=0.0)
+    # Условия маршрутизации
+    request_types = Column(JSON, default=[])  # Список типов запросов
+    keywords = Column(JSON, default=[])  # Ключевые слова для маршрутизации
+    complexity_threshold = Column(Float, default=0.0)  # Порог сложности
+    user_tiers = Column(JSON, default=[])  # Уровни пользователей
     
     # Статус
     is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
     
-    # Временные метки
+    # Метаданные
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -117,308 +149,318 @@ class ModelRoute(Base):
     
     __table_args__ = (
         Index('idx_route_strategy_active', 'strategy', 'is_active'),
-        Index('idx_route_priority', 'priority', 'weight'),
+        Index('idx_route_priority', 'priority'),
     )
 
 
 class TuningSession(Base):
-    """Сессии тюнинга моделей"""
+    """Сессия тюнинга модели"""
     __tablename__ = "tuning_sessions"
     
     id = Column(Integer, primary_key=True, index=True)
-    model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
     name = Column(String(255), nullable=False)
-    status = Column(String(20), default=TuningStatus.PENDING.value)
+    model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
     
     # Параметры тюнинга
-    strategy = Column(String(50), nullable=False)  # adaptive, aggregate, hybrid
+    strategy = Column(SQLEnum(TuningStrategy), default=TuningStrategy.ADAPTIVE)
+    training_data = Column(JSON, default=[])  # Данные для обучения
+    validation_data = Column(JSON, default=[])  # Данные для валидации
+    
+    # Гиперпараметры
     learning_rate = Column(Float, default=0.001)
     batch_size = Column(Integer, default=32)
     epochs = Column(Integer, default=3)
     
-    # Данные для тюнинга
-    training_data = Column(JSON, default=list)
-    validation_data = Column(JSON, default=list)
+    # Статус и прогресс
+    status = Column(String(50), default="pending")  # pending, running, completed, failed
+    progress = Column(Float, default=0.0)  # 0.0 - 1.0
+    current_epoch = Column(Integer, default=0)
     
     # Результаты
-    initial_quality = Column(Float, nullable=True)
-    final_quality = Column(Float, nullable=True)
-    improvement = Column(Float, nullable=True)
+    final_quality_score = Column(Float, default=0.0)
+    improvement_metrics = Column(JSON, default={})
+    error_log = Column(Text)
     
-    # Логи и метрики
-    logs = Column(JSON, default=list)
-    metrics = Column(JSON, default=dict)
-    
-    # Временные метки
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    # Метаданные
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Связи
     model = relationship("LLMModel", back_populates="tuning_sessions")
     
     __table_args__ = (
         Index('idx_tuning_status', 'status'),
-        Index('idx_tuning_model', 'model_id', 'status'),
+        Index('idx_tuning_model', 'model_id'),
+        Index('idx_tuning_created', 'created_at'),
     )
 
 
-class PerformanceMetric(Base):
+class RAGDocument(Base):
+    """Документ для RAG системы"""
+    __tablename__ = "rag_documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=False)
+    source = Column(String(500))
+    document_type = Column(String(100), default="general")
+    
+    # Векторные представления
+    embedding = Column(JSON)  # Векторное представление
+    keywords = Column(JSON, default=[])  # Извлеченные ключевые слова
+    
+    # Метаданные
+    tags = Column(JSON, default=[])
+    metadata = Column(JSON, default={})
+    
+    # Статистика использования
+    usage_count = Column(Integer, default=0)
+    last_used = Column(DateTime(timezone=True))
+    
+    # Метаданные
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    __table_args__ = (
+        Index('idx_rag_document_type', 'document_type'),
+        Index('idx_rag_usage_count', 'usage_count'),
+        Index('idx_rag_created', 'created_at'),
+    )
+
+
+class PerformanceMetrics(Base):
     """Метрики производительности"""
     __tablename__ = "performance_metrics"
     
     id = Column(Integer, primary_key=True, index=True)
     model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
     
-    # Метрики
-    response_time = Column(Float, nullable=False)
-    quality_score = Column(Float, nullable=True)
-    token_count = Column(Integer, nullable=True)
-    error_occurred = Column(Boolean, default=False)
-    error_message = Column(Text, nullable=True)
-    
-    # Контекст
-    request_type = Column(String(50), nullable=True)  # rag, direct, tuning
-    context_length = Column(Integer, nullable=True)
-    user_id = Column(String(255), nullable=True)
-    
-    # Временные метки
+    # Временные метрики
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    response_time = Column(Float)  # Время ответа в секундах
+    tokens_generated = Column(Integer)  # Количество сгенерированных токенов
+    tokens_processed = Column(Integer)  # Количество обработанных токенов
+    
+    # Качественные метрики
+    quality_metrics = Column(JSON, default={})  # Детальные метрики качества
+    user_feedback = Column(Float)  # Оценка пользователя (1-5)
+    
+    # Системные метрики
+    memory_usage = Column(Float)  # Использование памяти в MB
+    cpu_usage = Column(Float)  # Использование CPU в %
+    gpu_usage = Column(Float)  # Использование GPU в %
+    
+    # Метаданные запроса
+    request_type = Column(String(100))
+    request_size = Column(Integer)  # Размер запроса в токенах
+    route_used = Column(String(255))
+    
+    # Статус
+    success = Column(Boolean, default=True)
+    error_message = Column(Text)
     
     # Связи
-    model = relationship("LLMModel", back_populates="performance_metrics")
+    model = relationship("LLMModel", back_populates="metrics")
     
     __table_args__ = (
-        Index('idx_metric_timestamp', 'timestamp'),
-        Index('idx_metric_model_time', 'model_id', 'timestamp'),
+        Index('idx_metrics_model_timestamp', 'model_id', 'timestamp'),
+        Index('idx_metrics_response_time', 'response_time'),
+        Index('idx_metrics_quality', 'quality_metrics'),
     )
 
 
-class RAGDocument(Base):
-    """Документы для RAG системы"""
-    __tablename__ = "rag_documents"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(500), nullable=False)
-    content = Column(Text, nullable=False)
-    source = Column(String(500), nullable=True)
-    
-    # Векторные данные
-    embedding = Column(JSON, nullable=True)  # Векторное представление
-    chunk_id = Column(String(255), nullable=True)
-    
-    # Метаданные
-    document_type = Column(String(50), nullable=True)  # seo, technical, content
-    tags = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
-    
-    # Статистика использования
-    usage_count = Column(Integer, default=0)
-    last_used = Column(DateTime(timezone=True), nullable=True)
-    
-    # Временные метки
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    __table_args__ = (
-        Index('idx_document_type', 'document_type'),
-        Index('idx_document_usage', 'usage_count'),
-    )
-
-
-class APICall(Base):
-    """Логи API вызовов"""
-    __tablename__ = "api_calls"
+class APILog(Base):
+    """Лог API запросов"""
+    __tablename__ = "api_logs"
     
     id = Column(Integer, primary_key=True, index=True)
     
     # Запрос
-    endpoint = Column(String(255), nullable=False)
     method = Column(String(10), nullable=False)
-    request_data = Column(JSON, nullable=True)
+    path = Column(String(500), nullable=False)
+    query_params = Column(JSON, default={})
+    request_body = Column(Text)
+    request_size = Column(Integer)
     
     # Ответ
-    response_status = Column(Integer, nullable=True)
-    response_data = Column(JSON, nullable=True)
-    response_time = Column(Float, nullable=False)
+    status_code = Column(Integer, nullable=False)
+    response_body = Column(Text)
+    response_size = Column(Integer)
     
-    # Контекст
-    user_id = Column(String(255), nullable=True)
-    ip_address = Column(String(45), nullable=True)
-    user_agent = Column(Text, nullable=True)
+    # Временные метрики
+    request_time = Column(DateTime(timezone=True), server_default=func.now())
+    processing_time = Column(Float)  # Время обработки в секундах
     
-    # Ошибки
-    error_occurred = Column(Boolean, default=False)
-    error_message = Column(Text, nullable=True)
+    # Пользователь
+    user_id = Column(String(255))
+    ip_address = Column(String(45))
+    user_agent = Column(String(500))
     
-    # Временные метки
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    # Метаданные
+    headers = Column(JSON, default={})
+    error_details = Column(Text)
     
     __table_args__ = (
-        Index('idx_api_timestamp', 'timestamp'),
-        Index('idx_api_endpoint', 'endpoint'),
-        Index('idx_api_user', 'user_id'),
+        Index('idx_api_log_method_path', 'method', 'path'),
+        Index('idx_api_log_status_code', 'status_code'),
+        Index('idx_api_log_request_time', 'request_time'),
+        Index('idx_api_log_user', 'user_id'),
     )
 
 
-# Pydantic модели для API
-class LLMModelCreate(BaseModel):
-    """Создание модели LLM"""
-    name: str = Field(..., description="Название модели")
-    provider: str = Field(..., description="Провайдер (ollama, openai, anthropic)")
-    model_id: str = Field(..., description="ID модели у провайдера")
-    temperature: float = Field(default=0.7, description="Температура генерации")
-    max_tokens: int = Field(default=4096, description="Максимальное количество токенов")
-    context_length: int = Field(default=4096, description="Длина контекста")
-    description: Optional[str] = Field(None, description="Описание модели")
-    tags: List[str] = Field(default=list, description="Теги модели")
-    config: Dict[str, Any] = Field(default=dict, description="Дополнительная конфигурация")
-
-
-class LLMModelUpdate(BaseModel):
-    """Обновление модели LLM"""
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    context_length: Optional[int] = None
-    status: Optional[ModelStatus] = None
-    description: Optional[str] = None
-    tags: Optional[List[str]] = None
-    config: Optional[Dict[str, Any]] = None
-
-
-class LLMModelResponse(BaseModel):
-    """Ответ с моделью LLM"""
-    id: int
-    name: str
-    provider: str
-    model_id: str
-    status: str
-    temperature: float
-    max_tokens: int
-    context_length: int
-    avg_response_time: float
-    avg_quality_score: float
-    total_requests: int
-    error_rate: float
-    description: Optional[str]
-    tags: List[str]
-    config: Dict[str, Any]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    last_used: Optional[datetime]
+class ABTest(Base):
+    """A/B тест для моделей"""
+    __tablename__ = "ab_tests"
     
-    class Config:
-        from_attributes = True
-
-
-class RouteCreate(BaseModel):
-    """Создание маршрута"""
-    name: str = Field(..., description="Название маршрута")
-    model_id: int = Field(..., description="ID модели")
-    strategy: RouteStrategy = Field(default=RouteStrategy.SMART, description="Стратегия маршрутизации")
-    conditions: Dict[str, Any] = Field(default=dict, description="Условия маршрутизации")
-    priority: int = Field(default=1, description="Приоритет")
-    weight: float = Field(default=1.0, description="Вес маршрута")
-
-
-class RouteResponse(BaseModel):
-    """Ответ с маршрутом"""
-    id: int
-    name: str
-    model_id: int
-    strategy: str
-    conditions: Dict[str, Any]
-    priority: int
-    weight: float
-    total_requests: int
-    success_rate: float
-    avg_response_time: float
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False)
+    model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
     
-    class Config:
-        from_attributes = True
-
-
-class TuningSessionCreate(BaseModel):
-    """Создание сессии тюнинга"""
-    model_id: int = Field(..., description="ID модели")
-    name: str = Field(..., description="Название сессии")
-    strategy: str = Field(..., description="Стратегия тюнинга")
-    learning_rate: float = Field(default=0.001, description="Скорость обучения")
-    batch_size: int = Field(default=32, description="Размер батча")
-    epochs: int = Field(default=3, description="Количество эпох")
-    training_data: List[Dict[str, Any]] = Field(default=list, description="Данные для обучения")
-    validation_data: List[Dict[str, Any]] = Field(default=list, description="Данные для валидации")
-
-
-class TuningSessionResponse(BaseModel):
-    """Ответ с сессией тюнинга"""
-    id: int
-    model_id: int
-    name: str
-    status: str
-    strategy: str
-    learning_rate: float
-    batch_size: int
-    epochs: int
-    initial_quality: Optional[float]
-    final_quality: Optional[float]
-    improvement: Optional[float]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    created_at: datetime
+    # Конфигурация теста
+    control_model = Column(String(255), nullable=False)  # Контрольная модель
+    variant_model = Column(String(255), nullable=False)  # Тестовая модель
+    traffic_split = Column(Float, default=0.5)  # Доля трафика для варианта (0.0 - 1.0)
     
-    class Config:
-        from_attributes = True
+    # Условия тестирования
+    request_types = Column(JSON, default=[])  # Типы запросов для тестирования
+    user_segments = Column(JSON, default=[])  # Сегменты пользователей
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True))
+    
+    # Статус
+    status = Column(SQLEnum(ABTestStatus), default=ABTestStatus.ACTIVE)
+    is_active = Column(Boolean, default=True)
+    
+    # Результаты
+    control_metrics = Column(JSON, default={})
+    variant_metrics = Column(JSON, default={})
+    statistical_significance = Column(Float, default=0.0)
+    winner = Column(String(10))  # "control", "variant", "none"
+    
+    # Метаданные
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Связи
+    model = relationship("LLMModel", back_populates="ab_tests")
+    
+    __table_args__ = (
+        Index('idx_abtest_status_active', 'status', 'is_active'),
+        Index('idx_abtest_dates', 'start_date', 'end_date'),
+        Index('idx_abtest_model', 'model_id'),
+    )
 
 
-class RAGQuery(BaseModel):
-    """RAG запрос"""
-    query: str = Field(..., description="Запрос пользователя")
-    context_type: Optional[str] = Field(None, description="Тип контекста")
-    top_k: int = Field(default=5, description="Количество результатов")
-    similarity_threshold: float = Field(default=0.7, description="Порог схожести")
-    use_hybrid_search: bool = Field(default=True, description="Использовать гибридный поиск")
+class ModelOptimization(Base):
+    """Запись об оптимизации модели"""
+    __tablename__ = "model_optimizations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
+    
+    # Тип и параметры оптимизации
+    optimization_type = Column(SQLEnum(OptimizationType), nullable=False)
+    parameters = Column(JSON, default={})  # Параметры оптимизации
+    target_metrics = Column(JSON, default={})  # Целевые метрики
+    
+    # Результаты
+    before_metrics = Column(JSON, default={})  # Метрики до оптимизации
+    after_metrics = Column(JSON, default={})  # Метрики после оптимизации
+    improvement = Column(JSON, default={})  # Улучшения
+    
+    # Статус
+    status = Column(String(50), default="pending")  # pending, running, completed, failed
+    error_message = Column(Text)
+    
+    # Метаданные
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Связи
+    model = relationship("LLMModel", back_populates="optimizations")
+    
+    __table_args__ = (
+        Index('idx_optimization_type_status', 'optimization_type', 'status'),
+        Index('idx_optimization_model', 'model_id'),
+        Index('idx_optimization_created', 'created_at'),
+    )
 
 
-class RAGResponse(BaseModel):
-    """RAG ответ"""
-    answer: str = Field(..., description="Ответ на запрос")
-    sources: List[Dict[str, Any]] = Field(default=list, description="Источники")
-    confidence: float = Field(..., description="Уверенность в ответе")
-    response_time: float = Field(..., description="Время ответа")
-    tokens_used: int = Field(..., description="Использовано токенов")
+class QualityAssessment(Base):
+    """Оценка качества ответов"""
+    __tablename__ = "quality_assessments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    model_id = Column(Integer, ForeignKey("llm_models.id"), nullable=False)
+    
+    # Запрос и ответ
+    request_text = Column(Text, nullable=False)
+    response_text = Column(Text, nullable=False)
+    context_documents = Column(JSON, default=[])  # Использованные документы RAG
+    
+    # Оценки качества
+    relevance_score = Column(Float)  # Релевантность ответа
+    accuracy_score = Column(Float)  # Точность информации
+    coherence_score = Column(Float)  # Связность текста
+    fluency_score = Column(Float)  # Беглость языка
+    completeness_score = Column(Float)  # Полнота ответа
+    
+    # Общая оценка
+    overall_score = Column(Float, nullable=False)
+    
+    # Детали оценки
+    assessment_details = Column(JSON, default={})
+    feedback_notes = Column(Text)
+    
+    # Метаданные
+    assessed_by = Column(String(255))  # Кто оценивал (user, system, expert)
+    assessment_method = Column(String(100))  # Метод оценки
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = (
+        Index('idx_quality_model_score', 'model_id', 'overall_score'),
+        Index('idx_quality_assessed_by', 'assessed_by'),
+        Index('idx_quality_created', 'created_at'),
+    )
 
 
-class RouteRequest(BaseModel):
-    """Запрос на маршрутизацию"""
-    query: str = Field(..., description="Запрос пользователя")
-    context: Optional[Dict[str, Any]] = Field(None, description="Контекст запроса")
-    user_id: Optional[str] = Field(None, description="ID пользователя")
-    priority: Optional[str] = Field(None, description="Приоритет (high, normal, low)")
-    model_preference: Optional[str] = Field(None, description="Предпочтительная модель")
-
-
-class RouteResponse(BaseModel):
-    """Ответ маршрутизатора"""
-    model_id: int = Field(..., description="ID выбранной модели")
-    model_name: str = Field(..., description="Название модели")
-    route_id: int = Field(..., description="ID маршрута")
-    strategy: str = Field(..., description="Использованная стратегия")
-    confidence: float = Field(..., description="Уверенность в выборе")
-    reasoning: str = Field(..., description="Объяснение выбора")
-
-
-class PerformanceMetrics(BaseModel):
-    """Метрики производительности"""
-    model_id: int
-    response_time: float
-    quality_score: Optional[float] = None
-    token_count: Optional[int] = None
-    error_occurred: bool = False
-    error_message: Optional[str] = None
-    request_type: Optional[str] = None
-    context_length: Optional[int] = None
-    user_id: Optional[str] = None 
+class SystemHealth(Base):
+    """Состояние системы"""
+    __tablename__ = "system_health"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Системные метрики
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    cpu_usage = Column(Float)  # Использование CPU в %
+    memory_usage = Column(Float)  # Использование памяти в %
+    disk_usage = Column(Float)  # Использование диска в %
+    network_io = Column(JSON, default={})  # Сетевая активность
+    
+    # Ollama метрики
+    ollama_status = Column(String(50))  # running, stopped, error
+    active_models = Column(Integer, default=0)
+    total_requests = Column(Integer, default=0)
+    error_rate = Column(Float, default=0.0)
+    
+    # RAG метрики
+    rag_status = Column(String(50))  # active, inactive, error
+    documents_count = Column(Integer, default=0)
+    vector_db_status = Column(String(50))
+    
+    # Общие метрики
+    response_time_avg = Column(Float, default=0.0)
+    requests_per_minute = Column(Float, default=0.0)
+    active_connections = Column(Integer, default=0)
+    
+    # Алерты
+    alerts = Column(JSON, default=[])
+    
+    __table_args__ = (
+        Index('idx_health_timestamp', 'timestamp'),
+        Index('idx_health_ollama_status', 'ollama_status'),
+        Index('idx_health_rag_status', 'rag_status'),
+    ) 
