@@ -65,6 +65,7 @@ from .auth import (
 from .database import get_db, engine
 from .models import Base, User, Domain, WordPressPost, AnalysisHistory
 from .llm_router import system_analyzer, llm_router
+from .diagram_service import DiagramService, DiagramGenerationRequest
 
 # Загрузка NLTK данных при старте
 try:
@@ -1064,14 +1065,186 @@ async def get_rag_monitoring_metrics():
 
 @app.get("/api/v1/rag/monitoring/health")
 async def get_rag_health():
-    """Получение статуса здоровья RAG системы"""
+    """Получение статуса здоровья RAG системы."""
     try:
-        from .monitoring import get_rag_health_status
-        health_status = get_rag_health_status()
-        return health_status
+        # Проверяем доступность ChromaDB
+        chroma_client = chromadb.Client()
+        collections = chroma_client.list_collections()
+        
+        return {
+            "status": "healthy",
+            "chromadb_available": True,
+            "collections_count": len(collections),
+            "timestamp": datetime.now().isoformat()
+        }
     except Exception as e:
-        logger.error(f"Error getting RAG health status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"RAG health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "chromadb_available": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+# 🎨 DIAGRAM GENERATION ENDPOINTS
+
+class DiagramGenerationRequestModel(BaseModel):
+    """Модель запроса для генерации диаграммы."""
+    diagram_type: str
+    title: str
+    description: str
+    components: List[Dict[str, Any]]
+    relationships: List[Dict[str, Any]]
+    style: Optional[Dict[str, Any]] = None
+    width: int = 800
+    height: int = 600
+    interactive: bool = True
+    include_legend: bool = True
+
+class DiagramGenerationResponseModel(BaseModel):
+    """Модель ответа для генерации диаграммы."""
+    diagram_id: int
+    svg_content: str
+    quality_score: float
+    generation_time: float
+    model_used: str
+    confidence_score: float
+    validation_result: Dict[str, Any]
+
+@app.post("/api/diagrams/generate", response_model=DiagramGenerationResponseModel)
+async def generate_diagram(
+    request: DiagramGenerationRequestModel,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Генерация SVG диаграммы архитектуры."""
+    try:
+        diagram_service = DiagramService()
+        
+        # Преобразуем запрос в формат сервиса
+        diagram_request = DiagramGenerationRequest(
+            diagram_type=request.diagram_type,
+            title=request.title,
+            description=request.description,
+            components=request.components,
+            relationships=request.relationships,
+            style_config=request.style,
+            user_id=current_user.id
+        )
+        
+        # Генерируем диаграмму
+        result = await diagram_service.generate_diagram(diagram_request, db)
+        
+        return DiagramGenerationResponseModel(
+            diagram_id=result.diagram_id,
+            svg_content=result.svg_content,
+            quality_score=result.quality_score,
+            generation_time=result.generation_time,
+            model_used=result.model_used,
+            confidence_score=result.confidence_score,
+            validation_result=result.validation_result
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации диаграммы: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка генерации диаграммы: {str(e)}"
+        )
+
+@app.get("/api/diagrams/templates")
+async def get_diagram_templates():
+    """Получение доступных шаблонов диаграмм."""
+    try:
+        diagram_service = DiagramService()
+        templates = await diagram_service.get_available_templates()
+        return {"templates": templates}
+    except Exception as e:
+        logger.error(f"Ошибка получения шаблонов: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка получения шаблонов: {str(e)}"
+        )
+
+@app.get("/api/diagrams/{diagram_id}")
+async def get_diagram(
+    diagram_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение диаграммы по ID."""
+    try:
+        from .models import Diagram
+        result = await db.execute(
+            select(Diagram).where(
+                Diagram.id == diagram_id,
+                Diagram.user_id == current_user.id
+            )
+        )
+        diagram = result.scalar_one_or_none()
+        
+        if not diagram:
+            raise HTTPException(status_code=404, detail="Диаграмма не найдена")
+        
+        return {
+            "id": diagram.id,
+            "title": diagram.title,
+            "description": diagram.description,
+            "svg_content": diagram.svg_content,
+            "quality_score": diagram.quality_score,
+            "created_at": diagram.created_at.isoformat(),
+            "diagram_type": diagram.diagram_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка получения диаграммы: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка получения диаграммы: {str(e)}"
+        )
+
+@app.get("/api/diagrams")
+async def get_user_diagrams(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = 10,
+    offset: int = 0
+):
+    """Получение списка диаграмм пользователя."""
+    try:
+        from .models import Diagram
+        result = await db.execute(
+            select(Diagram)
+            .where(Diagram.user_id == current_user.id)
+            .order_by(Diagram.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        diagrams = result.scalars().all()
+        
+        return {
+            "diagrams": [
+                {
+                    "id": d.id,
+                    "title": d.title,
+                    "description": d.description,
+                    "diagram_type": d.diagram_type,
+                    "quality_score": d.quality_score,
+                    "created_at": d.created_at.isoformat()
+                }
+                for d in diagrams
+            ],
+            "total": len(diagrams)
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения диаграмм: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка получения диаграмм: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
