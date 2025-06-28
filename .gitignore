@@ -113,7 +113,9 @@ postgresql.conf
 *.xz
 
 # 🐍 Database directories
-data/
+# Игнорировать всё содержимое data, кроме README.md
+/data/*
+!/data/README.md
 postgres_data/
 mysql_data/
 mongo_data/
