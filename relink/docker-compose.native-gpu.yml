@@ -17,6 +17,14 @@ services:
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://host.docker.internal:11434/api/generate  # Нативная Ollama
       - OLLAMA_MODEL=qwen2.5:7b-turbo
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 1734Mi
+        reservations:
+          cpus: '0.695'
+          memory: 867Mi
     depends_on:
       - db
     extra_hosts:
@@ -31,6 +39,14 @@ services:
         BUILDKIT_INLINE_CACHE: 1
     ports:
       - "3001:80"  # Другой порт
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     depends_on:
       - backend
 
@@ -41,6 +57,14 @@ services:
       POSTGRES_USER: seo_user
       POSTGRES_PASSWORD: seo_pass
       POSTGRES_DB: seo_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     volumes:
       - ./postgres_data_native:/var/lib/postgresql/data
 

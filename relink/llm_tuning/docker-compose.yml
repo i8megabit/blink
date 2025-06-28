@@ -29,6 +29,14 @@ services:
       - OLLAMA_METAL=1
       - OLLAMA_FLASH_ATTENTION=1
       - OLLAMA_KV_CACHE_TYPE=q8_0
+    deploy:
+      resources:
+        limits:
+          cpus: '2.086'
+          memory: 3469Mi
+        reservations:
+          cpus: '1.043'
+          memory: 1734Mi
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -53,6 +61,14 @@ services:
       - POSTGRES_DB=llm_tuning_db
       - POSTGRES_USER=llm_tuning_user
       - POSTGRES_PASSWORD=llm_tuning_pass
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     ports:
       - "5433:5432"
     volumes:
@@ -77,6 +93,14 @@ services:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_ORIGINS=*
       - OLLAMA_MODELS=/app/models
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8.0'
+        reservations:
+          memory: 8G
+          cpus: '4.0'
     volumes:
       - ollama-models:/app/models
       - ollama-data:/root/.ollama
@@ -96,6 +120,14 @@ services:
     container_name: llm-tuning-redis
     ports:
       - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - redis-data:/data
     networks:
@@ -115,6 +147,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
@@ -132,6 +172,14 @@ services:
     container_name: llm-tuning-prometheus
     ports:
       - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -157,6 +205,14 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -178,6 +234,14 @@ services:
       - "14268:14268"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     networks:
       - llm-tuning-network
     restart: unless-stopped

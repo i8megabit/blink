@@ -10,6 +10,14 @@ services:
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
       - OLLAMA_MODEL=qwen2.5:7b-turbo
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 1734Mi
+        reservations:
+          cpus: '0.695'
+          memory: 867Mi
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
@@ -36,7 +44,15 @@ services:
       - DOCS_PATH=/app/static
       - VERSION_FILE=/app/VERSION
       - README_FILE=/app/README.md
-      - CORS_ORIGINS=["http://localhost:3000","http://frontend:80"]
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - ./VERSION:/app/VERSION:ro
       - ./README.md:/app/README.md:ro
@@ -67,9 +83,17 @@ services:
       - CACHE_PREFIX=monitoring:
       - COLLECT_INTERVAL=30
       - RETENTION_DAYS=30
-      - CORS_ORIGINS=["http://localhost:3000","http://frontend:80"]
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 867Mi
+        reservations:
+          cpus: '0.173'
+          memory: 433Mi
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s
@@ -95,7 +119,7 @@ services:
       - REDIS_DB=1
       - CACHE_TTL=3600
       - CACHE_PREFIX=testing:
-      - CORS_ORIGINS=["http://localhost:3000","http://frontend:80"]
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - MAX_CONCURRENT_TESTS=10
@@ -105,6 +129,14 @@ services:
       - PROMETHEUS_PORT=9090
       - JAEGER_HOST=jaeger
       - JAEGER_PORT=6831
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     volumes:
       - ./testing/reports:/app/reports
       - ./testing/test_data:/app/test_data
@@ -126,6 +158,14 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     depends_on:
       - backend
       - docs
@@ -137,6 +177,14 @@ services:
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
     volumes:
       - redis_data:/data
     healthcheck:
@@ -154,6 +202,14 @@ services:
       POSTGRES_USER: seo_user
       POSTGRES_PASSWORD: seo_pass
       POSTGRES_DB: seo_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
     volumes:
       - ../relink_db:/var/lib/postgresql/data
 
@@ -161,6 +217,14 @@ services:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 5204Mi
+        reservations:
+          cpus: '0.695'
+          memory: 2602Mi
     volumes:
       - ./ollama_models:/root/.ollama
       - ./scripts:/scripts
@@ -217,82 +281,61 @@ services:
       sleep 45 && 
       echo '🚀 Загружаем модели для A/B тестирования...' && 
       ollama pull qwen2.5:7b && 
-      ollama pull qwen2.5:7b-instruct && 
-      
-      echo '⚡ Создаем ТУРБО модель (базовая)...' && 
-      ollama create qwen2.5:7b-turbo -f /dev/stdin <<EOF
-      FROM qwen2.5:7b
-      # 🔥 ТУРБО параметры для Apple M4 CPU
-      PARAMETER num_ctx 4096
-      PARAMETER num_batch 512
-      PARAMETER num_thread 8
-      PARAMETER num_gpu 0
-      PARAMETER f16_kv true
-      PARAMETER use_mmap true
-      PARAMETER use_mlock true
-      PARAMETER num_predict 2048
-      PARAMETER temperature 0.7
-      PARAMETER top_p 0.9
-      PARAMETER repeat_penalty 1.1
-      PARAMETER seed 42
-      EOF
-      
-      echo '🎯 Создаем INSTRUCT ТУРБО модель...' && 
-      ollama create qwen2.5:7b-instruct-turbo -f /dev/stdin <<EOF
-      FROM qwen2.5:7b-instruct
-      # 🎯 INSTRUCT ТУРБО для SEO задач M4 CPU
-      PARAMETER num_ctx 4096
-      PARAMETER num_batch 512
-      PARAMETER num_thread 8
-      PARAMETER num_gpu 0
-      PARAMETER f16_kv true
-      PARAMETER use_mmap true
-      PARAMETER use_mlock true
-      PARAMETER num_predict 2048
-      PARAMETER temperature 0.6
-      PARAMETER top_p 0.85
-      PARAMETER repeat_penalty 1.05
-      PARAMETER seed 42
-      # Специально для инструкций
-      PARAMETER stop \"<|im_end|>\"
-      PARAMETER stop \"<|endoftext|>\"
-      EOF
-      
-      echo '🏆 Обе модели готовы для бенчмарка!' &&
-      echo '⚡ Предпрогреваем систему...' &&
-      ollama run qwen2.5:7b-turbo 'Система готова для бенчмарка!' &&
-      ollama run qwen2.5:7b-instruct-turbo 'Instruct модель готова!' &&
-      echo '🔥 Apple M4 A/B система активирована!' &&
+      ollama pull qwen2.5:7b-turbo && 
+      echo '✅ Модели загружены!' && 
       wait"
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:11434/api/tags"]
-      interval: 60s
-      timeout: 45s
-      retries: 5
-      start_period: 600s
+
+  llm_tuning:
+    build:
+      context: .
+      dockerfile: llm_tuning/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=2
+      - OLLAMA_URL=http://ollama:11434
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=llm_tuning
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - MAX_CONCURRENT_TUNINGS=3
+      - TUNING_TIMEOUT=1800
+      - MODEL_RETENTION_DAYS=7
+      - METRICS_ENABLED=true
+      - PROMETHEUS_PORT=9091
     deploy:
       resources:
         limits:
-          memory: 16G
-          cpus: '8.0'
+          cpus: '2.086'
+          memory: 3469Mi
         reservations:
-          memory: 8G
-          cpus: '4.0'
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    security_opt:
-      - seccomp:unconfined
-    ipc: host
+          cpus: '1.043'
+          memory: 1734Mi
+    volumes:
+      - ./llm_tuning/models:/app/models
+      - ./llm_tuning/data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+      - db
+      - ollama
 
-  # 🚀 МОНИТОРИНГ И ОБСЕРВАБИЛЬНОСТЬ
   prometheus:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -301,33 +344,6 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    depends_on:
-      - prometheus
     restart: unless-stopped
 
   jaeger:
@@ -335,147 +351,10 @@ services:
     ports:
       - "16686:16686"
       - "6831:6831/udp"
-      - "6832:6832/udp"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:16686/api/services"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-
-  # 📊 ДОПОЛНИТЕЛЬНЫЕ СЕРВИСЫ ДЛЯ ТЕСТИРОВАНИЯ
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    ports:
-      - "9200:9200"
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    depends_on:
-      - elasticsearch
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - backend
-      - docs
-      - monitoring
-      - testing
-    restart: unless-stopped
-
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    ports:
-      - "8081:8081"
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    ports:
-      - "8082:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@relink.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      - db
-    restart: unless-stopped
-
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    restart: unless-stopped
-
-  wiremock:
-    image: wiremock/wiremock:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./testing/wiremock:/home/wiremock
-    command: --verbose
-    restart: unless-stopped
-
-  selenium:
-    image: selenium/standalone-chrome:latest
-    ports:
-      - "4444:4444"
-      - "7900:7900"
-    environment:
-      - SE_NODE_MAX_SESSIONS=4
-      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
-    volumes:
-      - /dev/shm:/dev/shm
     restart: unless-stopped
 
 volumes:
   redis_data:
-    driver: local
   prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-  elasticsearch_data:
-    driver: local
-  minio_data:
-    driver: local
-  pgadmin_data:
-    driver: local
