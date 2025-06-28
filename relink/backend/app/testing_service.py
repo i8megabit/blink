@@ -1,6 +1,4 @@
-"""
-Сервис тестирования для интеграции с основным бэкендом reLink
-"""
+"""Сервис тестирования для интеграции с основным бэкендом reLink"""
 
 import asyncio
 import json
@@ -783,4 +781,4 @@ class TestingService:
 
 
 # Глобальный экземпляр сервиса тестирования
-testing_service = TestingService() 
+testing_service = TestingService()
