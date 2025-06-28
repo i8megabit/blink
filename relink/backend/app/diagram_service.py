@@ -446,50 +446,40 @@ SVG должен быть оптимизирован для веб-отобра�
     async def _create_embeddings(self, diagram: Diagram, db: AsyncSession):
         """Создание эмбеддингов для RAG поиска."""
         try:
-            # Создаем эмбеддинг для заголовка
-            title_embedding = await self._create_text_embedding(diagram.title)
-            title_emb = DiagramEmbedding(
-                diagram_id=diagram.id,
-                embedding_type="title",
-                vector_model="text-embedding-3-small",
-                embedding_vector=json.dumps(title_embedding.tolist()),
-                dimension=len(title_embedding),
-                context_text=diagram.title,
-                semantic_keywords=self._extract_keywords(diagram.title)
-            )
-            db.add(title_emb)
-            
-            # Создаем эмбеддинг для описания
-            if diagram.description:
-                desc_embedding = await self._create_text_embedding(diagram.description)
-                desc_emb = DiagramEmbedding(
+            # Создаем эмбеддинги для заголовка и описания
+            title_text = f"{diagram.title} {diagram.description or ''}"
+            if title_text.strip():
+                title_embedding = await self._create_text_embedding(title_text)
+                title_emb = DiagramEmbedding(
                     diagram_id=diagram.id,
-                    embedding_type="description",
+                    embedding_type="title",
                     vector_model="text-embedding-3-small",
-                    embedding_vector=json.dumps(desc_embedding.tolist()),
-                    dimension=len(desc_embedding),
-                    context_text=diagram.description,
-                    semantic_keywords=self._extract_keywords(diagram.description)
+                    embedding_vector=json.dumps(title_embedding.tolist()),
+                    dimension=len(title_embedding),
+                    context_text=title_text,
+                    semantic_keywords=self._extract_keywords(title_text)
                 )
-                db.add(desc_emb)
+                db.add(title_emb)
             
-            # Создаем эмбеддинг для компонентов
-            components_text = " ".join([
-                f"{comp.get('name', '')} {comp.get('description', '')}"
-                for comp in diagram.components
-            ])
-            if components_text:
-                comp_embedding = await self._create_text_embedding(components_text)
-                comp_emb = DiagramEmbedding(
-                    diagram_id=diagram.id,
-                    embedding_type="components",
-                    vector_model="text-embedding-3-small",
-                    embedding_vector=json.dumps(comp_embedding.tolist()),
-                    dimension=len(comp_embedding),
-                    context_text=components_text,
-                    semantic_keywords=self._extract_keywords(components_text)
-                )
-                db.add(comp_emb)
+            # Создаем эмбеддинги для компонентов
+            if diagram.components:
+                components_text = " ".join([
+                    f"{comp.get('name', '')} {comp.get('description', '')}"
+                    for comp in diagram.components
+                ])
+                
+                if components_text:
+                    comp_embedding = await self._create_text_embedding(components_text)
+                    comp_emb = DiagramEmbedding(
+                        diagram_id=diagram.id,
+                        embedding_type="components",
+                        vector_model="text-embedding-3-small",
+                        embedding_vector=json.dumps(comp_embedding.tolist()),
+                        dimension=len(comp_embedding),
+                        context_text=components_text,
+                        semantic_keywords=self._extract_keywords(components_text)
+                    )
+                    db.add(comp_emb)
             
             await db.commit()
             
@@ -641,6 +631,76 @@ SVG должен быть оптимизирован для веб-отобра�
             await db.rollback()
             logger.error(f"Ошибка оптимизации диаграммы: {e}")
             raise DatabaseException(f"Ошибка оптимизации диаграммы: {e}")
+    
+    async def get_available_templates(self) -> List[Dict[str, Any]]:
+        """Получение доступных шаблонов диаграмм."""
+        return [
+            {
+                "name": "System Architecture",
+                "description": "Архитектурная диаграмма системы",
+                "type": "system_architecture",
+                "components": ["Frontend", "Backend", "Database", "Cache", "Load Balancer"],
+                "relationships": ["HTTP", "Database Connection", "Cache Hit", "Load Distribution"],
+                "default_style": {
+                    "theme": "modern",
+                    "colors": {
+                        "primary": "#2563eb",
+                        "secondary": "#7c3aed",
+                        "success": "#059669",
+                        "warning": "#d97706",
+                        "error": "#dc2626"
+                    }
+                }
+            },
+            {
+                "name": "Microservices",
+                "description": "Архитектура микросервисов",
+                "type": "microservices",
+                "components": ["API Gateway", "User Service", "Order Service", "Payment Service", "Database"],
+                "relationships": ["HTTP", "Message Queue", "Database Connection"],
+                "default_style": {
+                    "theme": "tech",
+                    "colors": {
+                        "service": "#2563eb",
+                        "api_gateway": "#7c3aed",
+                        "database": "#059669",
+                        "message_queue": "#d97706"
+                    }
+                }
+            },
+            {
+                "name": "Data Flow",
+                "description": "Диаграмма потока данных",
+                "type": "data_flow",
+                "components": ["Data Source", "Processor", "Storage", "Analytics", "Output"],
+                "relationships": ["Data Transfer", "Processing", "Storage", "Analysis"],
+                "default_style": {
+                    "theme": "minimal",
+                    "colors": {
+                        "data": "#0891b2",
+                        "process": "#059669",
+                        "storage": "#7c3aed",
+                        "external": "#dc2626"
+                    }
+                }
+            },
+            {
+                "name": "Deployment",
+                "description": "Диаграмма развертывания",
+                "type": "deployment",
+                "components": ["Development", "CI/CD", "Staging", "Production", "Monitoring"],
+                "relationships": ["Code Push", "Deploy", "Monitor", "Rollback"],
+                "default_style": {
+                    "theme": "corporate",
+                    "colors": {
+                        "development": "#4CAF50",
+                        "staging": "#FF9800",
+                        "production": "#F44336",
+                        "monitoring": "#9C27B0"
+                    }
+                }
+            }
+        ]
 
 # Глобальный экземпляр сервиса
 diagram_service = DiagramService() 

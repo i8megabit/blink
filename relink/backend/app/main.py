@@ -63,7 +63,7 @@ from .auth import (
     UserRegistrationRequest, UserLoginRequest
 )
 from .database import get_db, engine
-from .models import Base, User, Domain, WordPressPost, AnalysisHistory
+from .models import Base, User, Domain, WordPressPost, AnalysisHistory, Diagram, DiagramEmbedding
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
 
