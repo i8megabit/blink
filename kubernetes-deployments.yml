@@ -1,0 +1,242 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: backend:latest
+        resources:
+          requests:
+            cpu: 695m
+            memory: 867Mi
+          limits:
+            cpu: 1391m
+            memory: 1734Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: frontend:latest
+        resources:
+          requests:
+            cpu: 347m
+            memory: 433Mi
+          limits:
+            cpu: 695m
+            memory: 867Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm_tuning-deployment
+  labels:
+    app: llm_tuning
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm_tuning
+  template:
+    metadata:
+      labels:
+        app: llm_tuning
+    spec:
+      containers:
+      - name: llm_tuning
+        image: llm_tuning:latest
+        resources:
+          requests:
+            cpu: 1043m
+            memory: 1734Mi
+          limits:
+            cpu: 2086m
+            memory: 3469Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoring-deployment
+  labels:
+    app: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitoring
+  template:
+    metadata:
+      labels:
+        app: monitoring
+    spec:
+      containers:
+      - name: monitoring
+        image: monitoring:latest
+        resources:
+          requests:
+            cpu: 173m
+            memory: 433Mi
+          limits:
+            cpu: 347m
+            memory: 867Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-deployment
+  labels:
+    app: docs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs
+  template:
+    metadata:
+      labels:
+        app: docs
+    spec:
+      containers:
+      - name: docs
+        image: docs:latest
+        resources:
+          requests:
+            cpu: 173m
+            memory: 216Mi
+          limits:
+            cpu: 347m
+            memory: 433Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testing-deployment
+  labels:
+    app: testing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testing
+  template:
+    metadata:
+      labels:
+        app: testing
+    spec:
+      containers:
+      - name: testing
+        image: testing:latest
+        resources:
+          requests:
+            cpu: 347m
+            memory: 433Mi
+          limits:
+            cpu: 695m
+            memory: 867Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-deployment
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: ollama:latest
+        resources:
+          requests:
+            cpu: 695m
+            memory: 2602Mi
+          limits:
+            cpu: 1391m
+            memory: 5204Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:latest
+        resources:
+          requests:
+            cpu: 173m
+            memory: 216Mi
+          limits:
+            cpu: 347m
+            memory: 433Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:latest
+        resources:
+          requests:
+            cpu: 347m
+            memory: 433Mi
+          limits:
+            cpu: 695m
+            memory: 867Mi

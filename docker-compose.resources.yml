@@ -1,0 +1,83 @@
+version: '3.8'
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 1734Mi
+        reservations:
+          cpus: '0.695'
+          memory: 867Mi
+  frontend:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
+  llm_tuning:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.086'
+          memory: 3469Mi
+        reservations:
+          cpus: '1.043'
+          memory: 1734Mi
+  monitoring:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 867Mi
+        reservations:
+          cpus: '0.173'
+          memory: 433Mi
+  docs:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
+  testing:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi
+  ollama:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 5204Mi
+        reservations:
+          cpus: '0.695'
+          memory: 2602Mi
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433Mi
+        reservations:
+          cpus: '0.173'
+          memory: 216Mi
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867Mi
+        reservations:
+          cpus: '0.347'
+          memory: 433Mi

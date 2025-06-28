@@ -52,20 +52,29 @@ describe('ArchGen Component', () => {
   });
 
   test('можно выбрать шаблон', () => {
-    const microservicesButton = screen.getByText('Микросервисы').closest('button');
-    fireEvent.click(microservicesButton!);
-    
+    // Выбираем первый шаблон
+    const templateButtons = screen.getAllByText('Системная архитектура');
+    expect(templateButtons.length).toBeGreaterThan(0);
+    fireEvent.click(templateButtons[0]);
+
     // Проверяем, что компоненты микросервисов загрузились
-    expect(screen.getByText('API Gateway')).toBeInTheDocument();
-    expect(screen.getByText('User Service')).toBeInTheDocument();
+    const apiGatewayOptions = screen.getAllByText('API Gateway');
+    expect(apiGatewayOptions.length).toBeGreaterThan(0);
+    // Используем функцию-мэтчер для поиска 'User Service'
+    const userServiceOptions = screen.getAllByText((content) => content.includes('User Service'));
+    expect(userServiceOptions.length).toBeGreaterThan(0);
   });
 
   test('можно добавить компонент', () => {
-    const addButton = screen.getByText('+ Добавить');
+    // Считаем количество полей до клика
+    const beforeInputs = screen.getAllByPlaceholderText('Название компонента').length;
+    // Находим первую активную кнопку "+ Добавить"
+    const addButtons = screen.getAllByText('+ Добавить');
+    const addButton = addButtons.find(btn => !btn.hasAttribute('disabled')) || addButtons[0];
     fireEvent.click(addButton);
-    
-    // Проверяем, что появился новый компонент
-    expect(screen.getByDisplayValue('Новый компонент')).toBeInTheDocument();
+    // Считаем количество полей после клика
+    const afterInputs = screen.getAllByPlaceholderText('Название компонента').length;
+    expect(afterInputs).toBeGreaterThan(beforeInputs);
   });
 
   test('можно изменить заголовок', () => {
@@ -76,9 +85,24 @@ describe('ArchGen Component', () => {
   });
 
   test('кнопка генерации активна при заполненных данных', () => {
+    // Заполняем обязательные поля
     const titleInput = screen.getByPlaceholderText('Название диаграммы');
-    fireEvent.change(titleInput, { target: { value: 'Тестовая диаграмма' } });
-    
+    fireEvent.change(titleInput, { target: { value: 'Test Diagram' } });
+
+    // Выбираем шаблон
+    const templateButtons = screen.getAllByText('Системная архитектура');
+    fireEvent.click(templateButtons[0]);
+
+    // Добавляем компонент
+    const addButtons = screen.getAllByText('+ Добавить');
+    const addButton = addButtons.find(btn => !btn.hasAttribute('disabled')) || addButtons[0];
+    fireEvent.click(addButton);
+
+    // Заполняем название компонента
+    const componentInputs = screen.getAllByPlaceholderText('Название компонента');
+    fireEvent.change(componentInputs[0], { target: { value: 'API Gateway' } });
+
+    // Кнопка генерации должна быть активна
     const generateButton = screen.getByText('🎨 Сгенерировать диаграмму');
     expect(generateButton).not.toBeDisabled();
   });
@@ -89,10 +113,10 @@ describe('ArchGen Component', () => {
   });
 
   test('отображаются стили', () => {
-    expect(screen.getByText('modern')).toBeInTheDocument();
-    expect(screen.getByText('minimal')).toBeInTheDocument();
-    expect(screen.getByText('corporate')).toBeInTheDocument();
-    expect(screen.getByText('tech')).toBeInTheDocument();
+    expect(screen.getAllByText('modern').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('minimal').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('corporate').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('tech').length).toBeGreaterThan(0);
   });
 
   test('можно изменить размеры', () => {

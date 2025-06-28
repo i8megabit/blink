@@ -10,6 +10,15 @@
 ![AI](https://img.shields.io/badge/AI-LLM%20+%20RAG-orange.svg)
 ![Tests](https://img.shields.io/badge/tests-vitest%20+%20playwright-brightgreen.svg)
 
+## 📊 Проектные метрики
+
+![Lines of Code](https://img.shields.io/badge/lines%20of%20code-82,377-brightgreen.svg)
+![Repository Size](https://img.shields.io/badge/repository%20size-4.7GB-blue.svg)
+![Files Count](https://img.shields.io/badge/files-252-orange.svg)
+![CPU Cores](https://img.shields.io/badge/CPU-10%20cores%20Apple%20M4-purple.svg)
+![Memory](https://img.shields.io/badge/memory-16GB-red.svg)
+![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M4%20Optimized-yellow.svg)
+
 ## 🚀 Что нового в reLink 4.1.1
 
 ### 🔥 Мажорный рефакторинг

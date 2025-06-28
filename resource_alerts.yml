@@ -1,0 +1,162 @@
+- alert: backend_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="backend"}[5m]) > 1.1128
+  for: 5m
+  labels:
+    severity: warning
+    service: backend
+  annotations:
+    summary: backend CPU usage is high
+    description: backend CPU usage is above 80% of limit (1.391 cores)
+- alert: backend_high_memory
+  expr: container_memory_usage_bytes{container="backend"} > 1454584627.2
+  for: 5m
+  labels:
+    severity: warning
+    service: backend
+  annotations:
+    summary: backend memory usage is high
+    description: backend memory usage is above 80% of limit (1734Mi)
+- alert: frontend_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="frontend"}[5m]) > 0.5559999999999999
+  for: 5m
+  labels:
+    severity: warning
+    service: frontend
+  annotations:
+    summary: frontend CPU usage is high
+    description: frontend CPU usage is above 80% of limit (0.695 cores)
+- alert: frontend_high_memory
+  expr: container_memory_usage_bytes{container="frontend"} > 727292313.6
+  for: 5m
+  labels:
+    severity: warning
+    service: frontend
+  annotations:
+    summary: frontend memory usage is high
+    description: frontend memory usage is above 80% of limit (867Mi)
+- alert: llm_tuning_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="llm_tuning"}[5m]) > 1.6688
+  for: 5m
+  labels:
+    severity: warning
+    service: llm_tuning
+  annotations:
+    summary: llm_tuning CPU usage is high
+    description: llm_tuning CPU usage is above 80% of limit (2.086 cores)
+- alert: llm_tuning_high_memory
+  expr: container_memory_usage_bytes{container="llm_tuning"} > 2910008115.2000003
+  for: 5m
+  labels:
+    severity: warning
+    service: llm_tuning
+  annotations:
+    summary: llm_tuning memory usage is high
+    description: llm_tuning memory usage is above 80% of limit (3469Mi)
+- alert: monitoring_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="monitoring"}[5m]) > 0.2776
+  for: 5m
+  labels:
+    severity: warning
+    service: monitoring
+  annotations:
+    summary: monitoring CPU usage is high
+    description: monitoring CPU usage is above 80% of limit (0.347 cores)
+- alert: monitoring_high_memory
+  expr: container_memory_usage_bytes{container="monitoring"} > 727292313.6
+  for: 5m
+  labels:
+    severity: warning
+    service: monitoring
+  annotations:
+    summary: monitoring memory usage is high
+    description: monitoring memory usage is above 80% of limit (867Mi)
+- alert: docs_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="docs"}[5m]) > 0.2776
+  for: 5m
+  labels:
+    severity: warning
+    service: docs
+  annotations:
+    summary: docs CPU usage is high
+    description: docs CPU usage is above 80% of limit (0.347 cores)
+- alert: docs_high_memory
+  expr: container_memory_usage_bytes{container="docs"} > 363226726.40000004
+  for: 5m
+  labels:
+    severity: warning
+    service: docs
+  annotations:
+    summary: docs memory usage is high
+    description: docs memory usage is above 80% of limit (433Mi)
+- alert: testing_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="testing"}[5m]) > 0.5559999999999999
+  for: 5m
+  labels:
+    severity: warning
+    service: testing
+  annotations:
+    summary: testing CPU usage is high
+    description: testing CPU usage is above 80% of limit (0.695 cores)
+- alert: testing_high_memory
+  expr: container_memory_usage_bytes{container="testing"} > 727292313.6
+  for: 5m
+  labels:
+    severity: warning
+    service: testing
+  annotations:
+    summary: testing memory usage is high
+    description: testing memory usage is above 80% of limit (867Mi)
+- alert: ollama_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="ollama"}[5m]) > 1.1128
+  for: 5m
+  labels:
+    severity: warning
+    service: ollama
+  annotations:
+    summary: ollama CPU usage is high
+    description: ollama CPU usage is above 80% of limit (1.391 cores)
+- alert: ollama_high_memory
+  expr: container_memory_usage_bytes{container="ollama"} > 4365431603.2
+  for: 5m
+  labels:
+    severity: warning
+    service: ollama
+  annotations:
+    summary: ollama memory usage is high
+    description: ollama memory usage is above 80% of limit (5204Mi)
+- alert: redis_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="redis"}[5m]) > 0.2776
+  for: 5m
+  labels:
+    severity: warning
+    service: redis
+  annotations:
+    summary: redis CPU usage is high
+    description: redis CPU usage is above 80% of limit (0.347 cores)
+- alert: redis_high_memory
+  expr: container_memory_usage_bytes{container="redis"} > 363226726.40000004
+  for: 5m
+  labels:
+    severity: warning
+    service: redis
+  annotations:
+    summary: redis memory usage is high
+    description: redis memory usage is above 80% of limit (433Mi)
+- alert: postgres_high_cpu
+  expr: rate(container_cpu_usage_seconds_total{container="postgres"}[5m]) > 0.5559999999999999
+  for: 5m
+  labels:
+    severity: warning
+    service: postgres
+  annotations:
+    summary: postgres CPU usage is high
+    description: postgres CPU usage is above 80% of limit (0.695 cores)
+- alert: postgres_high_memory
+  expr: container_memory_usage_bytes{container="postgres"} > 727292313.6
+  for: 5m
+  labels:
+    severity: warning
+    service: postgres
+  annotations:
+    summary: postgres memory usage is high
+    description: postgres memory usage is above 80% of limit (867Mi)
