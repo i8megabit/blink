@@ -1483,6 +1483,10 @@ async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]
                     date_str = wp_post.get('date', '')
                     if date_str:
                         try:
+                            # WordPress API возвращает дату в UTC, но без timezone info
+                            # Добавляем timezone info
+                            if 'T' in date_str and 'Z' not in date_str:
+                                date_str += 'Z'
                             date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                         except:
                             pass
