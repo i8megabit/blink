@@ -448,4 +448,4 @@ if __name__ == "__main__":
         asyncio.run(run_specific_benchmark(benchmark_name, num_requests))
     else:
         # Запуск полного бенчмарка
-        asyncio.run(run_full_benchmark()) 
+        asyncio.run(run_full_benchmark())
