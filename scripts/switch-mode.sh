@@ -123,7 +123,7 @@ start_native_mode() {
     
     # Настраиваем переменные среды
     export OLLAMA_HOST=0.0.0.0:11434
-    export OLLAMA_MODELS="$PROJECT_DIR/ollama_models"
+    export OLLAMA_MODELS="$PROJECT_DIR/data/ollama_models"
     export OLLAMA_METAL=1
     export OLLAMA_FLASH_ATTENTION=1
     export OLLAMA_KV_CACHE_TYPE=q8_0

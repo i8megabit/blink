@@ -50,7 +50,7 @@
 
 Все режимы используют **общую папку моделей**:
 ```
-ollama_models/
+data/ollama_models/
 ├── models/           # Сами модели
 ├── blobs/           # Blob данные
 └── manifests/       # Метаданные
@@ -144,7 +144,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ### Права доступа к моделям:
 ```bash
-sudo chown -R $(whoami) ollama_models/
+sudo chown -R $(whoami) data/ollama_models/
 ```
 
 ### Контейнеры не запускаются:
