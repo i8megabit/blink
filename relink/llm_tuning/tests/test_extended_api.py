@@ -128,7 +128,7 @@ class TestABTestingAPI:
     """Тесты для A/B тестирования API"""
     
     @pytest.mark.asyncio
-    async def test_create_ab_test(self, async_client, sample_model):
+    async def test_create_ab_test(self, async_client, sample_ab_test):
         """Тест создания A/B теста"""
         with patch('app.services.ABTestingService.create_ab_test') as mock_create:
             mock_create.return_value = sample_ab_test
