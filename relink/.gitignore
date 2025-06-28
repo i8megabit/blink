@@ -5,6 +5,8 @@
 #rules
 *rules*.md
 *roadmap*.md
+*report*.md
+*analysis*.md
 
 # 🐍 Python
 __pycache__/
