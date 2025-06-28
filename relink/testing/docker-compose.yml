@@ -1,0 +1,435 @@
+version: '3.8'
+
+services:
+  # Микросервис тестирования
+  testing-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: relink-testing-service
+    restart: unless-stopped
+    ports:
+      - "8001:8000"  # API порт
+      - "8002:8000"  # Метрики Prometheus
+    environment:
+      # Основные настройки
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # База данных
+      - DATABASE_URL=postgresql+asyncpg://testing_user:testing_password@postgres:5432/testing_db
+      - DB_POOL_SIZE=20
+      - DB_MAX_OVERFLOW=30
+      
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_MAX_CONNECTIONS=50
+      
+      # API настройки
+      - HOST=0.0.0.0
+      - PORT=8000
+      - API_PREFIX=/api/v1
+      - CORS_ORIGINS=["http://localhost:3000", "https://relink.example.com"]
+      - ALLOWED_HOSTS=["localhost", "relink.example.com"]
+      
+      # Безопасность
+      - AUTH_REQUIRED=true
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      
+      # Тестирование
+      - MAX_CONCURRENT_TESTS=10
+      - TEST_TIMEOUT=300
+      - RETRY_ATTEMPTS=3
+      - PARALLEL_EXECUTION=true
+      
+      # Мониторинг
+      - METRICS_PORT=8000
+      - HEALTH_CHECK_INTERVAL=30
+      - METRICS_ENABLED=true
+      - TRACING_ENABLED=true
+      
+      # Логирование
+      - LOG_FORMAT=json
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/app/logs/testing-service.log
+      
+      # Кэширование
+      - CACHE_TTL=3600
+      - CACHE_MAX_SIZE=1000
+      - CACHE_ENABLED=true
+      
+      # Очереди
+      - QUEUE_REDIS_URL=redis://redis:6379/1
+      - QUEUE_WORKERS=4
+      - QUEUE_MAX_RETRIES=3
+      
+      # Файловое хранилище
+      - STORAGE_PATH=/app/storage
+      - MAX_FILE_SIZE=100MB
+      - ALLOWED_FILE_TYPES=["json", "xml", "csv", "html"]
+      
+      # Интеграции
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_TIMEOUT=60
+      - OLLAMA_MODEL=llama3.2:3b
+      
+      # Уведомления
+      - NOTIFICATIONS_ENABLED=true
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - EMAIL_ENABLED=false
+      - SLACK_WEBHOOK=${SLACK_WEBHOOK}
+      
+      # Резервное копирование
+      - BACKUP_ENABLED=true
+      - BACKUP_SCHEDULE=0 2 * * *
+      - BACKUP_RETENTION_DAYS=30
+      
+      # Масштабирование
+      - AUTO_SCALE_ENABLED=true
+      - MIN_INSTANCES=1
+      - MAX_INSTANCES=5
+      - SCALE_UP_THRESHOLD=80
+      - SCALE_DOWN_THRESHOLD=20
+      
+    volumes:
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+      - ./reports:/app/reports
+      - ./config:/app/config
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: relink-testing-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=testing_db
+      - POSTGRES_USER=testing_user
+      - POSTGRES_PASSWORD=testing_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testing_user -d testing_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Redis для кэширования и очередей
+  redis:
+    image: redis:7-alpine
+    container_name: relink-testing-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Prometheus для метрик
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: relink-testing-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - relink-network
+    depends_on:
+      - testing-service
+
+  # Grafana для визуализации
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: relink-testing-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - relink-network
+    depends_on:
+      - prometheus
+
+  # Jaeger для трейсинга
+  jaeger:
+    image: jaegertracing/all-in-one:1.47
+    container_name: relink-testing-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - relink-network
+
+  # Elasticsearch для логов
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: relink-testing-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana для анализа логов
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: relink-testing-kibana
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - relink-network
+    depends_on:
+      - elasticsearch
+
+  # Nginx для проксирования
+  nginx:
+    image: nginx:alpine
+    container_name: relink-testing-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - relink-network
+    depends_on:
+      - testing-service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MinIO для файлового хранилища
+  minio:
+    image: minio/minio:latest
+    container_name: relink-testing-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Commander для управления Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: relink-testing-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - relink-network
+    depends_on:
+      - redis
+
+  # pgAdmin для управления PostgreSQL
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: relink-testing-pgadmin
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@relink.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - relink-network
+    depends_on:
+      - postgres
+
+  # Mailhog для тестирования email
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: relink-testing-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - relink-network
+
+  # WireMock для моков API
+  wiremock:
+    image: wiremock/wiremock:2.35.0
+    container_name: relink-testing-wiremock
+    restart: unless-stopped
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./mocks:/home/wiremock
+    networks:
+      - relink-network
+    command: --verbose
+
+  # Selenium для UI тестов
+  selenium-hub:
+    image: selenium/hub:4.15.0
+    container_name: relink-testing-selenium-hub
+    restart: unless-stopped
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+    networks:
+      - relink-network
+
+  selenium-chrome:
+    image: selenium/node-chrome:4.15.0
+    container_name: relink-testing-selenium-chrome
+    restart: unless-stopped
+    shm_size: 2gb
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+    networks:
+      - relink-network
+    depends_on:
+      - selenium-hub
+
+  selenium-firefox:
+    image: selenium/node-firefox:4.15.0
+    container_name: relink-testing-selenium-firefox
+    restart: unless-stopped
+    shm_size: 2gb
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+    networks:
+      - relink-network
+    depends_on:
+      - selenium-hub
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  minio_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  relink-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
