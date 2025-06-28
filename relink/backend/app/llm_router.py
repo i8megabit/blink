@@ -9,6 +9,10 @@ import asyncio
 import aiohttp
 import json
 import logging
+import platform
+import psutil
+import subprocess
+import os
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
@@ -32,6 +36,232 @@ class LLMServiceType(Enum):
     CONTENT_ANALYSIS = "content_analysis"
     BENCHMARK_SERVICE = "benchmark_service"
     LLM_TUNING = "llm_tuning"
+
+@dataclass
+class SystemSpecs:
+    """Спецификации системы"""
+    platform: str
+    architecture: str
+    cpu_count: int
+    memory_gb: float
+    gpu_available: bool
+    gpu_type: Optional[str] = None
+    apple_silicon: bool = False
+    m1_m2_m4: bool = False
+
+@dataclass
+class OptimizedConfig:
+    """Оптимизированная конфигурация для системы"""
+    model: str
+    num_gpu: int
+    num_thread: int
+    batch_size: int
+    f16_kv: bool
+    temperature: float
+    max_tokens: int
+    context_length: int
+    keep_alive: str
+    request_timeout: int
+    semaphore_limit: int
+    cache_ttl: int
+
+class SystemAnalyzer:
+    """
+    🔍 Анализатор системы для автоопределения оптимальной конфигурации
+    
+    Автоматически определяет:
+    - Тип процессора (Apple Silicon, Intel, AMD)
+    - Доступность GPU
+    - Объем памяти
+    - Оптимальные параметры для Ollama
+    """
+    
+    def __init__(self):
+        self.specs: Optional[SystemSpecs] = None
+        self.optimized_config: Optional[OptimizedConfig] = None
+    
+    async def analyze_system(self) -> SystemSpecs:
+        """Анализ системы и определение спецификаций"""
+        if self.specs:
+            return self.specs
+        
+        platform_name = platform.system()
+        architecture = platform.machine()
+        cpu_count = psutil.cpu_count(logical=True)
+        memory_gb = psutil.virtual_memory().total / (1024**3)
+        
+        # Определение Apple Silicon
+        apple_silicon = False
+        m1_m2_m4 = False
+        
+        if platform_name == "Darwin" and "arm" in architecture.lower():
+            apple_silicon = True
+            # Проверка конкретной модели
+            try:
+                result = subprocess.run(
+                    ["sysctl", "-n", "machdep.cpu.brand_string"], 
+                    capture_output=True, text=True
+                )
+                cpu_brand = result.stdout.lower()
+                if any(x in cpu_brand for x in ["m1", "m2", "m3", "m4"]):
+                    m1_m2_m4 = True
+            except:
+                pass
+        
+        # Определение GPU
+        gpu_available = False
+        gpu_type = None
+        
+        if apple_silicon:
+            gpu_available = True
+            gpu_type = "Apple Silicon GPU"
+        else:
+            try:
+                # Проверка NVIDIA GPU
+                result = subprocess.run(["nvidia-smi"], capture_output=True)
+                if result.returncode == 0:
+                    gpu_available = True
+                    gpu_type = "NVIDIA"
+                else:
+                    # Проверка AMD GPU
+                    result = subprocess.run(["rocm-smi"], capture_output=True)
+                    if result.returncode == 0:
+                        gpu_available = True
+                        gpu_type = "AMD"
+            except:
+                pass
+        
+        self.specs = SystemSpecs(
+            platform=platform_name,
+            architecture=architecture,
+            cpu_count=cpu_count,
+            memory_gb=memory_gb,
+            gpu_available=gpu_available,
+            gpu_type=gpu_type,
+            apple_silicon=apple_silicon,
+            m1_m2_m4=m1_m2_m4
+        )
+        
+        logger.info(f"🔍 System analysis completed: {self.specs}")
+        return self.specs
+    
+    async def optimize_config(self) -> OptimizedConfig:
+        """Оптимизация конфигурации на основе анализа системы"""
+        if self.optimized_config:
+            return self.optimized_config
+        
+        specs = await self.analyze_system()
+        
+        # Базовые настройки
+        config = OptimizedConfig(
+            model="qwen2.5:7b-instruct-turbo",
+            num_gpu=0,
+            num_thread=4,
+            batch_size=512,
+            f16_kv=True,
+            temperature=0.7,
+            max_tokens=2048,
+            context_length=4096,
+            keep_alive="2h",
+            request_timeout=300,
+            semaphore_limit=5,
+            cache_ttl=3600
+        )
+        
+        # Оптимизация для Apple Silicon M1/M2/M4
+        if specs.apple_silicon and specs.m1_m2_m4:
+            config.num_gpu = 1
+            config.num_thread = min(8, specs.cpu_count)
+            config.batch_size = 1024
+            config.f16_kv = True
+            config.context_length = 8192
+            config.semaphore_limit = 8
+            logger.info("🍎 Optimized for Apple Silicon M1/M2/M4")
+        
+        # Оптимизация для других Apple Silicon
+        elif specs.apple_silicon:
+            config.num_gpu = 1
+            config.num_thread = min(6, specs.cpu_count)
+            config.batch_size = 768
+            config.f16_kv = True
+            config.context_length = 6144
+            config.semaphore_limit = 6
+            logger.info("🍎 Optimized for Apple Silicon")
+        
+        # Оптимизация для NVIDIA GPU
+        elif specs.gpu_available and specs.gpu_type == "NVIDIA":
+            config.num_gpu = 1
+            config.num_thread = min(6, specs.cpu_count)
+            config.batch_size = 1024
+            config.f16_kv = True
+            config.context_length = 8192
+            config.semaphore_limit = 6
+            logger.info("🟢 Optimized for NVIDIA GPU")
+        
+        # Оптимизация для AMD GPU
+        elif specs.gpu_available and specs.gpu_type == "AMD":
+            config.num_gpu = 1
+            config.num_thread = min(6, specs.cpu_count)
+            config.batch_size = 768
+            config.f16_kv = True
+            config.context_length = 6144
+            config.semaphore_limit = 6
+            logger.info("🔴 Optimized for AMD GPU")
+        
+        # Оптимизация для CPU-only
+        else:
+            config.num_gpu = 0
+            config.num_thread = min(8, specs.cpu_count)
+            config.batch_size = 256
+            config.f16_kv = False
+            config.context_length = 4096
+            config.semaphore_limit = 4
+            logger.info("💻 Optimized for CPU-only")
+        
+        # Дополнительная оптимизация по памяти
+        if specs.memory_gb >= 32:
+            config.context_length = min(config.context_length * 2, 16384)
+            config.batch_size = min(config.batch_size * 1.5, 2048)
+            config.semaphore_limit = min(config.semaphore_limit + 2, 10)
+            logger.info("💾 High memory optimization applied")
+        elif specs.memory_gb < 8:
+            config.context_length = min(config.context_length // 2, 2048)
+            config.batch_size = min(config.batch_size // 2, 256)
+            config.semaphore_limit = max(config.semaphore_limit - 2, 2)
+            logger.info("💾 Low memory optimization applied")
+        
+        self.optimized_config = config
+        logger.info(f"⚙️ Optimized config: {config}")
+        return config
+    
+    async def get_environment_variables(self) -> Dict[str, str]:
+        """Получение переменных окружения для Ollama"""
+        config = await self.optimize_config()
+        
+        env_vars = {
+            "OLLAMA_HOST": "0.0.0.0",
+            "OLLAMA_ORIGINS": "*",
+            "OLLAMA_KEEP_ALIVE": config.keep_alive,
+            "OLLAMA_CONTEXT_LENGTH": str(config.context_length),
+            "OLLAMA_BATCH_SIZE": str(config.batch_size),
+            "OLLAMA_NUM_PARALLEL": str(config.semaphore_limit),
+            "REQUEST_TIMEOUT": str(config.request_timeout)
+        }
+        
+        # Специальные настройки для Apple Silicon
+        specs = await self.analyze_system()
+        if specs.apple_silicon:
+            env_vars.update({
+                "OLLAMA_METAL": "1",
+                "OLLAMA_FLASH_ATTENTION": "1",
+                "OLLAMA_KV_CACHE_TYPE": "q8_0",
+                "OLLAMA_MEM_FRACTION": "0.9"
+            })
+        
+        return env_vars
+
+# Глобальный экземпляр анализатора
+system_analyzer = SystemAnalyzer()
 
 @dataclass
 class LLMRequest:
@@ -67,19 +297,23 @@ class LLMRouter:
     - RAG с векторной базой знаний
     - Кэширование и оптимизация
     - Обработка ошибок и fallback
+    - Автоопределение оптимальной конфигурации
     """
     
     def __init__(self):
         self.session: Optional[aiohttp.ClientSession] = None
-        self.semaphore = asyncio.Semaphore(5)  # Максимум 5 одновременных запросов
+        self.semaphore: Optional[asyncio.Semaphore] = None
         self.request_queue = asyncio.Queue()
         self.processing = False
+        self.optimized_config: Optional[OptimizedConfig] = None
         self.stats = {
             "total_requests": 0,
             "successful_requests": 0,
             "failed_requests": 0,
             "cached_responses": 0,
-            "avg_response_time": 0.0
+            "avg_response_time": 0.0,
+            "system_specs": None,
+            "optimization_applied": False
         }
     
     async def __aenter__(self):
@@ -92,14 +326,37 @@ class LLMRouter:
         await self.stop()
     
     async def start(self):
-        """Запуск маршрутизатора"""
+        """Запуск маршрутизатора с автоопределением конфигурации"""
         if not self.session:
-            timeout = aiohttp.ClientTimeout(total=300)  # 5 минут
+            # Получение оптимизированной конфигурации
+            self.optimized_config = await system_analyzer.optimize_config()
+            specs = await system_analyzer.analyze_system()
+            
+            # Обновление статистики
+            self.stats["system_specs"] = {
+                "platform": specs.platform,
+                "architecture": specs.architecture,
+                "cpu_count": specs.cpu_count,
+                "memory_gb": specs.memory_gb,
+                "gpu_available": specs.gpu_available,
+                "gpu_type": specs.gpu_type,
+                "apple_silicon": specs.apple_silicon,
+                "m1_m2_m4": specs.m1_m2_m4
+            }
+            self.stats["optimization_applied"] = True
+            
+            # Создание семафора с оптимизированным лимитом
+            self.semaphore = asyncio.Semaphore(self.optimized_config.semaphore_limit)
+            
+            # Создание сессии с оптимизированным таймаутом
+            timeout = aiohttp.ClientTimeout(total=self.optimized_config.request_timeout)
             self.session = aiohttp.ClientSession(
                 timeout=timeout,
                 headers={"Content-Type": "application/json"}
             )
-            logger.info("🚀 LLM Router started")
+            
+            logger.info(f"🚀 LLM Router started with optimized config: {self.optimized_config}")
+            logger.info(f"🔍 System specs: {self.stats['system_specs']}")
     
     async def stop(self):
         """Остановка маршрутизатора"""
