@@ -27,7 +27,9 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from .config import settings
 from .api_client import APIClient
-from .models import UIAnalysis, UserAction, TestReport, HumanProfile
+from .models import UIAnalysis, UserAction, TestReport, HumanProfile, BrowserConfig, APIConfig, PageAnalysis, Issue, IssueSeverity, UserProfile, ScenarioContext, TestResult, TestStatus
+from .services.browser_service import BrowserService
+from .services.scenario_service import ScenarioService
 
 logger = logging.getLogger(__name__)
 
@@ -890,3 +892,555 @@ URL: {context.get('url', 'Неизвестно')}
                 self.driver.quit()
             except:
                 pass 
+
+class UXBotCore:
+    """Ядро UX-бота - основная логика работы"""
+    
+    def __init__(self):
+        self.session_id: Optional[str] = None
+        self.browser_service: Optional[BrowserService] = None
+        self.api_client: Optional[APIClient] = None
+        self.scenario_service: Optional[ScenarioService] = None
+        self.current_user_profile: Optional[UserProfile] = None
+        self.is_running = False
+        self.action_history: List[Dict[str, Any]] = []
+        self.issues_found: List[Issue] = []
+        
+    async def initialize(self, user_profile_id: Optional[str] = None) -> bool:
+        """Инициализация UX-бота"""
+        try:
+            logger.info("Инициализация UX-бота")
+            
+            # Генерация ID сессии
+            self.session_id = str(uuid.uuid4())
+            
+            # Инициализация профиля пользователя
+            if user_profile_id:
+                self.scenario_service = ScenarioService()
+                self.current_user_profile = self.scenario_service.get_user_profile(user_profile_id)
+                if not self.current_user_profile:
+                    logger.warning(f"Профиль пользователя не найден: {user_profile_id}")
+                    self.current_user_profile = self.scenario_service.get_user_profile("beginner")
+            else:
+                self.scenario_service = ScenarioService()
+                self.current_user_profile = self.scenario_service.get_user_profile("beginner")
+            
+            # Инициализация конфигурации браузера
+            browser_config = BrowserConfig(
+                headless=settings.browser_headless,
+                user_agent=settings.user_profiles[0]["name"] if settings.user_profiles else "UX Bot",
+                wait_timeout=settings.browser_timeout,
+                implicit_wait=settings.browser_implicit_wait
+            )
+            
+            # Инициализация сервиса браузера
+            self.browser_service = BrowserService(browser_config)
+            
+            # Инициализация API клиента
+            api_config = APIConfig(
+                base_url=settings.backend_url,
+                timeout=30,
+                retry_count=3
+            )
+            self.api_client = APIClient(api_config)
+            
+            logger.info(f"UX-бот инициализирован. Сессия: {self.session_id}")
+            logger.info(f"Профиль пользователя: {self.current_user_profile.name}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка инициализации UX-бота: {e}")
+            return False
+    
+    async def start_session(self) -> bool:
+        """Запуск сессии UX-бота"""
+        try:
+            if not self.browser_service or not self.api_client:
+                raise RuntimeError("UX-бот не инициализирован")
+            
+            # Запуск сессии браузера
+            browser_started = await self.browser_service.start_session(self.session_id)
+            if not browser_started:
+                raise RuntimeError("Не удалось запустить браузер")
+            
+            # Подключение к API
+            await self.api_client.connect()
+            
+            # Проверка здоровья API
+            api_healthy = await self.api_client.health_check()
+            if not api_healthy:
+                logger.warning("API недоступен, но продолжаем работу")
+            
+            self.is_running = True
+            logger.info(f"Сессия UX-бота запущена: {self.session_id}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка запуска сессии UX-бота: {e}")
+            return False
+    
+    async def stop_session(self):
+        """Остановка сессии UX-бота"""
+        try:
+            self.is_running = False
+            
+            # Закрытие браузера
+            if self.browser_service:
+                await self.browser_service.close_session()
+            
+            # Отключение от API
+            if self.api_client:
+                await self.api_client.disconnect()
+            
+            logger.info(f"Сессия UX-бота остановлена: {self.session_id}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка остановки сессии UX-бота: {e}")
+    
+    async def run_scenario(self, scenario_id: str) -> TestReport:
+        """Запуск тестового сценария"""
+        try:
+            if not self.is_running:
+                raise RuntimeError("UX-бот не запущен")
+            
+            logger.info(f"Запуск сценария: {scenario_id}")
+            
+            # Создание контекста сценария
+            context = self.scenario_service.create_scenario_context(
+                scenario_id=scenario_id,
+                session_id=self.session_id,
+                user_profile=self.current_user_profile
+            )
+            
+            # Выполнение сценария
+            results = await self.scenario_service.execute_scenario(
+                context=context,
+                browser_service=self.browser_service,
+                api_client=self.api_client
+            )
+            
+            # Создание отчета
+            report = await self._create_test_report(scenario_id, results)
+            
+            # Отправка отчета в бэкенд
+            if self.api_client:
+                await self.api_client.send_test_report(report)
+            
+            logger.info(f"Сценарий {scenario_id} завершен. Успешность: {report.success_rate:.1f}%")
+            
+            return report
+            
+        except Exception as e:
+            logger.error(f"Ошибка выполнения сценария {scenario_id}: {e}")
+            # Создание отчета об ошибке
+            error_result = TestResult(
+                test_id=f"{scenario_id}_error",
+                scenario_id=scenario_id,
+                status=TestStatus.FAILED,
+                start_time=datetime.now(),
+                end_time=datetime.now(),
+                success=False,
+                error_message=str(e)
+            )
+            return await self._create_test_report(scenario_id, [error_result])
+    
+    async def analyze_page(self, url: str) -> PageAnalysis:
+        """Анализ страницы"""
+        try:
+            logger.info(f"Анализ страницы: {url}")
+            
+            # Переход на страницу
+            if not await self.browser_service.navigate_to(url):
+                raise RuntimeError(f"Не удалось перейти на страницу: {url}")
+            
+            # Получение базовой информации
+            title = await self.browser_service.get_page_title()
+            current_url = await self.browser_service.get_current_url()
+            
+            # Поиск элементов на странице
+            elements = []
+            common_selectors = [
+                "button", "input", "a", "form", "img", "h1", "h2", "h3", 
+                ".btn", ".form-control", ".nav-link", ".card"
+            ]
+            
+            for selector in common_selectors:
+                found_elements = await self.browser_service.find_elements(selector)
+                for i, element in enumerate(found_elements):
+                    try:
+                        element_info = await self.browser_service.get_element_info(f"{selector}:nth-child({i+1})")
+                        if element_info:
+                            elements.append(element_info)
+                    except:
+                        continue
+            
+            # Создание скриншота
+            screenshot_path = await self.browser_service.take_screenshot(
+                f"analysis_{url.replace('://', '_').replace('/', '_')}.png"
+            )
+            
+            # Анализ доступности
+            accessibility_issues = await self._analyze_accessibility()
+            
+            # Анализ отзывчивости
+            responsiveness_issues = await self._analyze_responsiveness()
+            
+            # Метрики производительности
+            performance_metrics = await self._get_performance_metrics()
+            
+            # Создание анализа страницы
+            analysis = PageAnalysis(
+                url=current_url,
+                title=title,
+                elements=elements,
+                accessibility_issues=accessibility_issues,
+                responsiveness_issues=responsiveness_issues,
+                performance_metrics=performance_metrics,
+                screenshot_path=screenshot_path
+            )
+            
+            # Отправка анализа в бэкенд
+            if self.api_client:
+                await self.api_client.send_page_analysis(analysis)
+            
+            logger.info(f"Анализ страницы завершен. Найдено элементов: {len(elements)}")
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Ошибка анализа страницы {url}: {e}")
+            raise
+    
+    async def get_llm_instruction(self, current_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Получение инструкции от LLM-роутера"""
+        try:
+            if not self.api_client:
+                return {"error": "API клиент не инициализирован"}
+            
+            # Отправка контекста в LLM-роутер
+            context_data = {
+                "session_id": self.session_id,
+                "user_profile": {
+                    "name": self.current_user_profile.name,
+                    "behavior": self.current_user_profile.behavior,
+                    "speed": self.current_user_profile.speed
+                } if self.current_user_profile else None,
+                "current_context": current_context,
+                "action_history": self.action_history[-5:]  # Последние 5 действий
+            }
+            
+            instruction = await self.api_client.get_llm_instruction(
+                session_id=self.session_id,
+                current_context=context_data
+            )
+            
+            logger.info(f"Получена инструкция от LLM: {instruction.get('action', 'unknown')}")
+            
+            return instruction
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения инструкции от LLM: {e}")
+            return {"error": str(e)}
+    
+    async def execute_llm_instruction(self, instruction: Dict[str, Any]) -> Dict[str, Any]:
+        """Выполнение инструкции от LLM"""
+        try:
+            action = instruction.get("action")
+            target = instruction.get("target")
+            
+            if not action:
+                return {"error": "Действие не указано"}
+            
+            logger.info(f"Выполнение действия: {action} -> {target}")
+            
+            result = {"success": False, "action": action, "target": target}
+            
+            # Выполнение действия
+            if action == "click":
+                result["success"] = await self.browser_service.click_element(target)
+                
+            elif action == "type":
+                if ":" in target:
+                    selector, text = target.split(":", 1)
+                    result["success"] = await self.browser_service.type_text(selector, text)
+                else:
+                    result["error"] = "Неверный формат для ввода текста"
+                    
+            elif action == "scroll":
+                if target in ["up", "down", "top", "bottom"]:
+                    script = f"window.scrollTo(0, {'0' if target in ['top', 'up'] else 'document.body.scrollHeight'})"
+                    await self.browser_service.execute_script(script)
+                    result["success"] = True
+                else:
+                    result["success"] = await self.browser_service.scroll_to_element(target)
+                    
+            elif action == "wait":
+                try:
+                    wait_time = float(target)
+                    await asyncio.sleep(wait_time)
+                    result["success"] = True
+                except ValueError:
+                    result["error"] = "Неверное время ожидания"
+                    
+            elif action == "navigate":
+                result["success"] = await self.browser_service.navigate_to(target)
+                
+            elif action == "analyze":
+                analysis = await self.analyze_page(target)
+                result["success"] = True
+                result["analysis"] = analysis
+                
+            elif action == "stop":
+                await self.stop_session()
+                result["success"] = True
+                
+            else:
+                result["error"] = f"Неизвестное действие: {action}"
+            
+            # Добавление действия в историю
+            self.action_history.append({
+                "action": action,
+                "target": target,
+                "success": result["success"],
+                "timestamp": datetime.now().isoformat(),
+                "error": result.get("error")
+            })
+            
+            # Отправка результата в LLM-роутер
+            if self.api_client:
+                await self.api_client.send_action_result(
+                    session_id=self.session_id,
+                    action=action,
+                    result=result
+                )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка выполнения инструкции: {e}")
+            return {"error": str(e), "action": instruction.get("action")}
+    
+    async def run_interactive_session(self, start_url: str, max_actions: int = 50) -> TestReport:
+        """Запуск интерактивной сессии с LLM"""
+        try:
+            logger.info(f"Запуск интерактивной сессии. Начальный URL: {start_url}")
+            
+            # Переход на начальную страницу
+            if not await self.browser_service.navigate_to(start_url):
+                raise RuntimeError(f"Не удалось перейти на {start_url}")
+            
+            actions_performed = 0
+            results = []
+            
+            while self.is_running and actions_performed < max_actions:
+                try:
+                    # Получение текущего контекста
+                    current_url = await self.browser_service.get_current_url()
+                    page_title = await self.browser_service.get_page_title()
+                    
+                    current_context = {
+                        "url": current_url,
+                        "title": page_title,
+                        "session_id": self.session_id,
+                        "actions_performed": actions_performed
+                    }
+                    
+                    # Получение инструкции от LLM
+                    instruction = await self.get_llm_instruction(current_context)
+                    
+                    if "error" in instruction:
+                        logger.warning(f"Ошибка получения инструкции: {instruction['error']}")
+                        break
+                    
+                    # Выполнение инструкции
+                    result = await self.execute_llm_instruction(instruction)
+                    
+                    if not result.get("success"):
+                        logger.warning(f"Действие не выполнено: {result.get('error')}")
+                    
+                    actions_performed += 1
+                    
+                    # Небольшая пауза между действиями
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка в интерактивной сессии: {e}")
+                    break
+            
+            # Создание отчета
+            report = await self._create_interactive_report(actions_performed)
+            
+            logger.info(f"Интерактивная сессия завершена. Выполнено действий: {actions_performed}")
+            
+            return report
+            
+        except Exception as e:
+            logger.error(f"Ошибка интерактивной сессии: {e}")
+            raise
+    
+    async def _create_test_report(self, scenario_id: str, results: List[TestResult]) -> TestReport:
+        """Создание отчета о тестировании"""
+        total_tests = len(results)
+        successful_tests = len([r for r in results if r.success])
+        failed_tests = len([r for r in results if not r.success])
+        
+        # Анализ проблем
+        issues = []
+        for result in results:
+            if not result.success and result.error_message:
+                issue = Issue(
+                    issue_id=f"issue_{scenario_id}_{result.step_id or 'unknown'}",
+                    type="functionality",
+                    severity=IssueSeverity.HIGH if "критическая" in result.error_message.lower() else IssueSeverity.MEDIUM,
+                    description=result.error_message,
+                    location=result.data.get("url", "unknown"),
+                    screenshot_path=result.screenshot_path
+                )
+                issues.append(issue)
+        
+        report = TestReport(
+            report_id=f"report_{self.session_id}_{scenario_id}",
+            session_id=self.session_id,
+            start_time=datetime.now(),
+            end_time=datetime.now(),
+            total_tests=total_tests,
+            successful_tests=successful_tests,
+            failed_tests=failed_tests,
+            skipped_tests=0,
+            issues=issues,
+            user_profile=self.current_user_profile,
+            test_environment={
+                "browser": "Chrome",
+                "headless": settings.browser_headless,
+                "viewport": f"{settings.browser_viewport_width}x{settings.browser_viewport_height}"
+            }
+        )
+        
+        return report
+    
+    async def _create_interactive_report(self, actions_performed: int) -> TestReport:
+        """Создание отчета об интерактивной сессии"""
+        report = TestReport(
+            report_id=f"interactive_report_{self.session_id}",
+            session_id=self.session_id,
+            start_time=datetime.now(),
+            end_time=datetime.now(),
+            total_tests=actions_performed,
+            successful_tests=len([a for a in self.action_history if a.get("success")]),
+            failed_tests=len([a for a in self.action_history if not a.get("success")]),
+            skipped_tests=0,
+            issues=self.issues_found,
+            user_profile=self.current_user_profile,
+            test_environment={
+                "browser": "Chrome",
+                "headless": settings.browser_headless,
+                "mode": "interactive"
+            },
+            notes=f"Интерактивная сессия с {actions_performed} действиями"
+        )
+        
+        return report
+    
+    async def _analyze_accessibility(self) -> List[Dict[str, Any]]:
+        """Анализ доступности страницы"""
+        issues = []
+        
+        try:
+            # Проверка alt-атрибутов изображений
+            images = await self.browser_service.find_elements("img")
+            for img in images:
+                alt = img.get_attribute("alt")
+                if not alt:
+                    issues.append({
+                        "type": "accessibility",
+                        "severity": "medium",
+                        "description": "Изображение без alt-атрибута",
+                        "element": "img"
+                    })
+            
+            # Проверка ARIA-атрибутов
+            elements_without_aria = await self.browser_service.find_elements("[role]")
+            for elem in elements_without_aria:
+                aria_label = elem.get_attribute("aria-label")
+                if not aria_label:
+                    issues.append({
+                        "type": "accessibility",
+                        "severity": "low",
+                        "description": "Элемент с role без aria-label",
+                        "element": elem.tag_name
+                    })
+            
+        except Exception as e:
+            logger.error(f"Ошибка анализа доступности: {e}")
+        
+        return issues
+    
+    async def _analyze_responsiveness(self) -> List[Dict[str, Any]]:
+        """Анализ отзывчивости страницы"""
+        issues = []
+        
+        try:
+            # Проверка viewport
+            viewport_meta = await self.browser_service.find_element("meta[name='viewport']")
+            if not viewport_meta:
+                issues.append({
+                    "type": "responsiveness",
+                    "severity": "high",
+                    "description": "Отсутствует meta viewport",
+                    "element": "meta"
+                })
+            
+            # Проверка медиа-запросов (базовая)
+            css_files = await self.browser_service.find_elements("link[rel='stylesheet']")
+            if len(css_files) == 0:
+                issues.append({
+                    "type": "responsiveness",
+                    "severity": "medium",
+                    "description": "Отсутствуют CSS файлы",
+                    "element": "link"
+                })
+            
+        except Exception as e:
+            logger.error(f"Ошибка анализа отзывчивости: {e}")
+        
+        return issues
+    
+    async def _get_performance_metrics(self) -> Dict[str, Any]:
+        """Получение метрик производительности"""
+        metrics = {}
+        
+        try:
+            # Базовые метрики через JavaScript
+            performance_script = """
+            () => {
+                const perfData = performance.getEntriesByType('navigation')[0];
+                return {
+                    loadTime: perfData.loadEventEnd - perfData.loadEventStart,
+                    domContentLoaded: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart,
+                    firstPaint: performance.getEntriesByName('first-paint')[0]?.startTime || 0,
+                    firstContentfulPaint: performance.getEntriesByName('first-contentful-paint')[0]?.startTime || 0
+                };
+            }
+            """
+            
+            perf_data = await self.browser_service.execute_script(performance_script)
+            if perf_data:
+                metrics.update(perf_data)
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения метрик производительности: {e}")
+        
+        return metrics
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Получение статистики работы UX-бота"""
+        return {
+            "session_id": self.session_id,
+            "is_running": self.is_running,
+            "user_profile": self.current_user_profile.name if self.current_user_profile else None,
+            "actions_performed": len(self.action_history),
+            "issues_found": len(self.issues_found),
+            "scenarios_available": len(self.scenario_service.scenarios) if self.scenario_service else 0
+        } 

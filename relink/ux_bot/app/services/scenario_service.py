@@ -10,8 +10,9 @@ import time
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 import logging
+from datetime import datetime
 
-from ..models import TestScenario, TestStep, UserAction, TestResult, ScenarioType
+from ..models import TestScenario, TestStep, UserAction, TestResult, ScenarioType, UserProfile, TestStatus, Issue, IssueSeverity
 from ..services.browser_service import BrowserService
 from ..services.api_client import APIClient
 from ..config import settings
@@ -29,6 +30,7 @@ class ScenarioContext:
     start_time: float
     browser_service: BrowserService
     api_client: APIClient
+    user_profile: Optional[UserProfile] = None
 
 
 class ScenarioService:
@@ -37,8 +39,10 @@ class ScenarioService:
     def __init__(self):
         self.scenarios: Dict[str, TestScenario] = {}
         self.custom_actions: Dict[str, Callable] = {}
+        self.user_profiles: Dict[str, UserProfile] = {}
         self._load_builtin_scenarios()
         self._register_custom_actions()
+        self._initialize_user_profiles()
     
     def _load_builtin_scenarios(self):
         """Загрузка встроенных сценариев"""
@@ -685,4 +689,115 @@ class ScenarioService:
     def add_custom_action(self, name: str, action: Callable):
         """Добавление пользовательского действия"""
         self.custom_actions[name] = action
-        logger.info(f"Добавлено пользовательское действие: {name}") 
+        logger.info(f"Добавлено пользовательское действие: {name}")
+    
+    def _initialize_user_profiles(self):
+        """Инициализация профилей пользователей"""
+        
+        # Профиль SEO-специалиста
+        seo_expert = UserProfile(
+            name="SEO-специалист",
+            description="Профессиональный SEO-инженер с опытом работы",
+            behavior="expert",
+            speed="normal",
+            preferences={
+                "focus_on_metrics": True,
+                "detailed_analysis": True,
+                "technical_seo": True
+            },
+            typical_actions=[
+                "analyze_domain",
+                "check_metrics",
+                "generate_reports",
+                "export_data"
+            ]
+        )
+        
+        # Профиль новичка
+        beginner = UserProfile(
+            name="Новичок",
+            description="Пользователь без опыта в SEO",
+            behavior="exploratory",
+            speed="slow",
+            preferences={
+                "guided_tours": True,
+                "simple_interface": True,
+                "help_tooltips": True
+            },
+            typical_actions=[
+                "explore_interface",
+                "read_help",
+                "try_features",
+                "ask_questions"
+            ]
+        )
+        
+        # Профиль менеджера
+        manager = UserProfile(
+            name="Менеджер",
+            description="Менеджер проектов, фокусируется на результатах",
+            behavior="goal-oriented",
+            speed="fast",
+            preferences={
+                "quick_overview": True,
+                "summary_reports": True,
+                "team_collaboration": True
+            },
+            typical_actions=[
+                "view_dashboard",
+                "check_progress",
+                "generate_summaries",
+                "share_reports"
+            ]
+        )
+        
+        self.user_profiles = {
+            "seo_expert": seo_expert,
+            "beginner": beginner,
+            "manager": manager
+        }
+        
+        logger.info(f"Инициализировано {len(self.user_profiles)} профилей пользователей")
+    
+    def get_user_profile(self, profile_id: str) -> Optional[UserProfile]:
+        """Получение профиля пользователя по ID"""
+        return self.user_profiles.get(profile_id)
+    
+    def get_all_user_profiles(self) -> List[UserProfile]:
+        """Получение всех профилей пользователей"""
+        return list(self.user_profiles.values())
+    
+    def create_scenario_context(self, scenario_id: str, session_id: str, 
+                               user_profile: Optional[UserProfile] = None) -> ScenarioContext:
+        """Создание контекста для выполнения сценария"""
+        scenario = self.get_scenario(scenario_id)
+        if not scenario:
+            raise ValueError(f"Сценарий не найден: {scenario_id}")
+        
+        return ScenarioContext(
+            scenario_id=scenario_id,
+            session_id=session_id,
+            variables=scenario.variables.copy(),
+            results=[],
+            start_time=time.time(),
+            browser_service=None,
+            api_client=None,
+            user_profile=user_profile
+        )
+    
+    def get_scenario_statistics(self) -> Dict[str, Any]:
+        """Получение статистики по сценариям"""
+        total_scenarios = len(self.scenarios)
+        scenarios_by_priority = {}
+        
+        for scenario in self.scenarios.values():
+            priority = scenario.priority
+            if priority not in scenarios_by_priority:
+                scenarios_by_priority[priority] = 0
+            scenarios_by_priority[priority] += 1
+        
+        return {
+            "total_scenarios": total_scenarios,
+            "by_priority": scenarios_by_priority,
+            "scenarios": [s.scenario_id for s in self.scenarios.values()]
+        } 

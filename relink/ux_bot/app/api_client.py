@@ -13,351 +13,347 @@ from datetime import datetime
 import asyncio
 
 from .config import settings
+from .models import APIConfig, TestReport, PageAnalysis, Issue
 
 logger = logging.getLogger(__name__)
 
 class APIClient:
-    """Клиент для взаимодействия с API reLink"""
+    """Клиент для взаимодействия с API сервисов reLink"""
     
-    def __init__(self):
-        self.base_url = settings.BACKEND_URL
-        self.llm_router_url = f"{self.base_url}/api/llm"
-        self.rag_url = f"{self.base_url}/api/rag"
-        self.testing_url = f"{self.base_url}/api/testing"
+    def __init__(self, config: APIConfig):
+        self.config = config
         self.session: Optional[aiohttp.ClientSession] = None
-        self.timeout = aiohttp.ClientTimeout(total=30)
+        self.auth_token: Optional[str] = None
     
     async def __aenter__(self):
         """Асинхронный контекстный менеджер - вход"""
-        self.session = aiohttp.ClientSession(timeout=self.timeout)
+        await self.connect()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Асинхронный контекстный менеджер - выход"""
+        await self.disconnect()
+    
+    async def connect(self):
+        """Подключение к API"""
+        try:
+            connector = aiohttp.TCPConnector(verify_ssl=self.config.verify_ssl)
+            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+            
+            self.session = aiohttp.ClientSession(
+                base_url=self.config.base_url,
+                headers=self.config.headers,
+                connector=connector,
+                timeout=timeout
+            )
+            
+            logger.info(f"API клиент подключен к {self.config.base_url}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка подключения к API: {e}")
+            raise
+    
+    async def disconnect(self):
+        """Отключение от API"""
         if self.session:
             await self.session.close()
+            self.session = None
+            logger.info("API клиент отключен")
     
-    async def get_llm_guidance(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Получение руководства от LLM роутера
+    async def _make_request(self, method: str, endpoint: str, 
+                          data: Optional[Dict[str, Any]] = None,
+                          headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """Выполнение HTTP запроса"""
+        if not self.session:
+            raise RuntimeError("API клиент не подключен")
         
-        Args:
-            request_data: Данные запроса включая профиль пользователя и контекст
-            
-        Returns:
-            Словарь с руководством для следующего действия
-        """
+        url = f"{self.config.base_url}{endpoint}"
+        request_headers = self.config.headers.copy()
+        
+        if self.auth_token:
+            request_headers["Authorization"] = f"Bearer {self.auth_token}"
+        
+        if headers:
+            request_headers.update(headers)
+        
+        for attempt in range(self.config.retry_count):
+            try:
+                async with self.session.request(
+                    method=method,
+                    url=url,
+                    json=data,
+                    headers=request_headers
+                ) as response:
+                    
+                    if response.status == 200:
+                        return await response.json()
+                    elif response.status == 401:
+                        logger.warning("Неавторизованный запрос, попытка аутентификации")
+                        await self._authenticate()
+                        continue
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"HTTP {response.status}: {error_text}")
+                        return {"error": f"HTTP {response.status}: {error_text}"}
+                        
+            except aiohttp.ClientError as e:
+                logger.error(f"Ошибка сети при попытке {attempt + 1}: {e}")
+                if attempt == self.config.retry_count - 1:
+                    raise
+                await asyncio.sleep(1)
+        
+        return {"error": "Превышено количество попыток"}
+    
+    async def _authenticate(self):
+        """Аутентификация в API"""
         try:
-            if not self.session:
-                raise Exception("API клиент не инициализирован")
+            # Здесь должна быть логика аутентификации
+            # Для демонстрации используем токен из конфига
+            if self.config.auth_token:
+                self.auth_token = self.config.auth_token
+                logger.info("Аутентификация выполнена")
             
-            # Формирование запроса к LLM роутеру
-            llm_request = {
-                "service_type": "ux_testing",
-                "prompt": self._build_ux_prompt(request_data),
-                "context": {
-                    "session_id": request_data.get("session_id"),
-                    "profile": request_data.get("profile"),
-                    "current_context": request_data.get("current_context"),
-                    "action_history": request_data.get("action_history", [])
-                },
-                "llm_model": "qwen2.5:7b-instruct-turbo",
-                "temperature": 0.7,
-                "max_tokens": 1024,
-                "use_rag": True,
-                "priority": "high"
+        except Exception as e:
+            logger.error(f"Ошибка аутентификации: {e}")
+    
+    # Методы для работы с бэкендом reLink
+    
+    async def send_page_analysis(self, analysis: PageAnalysis) -> Dict[str, Any]:
+        """Отправка анализа страницы в бэкенд"""
+        try:
+            data = {
+                "url": analysis.url,
+                "title": analysis.title,
+                "elements": [
+                    {
+                        "selector": elem.selector,
+                        "type": elem.element_type.value,
+                        "text": elem.text,
+                        "attributes": elem.attributes,
+                        "is_visible": elem.is_visible,
+                        "is_enabled": elem.is_enabled,
+                        "position": elem.position,
+                        "size": elem.size
+                    }
+                    for elem in analysis.elements
+                ],
+                "accessibility_issues": analysis.accessibility_issues,
+                "responsiveness_issues": analysis.responsiveness_issues,
+                "performance_metrics": analysis.performance_metrics,
+                "screenshot_path": analysis.screenshot_path,
+                "analysis_time": analysis.analysis_time.isoformat()
             }
             
-            logger.info(f"Отправка запроса к LLM роутеру: {llm_request['service_type']}")
-            
-            async with self.session.post(
-                f"{self.llm_router_url}/process",
-                json=llm_request,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                
-                if response.status == 200:
-                    result = await response.json()
-                    logger.info("Получен ответ от LLM роутера")
-                    return self._parse_llm_response(result)
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка LLM роутера: {response.status} - {error_text}")
-                    return self._get_fallback_guidance()
-                    
-        except Exception as e:
-            logger.error(f"Ошибка получения руководства от LLM: {e}")
-            return self._get_fallback_guidance()
-    
-    def _build_ux_prompt(self, request_data: Dict[str, Any]) -> str:
-        """Построение промпта для UX тестирования"""
-        profile = request_data.get("profile", {})
-        context = request_data.get("current_context", {})
-        history = request_data.get("action_history", [])
-        
-        prompt = f"""
-Ты - эксперт по UX тестированию, анализирующий веб-интерфейс.
-
-ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
-- Имя: {profile.get('name', 'Неизвестно')}
-- Возраст: {profile.get('age', 'Неизвестно')}
-- Профессия: {profile.get('occupation', 'Неизвестно')}
-- Технический уровень: {profile.get('tech_level', 'Неизвестно')}
-- Скорость просмотра: {profile.get('browsing_speed', 'Неизвестно')}
-- Терпение: {profile.get('patience', 'Неизвестно')}
-- Стиль исследования: {profile.get('exploration_style', 'Неизвестно')}
-
-ТЕКУЩИЙ КОНТЕКСТ:
-- URL: {context.get('url', 'Неизвестно')}
-- Заголовок страницы: {context.get('title', 'Неизвестно')}
-- Доступные элементы: {context.get('available_elements', [])}
-
-ИСТОРИЯ ДЕЙСТВИЙ (последние 3):
-{chr(10).join([f"- {action}" for action in history])}
-
-ТВОЯ ЗАДАЧА:
-Проанализируй ситуацию и дай конкретные инструкции для следующего действия, которое выполнит этот пользователь.
-
-УЧТИ:
-1. Характер пользователя (терпение, технический уровень)
-2. Логику исследования интерфейса
-3. Естественность поведения
-4. Цель тестирования функционала
-
-ОТВЕТ ДОЛЖЕН БЫТЬ В JSON ФОРМАТЕ:
-{{
-    "action": "тип_действия",
-    "target": "селектор_или_описание_цели",
-    "reason": "обоснование_действия",
-    "expected_outcome": "ожидаемый_результат",
-    "confidence": 0.0-1.0,
-    "human_delay": "время_задержки_в_секундах"
-}}
-
-ДОСТУПНЫЕ ТИПЫ ДЕЙСТВИЙ:
-- click: клик по элементу
-- type: ввод текста (формат: "селектор:текст")
-- scroll: прокрутка (up/down/top/bottom/селектор)
-- hover: наведение на элемент
-- wait: ожидание (время_в_секундах)
-- navigate: переход по ссылке
-- extract: извлечение данных (all_forms/all_links/селектор)
-- analyze: анализ страницы
-- custom_js: выполнение JS кода
-- stop: завершение сессии
-
-БУДЬ КОНКРЕТЕН И ПРАКТИЧЕН!
-"""
-        
-        return prompt
-    
-    def _parse_llm_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Парсинг ответа от LLM"""
-        try:
-            content = response.get("content", "")
-            
-            # Попытка извлечь JSON из ответа
-            if "{" in content and "}" in content:
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                json_str = content[start:end]
-                
-                try:
-                    parsed = json.loads(json_str)
-                    logger.info(f"Успешно распарсен ответ LLM: {parsed.get('action')}")
-                    return parsed
-                except json.JSONDecodeError:
-                    logger.warning("Не удалось распарсить JSON из ответа LLM")
-            
-            # Fallback - попытка извлечь действие из текста
-            return self._extract_action_from_text(content)
+            result = await self._make_request("POST", "/api/analysis/page", data)
+            logger.info(f"Анализ страницы отправлен: {analysis.url}")
+            return result
             
         except Exception as e:
-            logger.error(f"Ошибка парсинга ответа LLM: {e}")
-            return self._get_fallback_guidance()
+            logger.error(f"Ошибка отправки анализа страницы: {e}")
+            return {"error": str(e)}
     
-    def _extract_action_from_text(self, text: str) -> Dict[str, Any]:
-        """Извлечение действия из текстового ответа"""
-        text_lower = text.lower()
-        
-        if "click" in text_lower:
-            return {"action": "click", "target": "button", "reason": "Извлечено из текста", "confidence": 0.5}
-        elif "type" in text_lower or "ввод" in text_lower:
-            return {"action": "type", "target": "input:test", "reason": "Извлечено из текста", "confidence": 0.5}
-        elif "scroll" in text_lower or "прокрут" in text_lower:
-            return {"action": "scroll", "target": "down", "reason": "Извлечено из текста", "confidence": 0.5}
-        elif "wait" in text_lower or "ждать" in text_lower:
-            return {"action": "wait", "target": "2", "reason": "Извлечено из текста", "confidence": 0.5}
-        else:
-            return self._get_fallback_guidance()
-    
-    def _get_fallback_guidance(self) -> Dict[str, Any]:
-        """Fallback руководство при ошибках"""
-        return {
-            "action": "wait",
-            "target": "3",
-            "reason": "Fallback - ожидание",
-            "expected_outcome": "Пауза для анализа",
-            "confidence": 0.3,
-            "human_delay": 3
-        }
-    
-    async def send_ui_analysis(self, analysis_data: Dict[str, Any]) -> bool:
-        """
-        Отправка данных анализа UI в RAG
-        
-        Args:
-            analysis_data: Данные анализа интерфейса
-            
-        Returns:
-            True если успешно отправлено
-        """
+    async def send_test_report(self, report: TestReport) -> Dict[str, Any]:
+        """Отправка отчета о тестировании в бэкенд"""
         try:
-            if not self.session:
-                raise Exception("API клиент не инициализирован")
-            
-            # Формирование данных для RAG
-            rag_data = {
-                "type": "ui_analysis",
-                "session_id": analysis_data.get("session_id"),
-                "profile_id": analysis_data.get("profile_id"),
-                "url": analysis_data.get("url"),
-                "timestamp": analysis_data.get("timestamp"),
-                "content": json.dumps(analysis_data.get("analysis", {}), ensure_ascii=False),
-                "metadata": {
-                    "source": "ux_bot",
-                    "analysis_type": "ui_structure",
-                    "profile": analysis_data.get("profile_id")
-                }
+            data = {
+                "report_id": report.report_id,
+                "session_id": report.session_id,
+                "start_time": report.start_time.isoformat(),
+                "end_time": report.end_time.isoformat() if report.end_time else None,
+                "duration": report.duration,
+                "total_tests": report.total_tests,
+                "successful_tests": report.successful_tests,
+                "failed_tests": report.failed_tests,
+                "skipped_tests": report.skipped_tests,
+                "success_rate": report.success_rate,
+                "issues": [
+                    {
+                        "issue_id": issue.issue_id,
+                        "type": issue.type,
+                        "severity": issue.severity.value,
+                        "description": issue.description,
+                        "location": issue.location,
+                        "screenshot_path": issue.screenshot_path,
+                        "recommendation": issue.recommendation,
+                        "detected_at": issue.detected_at.isoformat()
+                    }
+                    for issue in report.issues
+                ],
+                "recommendations": [
+                    {
+                        "recommendation_id": rec.recommendation_id,
+                        "issue_id": rec.issue_id,
+                        "priority": rec.priority.value,
+                        "issue": rec.issue,
+                        "solution": rec.solution,
+                        "impact": rec.impact,
+                        "effort": rec.effort,
+                        "category": rec.category
+                    }
+                    for rec in report.recommendations
+                ],
+                "user_profile": {
+                    "name": report.user_profile.name,
+                    "behavior": report.user_profile.behavior,
+                    "speed": report.user_profile.speed
+                } if report.user_profile else None,
+                "test_environment": report.test_environment,
+                "notes": report.notes
             }
             
-            logger.info(f"Отправка анализа UI в RAG: {analysis_data.get('url')}")
+            result = await self._make_request("POST", "/api/reports/test", data)
+            logger.info(f"Отчет о тестировании отправлен: {report.report_id}")
+            return result
             
-            async with self.session.post(
-                f"{self.rag_url}/store",
-                json=rag_data,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                
-                if response.status == 200:
-                    logger.info("Анализ UI успешно отправлен в RAG")
-                    return True
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка отправки в RAG: {response.status} - {error_text}")
-                    return False
-                    
         except Exception as e:
-            logger.error(f"Ошибка отправки анализа UI: {e}")
-            return False
+            logger.error(f"Ошибка отправки отчета о тестировании: {e}")
+            return {"error": str(e)}
     
-    async def send_test_report(self, report_data: Dict[str, Any]) -> bool:
-        """
-        Отправка отчета о тестировании
-        
-        Args:
-            report_data: Данные отчета
-            
-        Returns:
-            True если успешно отправлено
-        """
+    async def send_issue(self, issue: Issue) -> Dict[str, Any]:
+        """Отправка найденной проблемы в бэкенд"""
         try:
-            if not self.session:
-                raise Exception("API клиент не инициализирован")
-            
-            logger.info(f"Отправка отчета о тестировании: {report_data.get('session_id')}")
-            
-            async with self.session.post(
-                f"{self.testing_url}/reports",
-                json=report_data,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                
-                if response.status == 200:
-                    logger.info("Отчет о тестировании успешно отправлен")
-                    return True
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка отправки отчета: {response.status} - {error_text}")
-                    return False
-                    
-        except Exception as e:
-            logger.error(f"Ошибка отправки отчета: {e}")
-            return False
-    
-    async def get_rag_context(self, query: str, session_id: str) -> List[Dict[str, Any]]:
-        """
-        Получение контекста из RAG для улучшения решений
-        
-        Args:
-            query: Запрос для поиска
-            session_id: ID сессии
-            
-        Returns:
-            Список релевантных документов
-        """
-        try:
-            if not self.session:
-                raise Exception("API клиент не инициализирован")
-            
-            search_data = {
-                "query": query,
-                "session_id": session_id,
-                "limit": 5,
-                "filters": {
-                    "type": "ui_analysis",
-                    "source": "ux_bot"
-                }
+            data = {
+                "issue_id": issue.issue_id,
+                "type": issue.type,
+                "severity": issue.severity.value,
+                "description": issue.description,
+                "location": issue.location,
+                "screenshot_path": issue.screenshot_path,
+                "recommendation": issue.recommendation,
+                "detected_at": issue.detected_at.isoformat()
             }
             
-            logger.info(f"Поиск контекста в RAG: {query}")
+            result = await self._make_request("POST", "/api/issues", data)
+            logger.info(f"Проблема отправлена: {issue.issue_id}")
+            return result
             
-            async with self.session.post(
-                f"{self.rag_url}/search",
-                json=search_data,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                
-                if response.status == 200:
-                    result = await response.json()
-                    logger.info(f"Найдено {len(result.get('documents', []))} документов в RAG")
-                    return result.get("documents", [])
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка поиска в RAG: {response.status} - {error_text}")
-                    return []
-                    
         except Exception as e:
-            logger.error(f"Ошибка получения контекста из RAG: {e}")
+            logger.error(f"Ошибка отправки проблемы: {e}")
+            return {"error": str(e)}
+    
+    async def get_test_scenarios(self) -> List[Dict[str, Any]]:
+        """Получение списка тестовых сценариев из бэкенда"""
+        try:
+            result = await self._make_request("GET", "/api/scenarios")
+            return result.get("scenarios", [])
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения сценариев: {e}")
             return []
+    
+    async def get_user_profiles(self) -> List[Dict[str, Any]]:
+        """Получение профилей пользователей из бэкенда"""
+        try:
+            result = await self._make_request("GET", "/api/profiles")
+            return result.get("profiles", [])
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения профилей: {e}")
+            return []
+    
+    # Методы для работы с LLM-роутером
+    
+    async def send_context_to_llm(self, context_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Отправка контекста в LLM-роутер для получения инструкций"""
+        try:
+            data = {
+                "context": context_data,
+                "timestamp": datetime.now().isoformat(),
+                "session_id": context_data.get("session_id")
+            }
+            
+            result = await self._make_request("POST", "/api/llm/context", data)
+            logger.info("Контекст отправлен в LLM-роутер")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки контекста в LLM: {e}")
+            return {"error": str(e)}
+    
+    async def get_llm_instruction(self, session_id: str, current_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Получение инструкции от LLM-роутера"""
+        try:
+            data = {
+                "session_id": session_id,
+                "current_context": current_context,
+                "request_type": "instruction"
+            }
+            
+            result = await self._make_request("POST", "/api/llm/instruction", data)
+            logger.info(f"Получена инструкция от LLM для сессии {session_id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения инструкции от LLM: {e}")
+            return {"error": str(e)}
+    
+    async def send_action_result(self, session_id: str, action: str, 
+                               result: Dict[str, Any]) -> Dict[str, Any]:
+        """Отправка результата действия в LLM-роутер"""
+        try:
+            data = {
+                "session_id": session_id,
+                "action": action,
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            result = await self._make_request("POST", "/api/llm/action-result", data)
+            logger.info(f"Результат действия отправлен в LLM: {action}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки результата действия: {e}")
+            return {"error": str(e)}
+    
+    # Методы для работы с RAG-сервисом
+    
+    async def send_to_rag(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Отправка данных в RAG-сервис для анализа"""
+        try:
+            result = await self._make_request("POST", "/api/rag/analyze", data)
+            logger.info("Данные отправлены в RAG-сервис")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки данных в RAG: {e}")
+            return {"error": str(e)}
+    
+    async def get_rag_insights(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Получение инсайтов от RAG-сервиса"""
+        try:
+            data = {
+                "query": query,
+                "context": context,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            result = await self._make_request("POST", "/api/rag/insights", data)
+            logger.info("Получены инсайты от RAG-сервиса")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения инсайтов от RAG: {e}")
+            return {"error": str(e)}
+    
+    # Утилитарные методы
     
     async def health_check(self) -> bool:
         """Проверка здоровья API"""
         try:
-            if not self.session:
-                return False
+            result = await self._make_request("GET", "/health")
+            return "status" in result and result["status"] == "ok"
             
-            async with self.session.get(f"{self.base_url}/health") as response:
-                return response.status == 200
-                
         except Exception as e:
             logger.error(f"Ошибка проверки здоровья API: {e}")
             return False
     
-    async def get_llm_router_stats(self) -> Dict[str, Any]:
-        """Получение статистики LLM роутера"""
+    async def get_api_info(self) -> Dict[str, Any]:
+        """Получение информации об API"""
         try:
-            if not self.session:
-                raise Exception("API клиент не инициализирован")
+            result = await self._make_request("GET", "/api/info")
+            return result
             
-            async with self.session.get(f"{self.llm_router_url}/stats") as response:
-                
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.error(f"Ошибка получения статистики LLM: {response.status}")
-                    return {}
-                    
         except Exception as e:
-            logger.error(f"Ошибка получения статистики LLM: {e}")
-            return {} 
+            logger.error(f"Ошибка получения информации об API: {e}")
+            return {"error": str(e)} 
