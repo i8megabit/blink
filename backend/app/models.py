@@ -1,6 +1,6 @@
 """Модели данных для приложения."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -12,6 +12,10 @@ from dataclasses import dataclass, field
 class Base(DeclarativeBase):
     """Базовый класс для всех моделей."""
     pass
+
+def utc_now():
+    """Возвращает текущее время в UTC с timezone."""
+    return datetime.now(timezone.utc)
 
 class User(Base):
     """Модель пользователя для аутентификации."""
@@ -25,8 +29,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Отношения
@@ -53,8 +57,8 @@ class Domain(Base):
     description: Mapped[str] = mapped_column(Text, nullable=True)
     language: Mapped[str] = mapped_column(String(10), default="ru")
     category: Mapped[str] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Владелец домена
@@ -89,7 +93,7 @@ class ThematicGroup(Base):
     semantic_signature: Mapped[str] = mapped_column(Text)  # TF-IDF подпись темы
     articles_count: Mapped[int] = mapped_column(Integer, default=0)
     avg_semantic_density: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     # Отношения
     domain_ref: Mapped["Domain"] = relationship("Domain", back_populates="themes")
@@ -131,8 +135,8 @@ class WordPressPost(Base):
 
     # Временные метки и статусы
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     last_analyzed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Отношения
@@ -166,7 +170,7 @@ class ArticleEmbedding(Base):
     preprocessing_info: Mapped[dict] = mapped_column(JSON, default=dict)  # информация о предобработке
     quality_metrics: Mapped[dict] = mapped_column(JSON, default=dict)  # метрики качества
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     # Отношения
     post: Mapped["WordPressPost"] = relationship("WordPressPost", back_populates="embeddings")
@@ -202,7 +206,7 @@ class AnalysisHistory(Base):
     processing_time_seconds: Mapped[float] = mapped_column(Float, nullable=True)
 
     # Временные метки
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Отношения
@@ -257,8 +261,8 @@ class Diagram(Base):
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Временные метки
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Отношения
     analysis: Mapped["AnalysisHistory"] = relationship("AnalysisHistory", back_populates="diagrams")
@@ -291,7 +295,7 @@ class DiagramEmbedding(Base):
     context_text: Mapped[str] = mapped_column(Text)  # текст, из которого создан эмбеддинг
     semantic_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
     # Отношения
     diagram: Mapped["Diagram"] = relationship("Diagram", back_populates="embeddings")
@@ -327,8 +331,8 @@ class DiagramTemplate(Base):
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
     avg_quality_score: Mapped[float] = mapped_column(Float, default=0.0)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
         Index('idx_template_name', 'name'),
@@ -423,7 +427,7 @@ class TestExecution(BaseModel):
     test_request: Optional[TestRequest] = None
     status: TestStatus = TestStatus.PENDING
     progress: float = Field(default=0.0, ge=0.0, le=100.0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     results: List[TestResult] = Field(default_factory=list)
@@ -441,8 +445,8 @@ class TestSuite(BaseModel):
     stop_on_failure: bool = Field(default=False)
     timeout: Optional[int] = Field(None, ge=1, le=7200)
     tags: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class TestReport(BaseModel):
@@ -457,7 +461,7 @@ class TestReport(BaseModel):
     average_duration: float = Field(..., ge=0)
     success_rate: float = Field(..., ge=0, le=100)
     results: List[TestResult]
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=utc_now)
     test_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -472,7 +476,7 @@ class TestMetrics(BaseModel):
     cpu_usage_avg: float = Field(..., ge=0, le=100)
     throughput: float = Field(..., ge=0)
     error_rate: float = Field(..., ge=0, le=100)
-    collected_at: datetime = Field(default_factory=datetime.utcnow)
+    collected_at: datetime = Field(default_factory=utc_now)
 
 
 class TestFilter(BaseModel):
@@ -567,8 +571,8 @@ class Test(Base):
     parallel: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dependencies: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     
     # Связи
@@ -584,7 +588,7 @@ class TestExecution(Base):
     test_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("tests.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
@@ -641,8 +645,8 @@ class TestSuite(Base):
     stop_on_failure: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     timeout: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     
     # Связи
@@ -663,7 +667,7 @@ class TestReport(Base):
     average_duration: Mapped[float] = mapped_column(Float, nullable=False)
     success_rate: Mapped[float] = mapped_column(Float, nullable=False)
     results: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
-    generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now)
     test_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Связи

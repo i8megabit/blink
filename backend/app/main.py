@@ -9,7 +9,7 @@ import re
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Tuple
 
@@ -387,7 +387,7 @@ async def generate_ai_thoughts_for_domain(domain: str, posts: List[dict], client
         semantic_weight=0.7,
         related_concepts=["контент", "анализ", "семантика"],
         reasoning_chain=["подсчет статей", "оценка качества"],
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     thoughts.append(content_thought)
     
@@ -403,7 +403,7 @@ async def generate_ai_thoughts_for_domain(domain: str, posts: List[dict], client
         semantic_weight=0.8,
         related_concepts=["связи", "семантика", "рекомендации"],
         reasoning_chain=["анализ тем", "поиск пересечений"],
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     thoughts.append(connection_thought)
     
@@ -598,7 +598,7 @@ async def get_monitoring_stats():
             "response_time": "150ms",
             "error_rate": "0.1%",
             "active_connections": 10,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка получения статистики")
@@ -626,7 +626,7 @@ async def get_optimization_report():
                 "adaptive_optimization_active": True,
                 "performance_monitoring": True,
                 "knowledge_base_entries": len(system_analyzer.knowledge_base),
-                "last_optimization": datetime.utcnow().isoformat()
+                "last_optimization": datetime.now().isoformat()
             },
             "system_insights": {
                 "apple_silicon_detected": report["system_specs"]["apple_silicon"],
@@ -672,7 +672,7 @@ async def get_optimization_environment():
             "environment_variables": env_vars,
             "optimization_applied": True,
             "recommended_ollama_command": f"OLLAMA_HOST={env_vars['OLLAMA_HOST']} OLLAMA_ORIGINS={env_vars['OLLAMA_ORIGINS']} ollama serve",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
@@ -707,7 +707,7 @@ async def trigger_optimization():
                 "context_length": new_config.context_length,
                 "semaphore_limit": new_config.semaphore_limit
             },
-            "optimization_timestamp": datetime.utcnow().isoformat()
+            "optimization_timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
@@ -724,7 +724,7 @@ async def get_cache_stats():
         return {
             "memory_cache_size": 0,
             "redis_cache_size": 0,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка получения статистики кэша")
@@ -758,7 +758,7 @@ async def analyze_domain(
         # Пока возвращаем заглушку
         analysis_result = SEOAnalysisResult(
             domain=request_data.domain,
-            analysis_date=datetime.utcnow(),
+            analysis_date=datetime.now(timezone.utc),
             score=75.5,
             recommendations=[
                 {
@@ -790,7 +790,7 @@ async def analyze_competitors(
         result = {
             "domain": request_data.domain,
             "competitors": request_data.competitors,
-            "analysis_date": datetime.utcnow().isoformat(),
+            "analysis_date": datetime.now().isoformat(),
             "metrics": {
                 "traffic_comparison": {},
                 "backlink_analysis": {},
@@ -816,7 +816,7 @@ async def get_analysis_history(
             {
                 "id": 1,
                 "domain": "example.com",
-                "analysis_date": datetime.utcnow().isoformat(),
+                "analysis_date": datetime.now().isoformat(),
                 "status": "completed",
                 "score": 85.0
             }
@@ -842,8 +842,8 @@ async def export_data(
         export_result = {
             "format": request_data.format,
             "analysis_count": len(request_data.analysis_ids),
-            "download_url": f"/api/v1/downloads/export_{datetime.utcnow().timestamp()}.{request_data.format}",
-            "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat()
+            "download_url": f"/api/v1/downloads/export_{datetime.now().timestamp()}.{request_data.format}",
+            "expires_at": (datetime.now() + timedelta(hours=24)).isoformat()
         }
         
         return export_result
@@ -927,7 +927,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={
             "error": "internal_server_error",
             "message": "Внутренняя ошибка сервера",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     )
 
@@ -948,7 +948,7 @@ async def get_rag_cache_stats():
         return {
             "status": "success",
             "data": stats,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Error getting RAG cache stats: {e}")
@@ -963,7 +963,7 @@ async def clear_rag_cache():
         return {
             "status": "success",
             "message": "RAG cache cleared",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Error clearing RAG cache: {e}")
@@ -978,7 +978,7 @@ async def get_rag_monitoring_metrics():
         return {
             "status": "success",
             "data": metrics,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Error getting RAG monitoring metrics: {e}")
@@ -1289,7 +1289,7 @@ async def get_testing_health():
     return {
         "status": "healthy",
         "running_executions": len(testing_service.running_executions),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now().isoformat()
     }
 
 app.include_router(testing_router, prefix="/api/v1/testing")
@@ -1340,7 +1340,7 @@ async def index_wordpress_site(
                 content=post_data.get('content', ''),
                 excerpt=post_data.get('excerpt', ''),
                 link=post_data.get('link', ''),
-                published_at=post_data.get('date', datetime.utcnow())
+                published_at=post_data.get('date', datetime.now(timezone.utc))
             )
             db.add(post)
             saved_posts.append(post)
@@ -1349,7 +1349,7 @@ async def index_wordpress_site(
         
         # Обновляем статистику домена
         domain_obj.total_posts = len(saved_posts)
-        domain_obj.last_analysis_at = datetime.utcnow()
+        domain_obj.last_analysis_at = datetime.now(timezone.utc)
         await db.commit()
         
         return {
@@ -1406,7 +1406,7 @@ async def reindex_wordpress_site(
                 content=post_data.get('content', ''),
                 excerpt=post_data.get('excerpt', ''),
                 link=post_data.get('link', ''),
-                published_at=post_data.get('date', datetime.utcnow())
+                published_at=post_data.get('date', datetime.now(timezone.utc))
             )
             db.add(post)
             saved_posts.append(post)
@@ -1415,7 +1415,7 @@ async def reindex_wordpress_site(
         
         # Обновляем статистику домена
         domain_obj.total_posts = len(saved_posts)
-        domain_obj.last_analysis_at = datetime.utcnow()
+        domain_obj.last_analysis_at = datetime.now(timezone.utc)
         await db.commit()
         
         return {
@@ -1424,7 +1424,7 @@ async def reindex_wordpress_site(
             "domain": domain,
             "posts_count": len(saved_posts),
             "domain_id": domain_obj.id,
-            "reindexed_at": datetime.utcnow().isoformat()
+            "reindexed_at": datetime.now().isoformat()
         }
         
     except HTTPException:
@@ -1501,7 +1501,7 @@ async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]
                             excerpt = excerpt_elem.get_text().strip()
                         
                         # Извлекаем дату
-                        date = datetime.utcnow()
+                        date = datetime.now(timezone.utc)
                         date_elem = article_soup.find('time') or article_soup.find(class_='date')
                         if date_elem:
                             try:
@@ -1600,7 +1600,7 @@ async def get_seo_recommendations(
             "posts_analyzed": len(posts),
             "recommendations": recommendations,
             "analysis_id": analysis.id,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now().isoformat()
         }
         
     except HTTPException:
@@ -1878,7 +1878,7 @@ async def get_domain_analytics(
                 "display_name": domain.display_name
             },
             "analytics": analytics,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now().isoformat()
         }
         
     except HTTPException:
