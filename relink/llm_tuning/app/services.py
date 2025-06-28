@@ -20,7 +20,8 @@ from sqlalchemy.orm import selectinload
 
 from .models import (
     LLMModel, ModelRoute, TuningSession, PerformanceMetrics,
-    RAGDocument, APILog, ModelStatus, RouteStrategy, TuningStrategy
+    RAGDocument, APILog, ModelStatus, RouteStrategy, TuningStrategy,
+    ABTest, ABTestStatus, ModelOptimization, QualityAssessment, SystemHealth
 )
 from .config import settings
 
@@ -1288,4 +1289,840 @@ class LLMTuningService:
                 "status": "error",
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
-            } 
+            }
+
+
+class ABTestingService:
+    """Сервис для A/B тестирования моделей"""
+    
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+        self.ollama_client = httpx.AsyncClient(
+            base_url=settings.ollama.url,
+            timeout=settings.ollama.timeout
+        )
+    
+    async def create_ab_test(self, test_data: Dict[str, Any]) -> ABTest:
+        """Создание нового A/B теста"""
+        try:
+            # Валидация моделей
+            await self._validate_models(test_data['control_model'], test_data['variant_model'])
+            
+            # Создание теста
+            ab_test = ABTest(**test_data)
+            self.db.add(ab_test)
+            await self.db.commit()
+            await self.db.refresh(ab_test)
+            
+            logger.info(f"✅ Создан A/B тест: {ab_test.name}")
+            return ab_test
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания A/B теста: {e}")
+            raise
+    
+    async def get_ab_test(self, test_id: int) -> Optional[ABTest]:
+        """Получение A/B теста по ID"""
+        stmt = select(ABTest).where(ABTest.id == test_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def list_ab_tests(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        status: Optional[ABTestStatus] = None,
+        model_id: Optional[int] = None
+    ) -> List[ABTest]:
+        """Список A/B тестов"""
+        stmt = select(ABTest)
+        
+        if status:
+            stmt = stmt.where(ABTest.status == status)
+        if model_id:
+            stmt = stmt.where(ABTest.model_id == model_id)
+        
+        stmt = stmt.offset(skip).limit(limit).order_by(ABTest.created_at.desc())
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def select_model_for_request(
+        self, 
+        test_id: int, 
+        request_type: str,
+        user_id: Optional[str] = None
+    ) -> Tuple[str, str]:
+        """Выбор модели для запроса в рамках A/B теста"""
+        test = await self.get_ab_test(test_id)
+        if not test or not test.is_active:
+            raise ValueError("A/B тест не найден или неактивен")
+        
+        # Проверяем условия тестирования
+        if not self._matches_test_conditions(test, request_type, user_id):
+            return test.control_model, "control"
+        
+        # Выбираем модель на основе traffic split
+        import random
+        if random.random() < test.traffic_split:
+            return test.variant_model, "variant"
+        else:
+            return test.control_model, "control"
+    
+    async def record_ab_test_result(
+        self, 
+        test_id: int, 
+        model_variant: str,
+        metrics: Dict[str, Any]
+    ):
+        """Запись результатов A/B теста"""
+        test = await self.get_ab_test(test_id)
+        if not test:
+            return
+        
+        # Обновляем метрики
+        if model_variant == "control":
+            test.control_metrics.update(metrics)
+        else:
+            test.variant_metrics.update(metrics)
+        
+        # Проверяем статистическую значимость
+        if len(test.control_metrics) > 10 and len(test.variant_metrics) > 10:
+            significance = await self._calculate_statistical_significance(test)
+            test.statistical_significance = significance
+            
+            # Определяем победителя
+            if significance > 0.95:
+                test.winner = await self._determine_winner(test)
+        
+        await self.db.commit()
+    
+    async def _validate_models(self, control_model: str, variant_model: str):
+        """Валидация моделей для A/B теста"""
+        try:
+            # Проверяем доступность моделей в Ollama
+            control_response = await self.ollama_client.get("/api/tags")
+            available_models = [m["name"] for m in control_response.json().get("models", [])]
+            
+            if control_model not in available_models:
+                raise ValueError(f"Контрольная модель {control_model} недоступна")
+            if variant_model not in available_models:
+                raise ValueError(f"Тестовая модель {variant_model} недоступна")
+                
+        except Exception as e:
+            logger.error(f"Ошибка валидации моделей: {e}")
+            raise
+    
+    def _matches_test_conditions(
+        self, 
+        test: ABTest, 
+        request_type: str, 
+        user_id: Optional[str]
+    ) -> bool:
+        """Проверка соответствия условиям теста"""
+        # Проверяем тип запроса
+        if test.request_types and request_type not in test.request_types:
+            return False
+        
+        # Проверяем сегмент пользователя
+        if test.user_segments and user_id:
+            # Здесь должна быть логика определения сегмента пользователя
+            pass
+        
+        return True
+    
+    async def _calculate_statistical_significance(self, test: ABTest) -> float:
+        """Расчет статистической значимости"""
+        try:
+            # Простой t-test для сравнения метрик
+            control_scores = test.control_metrics.get('quality_scores', [])
+            variant_scores = test.variant_metrics.get('quality_scores', [])
+            
+            if len(control_scores) < 10 or len(variant_scores) < 10:
+                return 0.0
+            
+            import numpy as np
+            from scipy import stats
+            
+            t_stat, p_value = stats.ttest_ind(control_scores, variant_scores)
+            return 1 - p_value
+            
+        except Exception as e:
+            logger.error(f"Ошибка расчета статистической значимости: {e}")
+            return 0.0
+    
+    async def _determine_winner(self, test: ABTest) -> str:
+        """Определение победителя A/B теста"""
+        control_avg = np.mean(test.control_metrics.get('quality_scores', [0]))
+        variant_avg = np.mean(test.variant_metrics.get('quality_scores', [0]))
+        
+        if variant_avg > control_avg * 1.05:  # 5% улучшение
+            return "variant"
+        elif control_avg > variant_avg * 1.05:
+            return "control"
+        else:
+            return "none"
+
+
+class AutoOptimizationService:
+    """Сервис автоматической оптимизации моделей"""
+    
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+        self.ollama_client = httpx.AsyncClient(
+            base_url=settings.ollama.url,
+            timeout=settings.ollama.timeout
+        )
+    
+    async def optimize_model(
+        self, 
+        model_id: int, 
+        optimization_type: OptimizationType,
+        target_metrics: Dict[str, Any]
+    ) -> ModelOptimization:
+        """Автоматическая оптимизация модели"""
+        try:
+            # Получаем модель
+            model = await self._get_model(model_id)
+            if not model:
+                raise ValueError(f"Модель {model_id} не найдена")
+            
+            # Создаем запись об оптимизации
+            optimization = ModelOptimization(
+                model_id=model_id,
+                optimization_type=optimization_type,
+                target_metrics=target_metrics,
+                status="running"
+            )
+            self.db.add(optimization)
+            await self.db.commit()
+            await self.db.refresh(optimization)
+            
+            # Запускаем оптимизацию в фоне
+            asyncio.create_task(self._run_optimization(optimization.id))
+            
+            return optimization
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка запуска оптимизации: {e}")
+            raise
+    
+    async def _run_optimization(self, optimization_id: int):
+        """Выполнение оптимизации"""
+        try:
+            optimization = await self._get_optimization(optimization_id)
+            if not optimization:
+                return
+            
+            # Получаем текущие метрики
+            before_metrics = await self._get_model_metrics(optimization.model_id)
+            optimization.before_metrics = before_metrics
+            
+            # Применяем оптимизацию
+            new_params = await self._apply_optimization(
+                optimization.optimization_type,
+                optimization.target_metrics
+            )
+            
+            # Тестируем оптимизированную модель
+            after_metrics = await self._test_optimized_model(
+                optimization.model_id,
+                new_params
+            )
+            optimization.after_metrics = after_metrics
+            
+            # Рассчитываем улучшения
+            improvement = self._calculate_improvement(before_metrics, after_metrics)
+            optimization.improvement = improvement
+            
+            # Обновляем статус
+            optimization.status = "completed"
+            optimization.completed_at = datetime.utcnow()
+            
+            await self.db.commit()
+            logger.info(f"✅ Оптимизация {optimization_id} завершена")
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка оптимизации {optimization_id}: {e}")
+            optimization = await self._get_optimization(optimization_id)
+            if optimization:
+                optimization.status = "failed"
+                optimization.error_message = str(e)
+                await self.db.commit()
+    
+    async def _apply_optimization(
+        self, 
+        optimization_type: OptimizationType,
+        target_metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Применение оптимизации"""
+        if optimization_type == OptimizationType.PERFORMANCE:
+            return await self._optimize_performance(target_metrics)
+        elif optimization_type == OptimizationType.QUALITY:
+            return await self._optimize_quality(target_metrics)
+        elif optimization_type == OptimizationType.MEMORY:
+            return await self._optimize_memory(target_metrics)
+        elif optimization_type == OptimizationType.LATENCY:
+            return await self._optimize_latency(target_metrics)
+        else:  # HYBRID
+            return await self._optimize_hybrid(target_metrics)
+    
+    async def _optimize_performance(self, target_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Оптимизация производительности"""
+        return {
+            "num_parallel": 4,
+            "batch_size": 1024,
+            "num_ctx": 4096,
+            "num_gpu": 1,
+            "num_thread": 8
+        }
+    
+    async def _optimize_quality(self, target_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Оптимизация качества"""
+        return {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "top_k": 40,
+            "repeat_penalty": 1.1,
+            "num_ctx": 8192
+        }
+    
+    async def _optimize_memory(self, target_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Оптимизация памяти"""
+        return {
+            "num_ctx": 2048,
+            "batch_size": 512,
+            "num_parallel": 1,
+            "num_gpu": 0
+        }
+    
+    async def _optimize_latency(self, target_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Оптимизация задержки"""
+        return {
+            "num_ctx": 1024,
+            "batch_size": 256,
+            "num_parallel": 2,
+            "num_thread": 4
+        }
+    
+    async def _optimize_hybrid(self, target_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Гибридная оптимизация"""
+        return {
+            "num_ctx": 4096,
+            "batch_size": 768,
+            "num_parallel": 2,
+            "temperature": 0.5,
+            "top_p": 0.9
+        }
+    
+    async def _get_model_metrics(self, model_id: int) -> Dict[str, Any]:
+        """Получение метрик модели"""
+        # Получаем последние метрики модели
+        stmt = select(PerformanceMetrics).where(
+            PerformanceMetrics.model_id == model_id
+        ).order_by(PerformanceMetrics.timestamp.desc()).limit(100)
+        
+        result = await self.db.execute(stmt)
+        metrics = result.scalars().all()
+        
+        if not metrics:
+            return {}
+        
+        return {
+            "avg_response_time": np.mean([m.response_time for m in metrics]),
+            "avg_quality_score": np.mean([m.user_feedback or 0 for m in metrics]),
+            "success_rate": np.mean([1 if m.success else 0 for m in metrics]),
+            "avg_memory_usage": np.mean([m.memory_usage or 0 for m in metrics]),
+            "avg_cpu_usage": np.mean([m.cpu_usage or 0 for m in metrics])
+        }
+    
+    async def _test_optimized_model(
+        self, 
+        model_id: int, 
+        new_params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Тестирование оптимизированной модели"""
+        # Здесь должна быть логика тестирования с новыми параметрами
+        # Пока возвращаем симуляцию
+        return {
+            "avg_response_time": 1.5,
+            "avg_quality_score": 4.2,
+            "success_rate": 0.98,
+            "avg_memory_usage": 2048,
+            "avg_cpu_usage": 45.0
+        }
+    
+    def _calculate_improvement(
+        self, 
+        before: Dict[str, Any], 
+        after: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Расчет улучшений"""
+        improvement = {}
+        for key in before:
+            if key in after and before[key] != 0:
+                if key in ['avg_response_time', 'avg_memory_usage', 'avg_cpu_usage']:
+                    # Меньше - лучше
+                    improvement[key] = (before[key] - after[key]) / before[key] * 100
+                else:
+                    # Больше - лучше
+                    improvement[key] = (after[key] - before[key]) / before[key] * 100
+        
+        return improvement
+
+
+class QualityAssessmentService:
+    """Сервис оценки качества ответов"""
+    
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+    
+    async def assess_quality(
+        self, 
+        model_id: int,
+        request_text: str,
+        response_text: str,
+        context_documents: List[Dict[str, Any]] = None
+    ) -> QualityAssessment:
+        """Автоматическая оценка качества ответа"""
+        try:
+            # Выполняем оценку по различным критериям
+            relevance_score = await self._assess_relevance(request_text, response_text, context_documents)
+            accuracy_score = await self._assess_accuracy(response_text, context_documents)
+            coherence_score = await self._assess_coherence(response_text)
+            fluency_score = await self._assess_fluency(response_text)
+            completeness_score = await self._assess_completeness(request_text, response_text)
+            
+            # Рассчитываем общую оценку
+            overall_score = (relevance_score + accuracy_score + coherence_score + 
+                           fluency_score + completeness_score) / 5
+            
+            # Создаем запись об оценке
+            assessment = QualityAssessment(
+                model_id=model_id,
+                request_text=request_text,
+                response_text=response_text,
+                context_documents=context_documents or [],
+                relevance_score=relevance_score,
+                accuracy_score=accuracy_score,
+                coherence_score=coherence_score,
+                fluency_score=fluency_score,
+                completeness_score=completeness_score,
+                overall_score=overall_score,
+                assessed_by="system",
+                assessment_method="automatic"
+            )
+            
+            self.db.add(assessment)
+            await self.db.commit()
+            await self.db.refresh(assessment)
+            
+            return assessment
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка оценки качества: {e}")
+            raise
+    
+    async def _assess_relevance(
+        self, 
+        request: str, 
+        response: str, 
+        context: List[Dict[str, Any]]
+    ) -> float:
+        """Оценка релевантности ответа"""
+        # Простая эвристика на основе ключевых слов
+        request_words = set(request.lower().split())
+        response_words = set(response.lower().split())
+        
+        if not request_words:
+            return 0.0
+        
+        overlap = len(request_words.intersection(response_words))
+        return min(overlap / len(request_words), 1.0)
+    
+    async def _assess_accuracy(self, response: str, context: List[Dict[str, Any]]) -> float:
+        """Оценка точности информации"""
+        # Базовая оценка на основе наличия контекста
+        if not context:
+            return 0.5  # Нейтральная оценка без контекста
+        
+        # Проверяем, использует ли ответ информацию из контекста
+        context_text = " ".join([doc.get('content', '') for doc in context])
+        context_words = set(context_text.lower().split())
+        response_words = set(response.lower().split())
+        
+        if not context_words:
+            return 0.5
+        
+        overlap = len(context_words.intersection(response_words))
+        return min(overlap / len(response_words), 1.0)
+    
+    async def _assess_coherence(self, response: str) -> float:
+        """Оценка связности текста"""
+        # Простая оценка на основе длины предложений и структуры
+        sentences = response.split('.')
+        if len(sentences) < 2:
+            return 0.8  # Короткий ответ может быть связным
+        
+        # Проверяем среднюю длину предложений
+        avg_length = sum(len(s.split()) for s in sentences) / len(sentences)
+        
+        if 5 <= avg_length <= 20:
+            return 0.9
+        elif 3 <= avg_length <= 25:
+            return 0.7
+        else:
+            return 0.5
+    
+    async def _assess_fluency(self, response: str) -> float:
+        """Оценка беглости языка"""
+        # Простая оценка на основе наличия ошибок
+        # В реальной системе здесь должна быть более сложная логика
+        
+        # Проверяем базовые признаки качества
+        has_capitalization = response[0].isupper() if response else False
+        has_punctuation = response.endswith(('.', '!', '?')) if response else False
+        reasonable_length = 10 <= len(response.split()) <= 500
+        
+        score = 0.0
+        if has_capitalization:
+            score += 0.3
+        if has_punctuation:
+            score += 0.3
+        if reasonable_length:
+            score += 0.4
+        
+        return score
+    
+    async def _assess_completeness(self, request: str, response: str) -> float:
+        """Оценка полноты ответа"""
+        # Проверяем, отвечает ли ответ на все аспекты запроса
+        
+        # Простая эвристика: сравниваем длину ответа с ожидаемой
+        request_words = len(request.split())
+        response_words = len(response.split())
+        
+        if request_words == 0:
+            return 0.5
+        
+        ratio = response_words / request_words
+        
+        if ratio >= 2.0:
+            return 0.9  # Подробный ответ
+        elif ratio >= 1.0:
+            return 0.7  # Адекватный ответ
+        elif ratio >= 0.5:
+            return 0.5  # Краткий ответ
+        else:
+            return 0.3  # Очень краткий ответ
+    
+    async def get_quality_stats(
+        self, 
+        model_id: int, 
+        days: int = 30
+    ) -> Dict[str, Any]:
+        """Получение статистики качества модели"""
+        from datetime import datetime, timedelta
+        
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        stmt = select(QualityAssessment).where(
+            and_(
+                QualityAssessment.model_id == model_id,
+                QualityAssessment.created_at >= start_date
+            )
+        )
+        
+        result = await self.db.execute(stmt)
+        assessments = result.scalars().all()
+        
+        if not assessments:
+            return {}
+        
+        return {
+            "total_assessments": len(assessments),
+            "avg_overall_score": np.mean([a.overall_score for a in assessments]),
+            "avg_relevance": np.mean([a.relevance_score for a in assessments]),
+            "avg_accuracy": np.mean([a.accuracy_score for a in assessments]),
+            "avg_coherence": np.mean([a.coherence_score for a in assessments]),
+            "avg_fluency": np.mean([a.fluency_score for a in assessments]),
+            "avg_completeness": np.mean([a.completeness_score for a in assessments]),
+            "score_distribution": {
+                "excellent": len([a for a in assessments if a.overall_score >= 0.8]),
+                "good": len([a for a in assessments if 0.6 <= a.overall_score < 0.8]),
+                "fair": len([a for a in assessments if 0.4 <= a.overall_score < 0.6]),
+                "poor": len([a for a in assessments if a.overall_score < 0.4])
+            }
+        }
+
+
+class SystemHealthService:
+    """Сервис мониторинга здоровья системы"""
+    
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+        self.ollama_client = httpx.AsyncClient(
+            base_url=settings.ollama.url,
+            timeout=settings.ollama.timeout
+        )
+    
+    async def collect_system_health(self) -> SystemHealth:
+        """Сбор метрик здоровья системы"""
+        try:
+            # Системные метрики
+            cpu_usage = await self._get_cpu_usage()
+            memory_usage = await self._get_memory_usage()
+            disk_usage = await self._get_disk_usage()
+            network_io = await self._get_network_io()
+            
+            # Ollama метрики
+            ollama_status = await self._get_ollama_status()
+            active_models = await self._get_active_models_count()
+            total_requests = await self._get_total_requests()
+            error_rate = await self._get_error_rate()
+            
+            # RAG метрики
+            rag_status = await self._get_rag_status()
+            documents_count = await self._get_documents_count()
+            vector_db_status = await self._get_vector_db_status()
+            
+            # Общие метрики
+            response_time_avg = await self._get_avg_response_time()
+            requests_per_minute = await self._get_requests_per_minute()
+            active_connections = await self._get_active_connections()
+            
+            # Проверяем алерты
+            alerts = await self._check_alerts(
+                cpu_usage, memory_usage, error_rate, response_time_avg
+            )
+            
+            # Создаем запись о здоровье системы
+            health = SystemHealth(
+                cpu_usage=cpu_usage,
+                memory_usage=memory_usage,
+                disk_usage=disk_usage,
+                network_io=network_io,
+                ollama_status=ollama_status,
+                active_models=active_models,
+                total_requests=total_requests,
+                error_rate=error_rate,
+                rag_status=rag_status,
+                documents_count=documents_count,
+                vector_db_status=vector_db_status,
+                response_time_avg=response_time_avg,
+                requests_per_minute=requests_per_minute,
+                active_connections=active_connections,
+                alerts=alerts
+            )
+            
+            self.db.add(health)
+            await self.db.commit()
+            await self.db.refresh(health)
+            
+            return health
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка сбора метрик здоровья: {e}")
+            raise
+    
+    async def _get_cpu_usage(self) -> float:
+        """Получение использования CPU"""
+        try:
+            import psutil
+            return psutil.cpu_percent(interval=1)
+        except:
+            return 0.0
+    
+    async def _get_memory_usage(self) -> float:
+        """Получение использования памяти"""
+        try:
+            import psutil
+            memory = psutil.virtual_memory()
+            return memory.percent
+        except:
+            return 0.0
+    
+    async def _get_disk_usage(self) -> float:
+        """Получение использования диска"""
+        try:
+            import psutil
+            disk = psutil.disk_usage('/')
+            return (disk.used / disk.total) * 100
+        except:
+            return 0.0
+    
+    async def _get_network_io(self) -> Dict[str, Any]:
+        """Получение сетевой активности"""
+        try:
+            import psutil
+            network = psutil.net_io_counters()
+            return {
+                "bytes_sent": network.bytes_sent,
+                "bytes_recv": network.bytes_recv,
+                "packets_sent": network.packets_sent,
+                "packets_recv": network.packets_recv
+            }
+        except:
+            return {}
+    
+    async def _get_ollama_status(self) -> str:
+        """Получение статуса Ollama"""
+        try:
+            response = await self.ollama_client.get("/api/tags")
+            if response.status_code == 200:
+                return "running"
+            else:
+                return "error"
+        except:
+            return "stopped"
+    
+    async def _get_active_models_count(self) -> int:
+        """Получение количества активных моделей"""
+        try:
+            response = await self.ollama_client.get("/api/tags")
+            if response.status_code == 200:
+                return len(response.json().get("models", []))
+            return 0
+        except:
+            return 0
+    
+    async def _get_total_requests(self) -> int:
+        """Получение общего количества запросов за последний час"""
+        from datetime import datetime, timedelta
+        
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        
+        stmt = select(func.count(PerformanceMetrics.id)).where(
+            PerformanceMetrics.timestamp >= start_time
+        )
+        
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+    
+    async def _get_error_rate(self) -> float:
+        """Получение процента ошибок за последний час"""
+        from datetime import datetime, timedelta
+        
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        
+        # Общее количество запросов
+        total_stmt = select(func.count(PerformanceMetrics.id)).where(
+            PerformanceMetrics.timestamp >= start_time
+        )
+        total_result = await self.db.execute(total_stmt)
+        total = total_result.scalar() or 0
+        
+        if total == 0:
+            return 0.0
+        
+        # Количество ошибок
+        error_stmt = select(func.count(PerformanceMetrics.id)).where(
+            and_(
+                PerformanceMetrics.timestamp >= start_time,
+                PerformanceMetrics.success == False
+            )
+        )
+        error_result = await self.db.execute(error_stmt)
+        errors = error_result.scalar() or 0
+        
+        return errors / total
+    
+    async def _get_rag_status(self) -> str:
+        """Получение статуса RAG системы"""
+        try:
+            # Проверяем доступность векторной БД
+            if settings.vector_db.type == VectorDBType.CHROMA:
+                import httpx
+                client = httpx.AsyncClient()
+                response = await client.get(f"http://{settings.vector_db.chroma_host}:{settings.vector_db.chroma_port}/api/v1/heartbeat")
+                await client.aclose()
+                
+                if response.status_code == 200:
+                    return "active"
+                else:
+                    return "error"
+            else:
+                return "active"  # Для других типов БД
+        except:
+            return "inactive"
+    
+    async def _get_documents_count(self) -> int:
+        """Получение количества документов в RAG"""
+        stmt = select(func.count(RAGDocument.id))
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+    
+    async def _get_vector_db_status(self) -> str:
+        """Получение статуса векторной БД"""
+        return await self._get_rag_status()
+    
+    async def _get_avg_response_time(self) -> float:
+        """Получение среднего времени ответа за последний час"""
+        from datetime import datetime, timedelta
+        
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        
+        stmt = select(func.avg(PerformanceMetrics.response_time)).where(
+            PerformanceMetrics.timestamp >= start_time
+        )
+        
+        result = await self.db.execute(stmt)
+        avg_time = result.scalar()
+        return float(avg_time) if avg_time else 0.0
+    
+    async def _get_requests_per_minute(self) -> float:
+        """Получение количества запросов в минуту"""
+        from datetime import datetime, timedelta
+        
+        start_time = datetime.utcnow() - timedelta(minutes=1)
+        
+        stmt = select(func.count(PerformanceMetrics.id)).where(
+            PerformanceMetrics.timestamp >= start_time
+        )
+        
+        result = await self.db.execute(stmt)
+        return float(result.scalar() or 0)
+    
+    async def _get_active_connections(self) -> int:
+        """Получение количества активных соединений"""
+        # Простая симуляция
+        return 5
+    
+    async def _check_alerts(
+        self, 
+        cpu_usage: float, 
+        memory_usage: float, 
+        error_rate: float, 
+        response_time: float
+    ) -> List[Dict[str, Any]]:
+        """Проверка алертов"""
+        alerts = []
+        
+        if cpu_usage > 90:
+            alerts.append({
+                "type": "warning",
+                "message": f"Высокое использование CPU: {cpu_usage:.1f}%",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        if memory_usage > 90:
+            alerts.append({
+                "type": "warning",
+                "message": f"Высокое использование памяти: {memory_usage:.1f}%",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        if error_rate > 0.05:
+            alerts.append({
+                "type": "error",
+                "message": f"Высокий процент ошибок: {error_rate:.2%}",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        if response_time > 5.0:
+            alerts.append({
+                "type": "warning",
+                "message": f"Медленное время ответа: {response_time:.2f}s",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        return alerts 
