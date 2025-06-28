@@ -2,6 +2,9 @@
 # SEO Link Recommender - .gitignore
 # ========================================
 
+# codeworkspace
+.code-workspace
+
 #rules
 *rules*.md
 *roadmap*.md
