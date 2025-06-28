@@ -4,9 +4,9 @@ import React, { useState } from 'react'
 import { LLMModels } from '../components/LLMModels'
 import { SystemMonitoring } from '../components/SystemMonitoring'
 import { GlobalSearch } from '../components/GlobalSearch'
-import { ABTesting } from '../components/ABTesting'
-import { Benchmarks } from '../components/Benchmarks'
-import ArchGen from '../components/ArchGen'
+// import { ABTesting } from '../components/ABTesting'
+// import { Benchmarks } from '../components/Benchmarks'
+// import ArchGen from '../components/ArchGen'
 import Testing from '../components/Testing'
 import { Card, Button, Badge } from '../components/ui'
 
@@ -37,14 +37,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         return <LLMModels />
       case 'monitoring':
         return <SystemMonitoring />
-      case 'ab-testing':
-        return <ABTesting />
-      case 'benchmarks':
-        return <Benchmarks />
+      // case 'ab-testing':
+      //   return <ABTesting />
+      // case 'benchmarks':
+      //   return <Benchmarks />
       case 'search':
         return <GlobalSearch />
-      case 'archgen':
-        return <ArchGen />
+      // case 'archgen':
+      //   return <ArchGen />
       case 'testing':
         return <Testing />
       default:

@@ -1,0 +1,9 @@
+/* App.css - базовые стили приложения */
+.App {
+  min-height: 100vh;
+  background-color: #f8fafc;
+}
+
+.dark .App {
+  background-color: #0f172a;
+} 
