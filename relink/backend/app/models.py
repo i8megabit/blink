@@ -7,6 +7,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
 
 class Base(DeclarativeBase):
     """Базовый класс для всех моделей."""
@@ -672,4 +673,40 @@ class TestReport(Base):
 # Обновляем модель User для связи с тестами
 User.tests = relationship("Test", back_populates="user")
 User.test_executions = relationship("TestExecution", back_populates="user")
-User.test_suites = relationship("TestSuite", back_populates="user") 
+User.test_suites = relationship("TestSuite", back_populates="user")
+
+class LLMServiceType(Enum):
+    SEO_RECOMMENDATIONS = "seo_recommendations"
+    DIAGRAM_GENERATION = "diagram_generation"
+    CONTENT_ANALYSIS = "content_analysis"
+    BENCHMARK_SERVICE = "benchmark_service"
+    LLM_TUNING = "llm_tuning"
+
+@dataclass
+class LLMRequest:
+    service_type: LLMServiceType
+    prompt: str
+    context: Optional[Dict[str, Any]] = None
+    model: str = "qwen2.5:7b-instruct-turbo"
+    temperature: float = 0.7
+    max_tokens: int = 2048
+    use_rag: bool = True
+    cache_ttl: int = 3600
+    priority: int = 1
+
+@dataclass
+class LLMResponse:
+    content: str
+    service_type: LLMServiceType
+    model_used: str
+    tokens_used: int
+    response_time: float
+    cached: bool = False
+    error: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class LLMEmbedding:
+    embedding: List[float]
+    model: str
+    created_at: Optional[str] = None 

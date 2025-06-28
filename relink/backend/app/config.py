@@ -152,6 +152,12 @@ class Settings(BaseSettings):
     api: APISettings = APISettings()
     monitoring: MonitoringSettings = MonitoringSettings()
     cache: CacheSettings = CacheSettings()
+
+    DEFAULT_LLM_MODEL: str = "qwen2.5:7b-instruct-turbo"
+
+    @property
+    def default_llm_model(self) -> str:
+        return self.DEFAULT_LLM_MODEL
     
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), ".env")

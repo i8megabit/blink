@@ -187,6 +187,28 @@ class BusinessLogicException(RelinkBaseException):
         )
 
 
+class LLMServiceError(RelinkBaseException):
+    """Исключение для ошибок LLM сервисов"""
+    def __init__(self, message: str, details: dict = None):
+        super().__init__(
+            message=message,
+            error_code="LLM_SERVICE_ERROR",
+            details=details,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+
+class OllamaConnectionError(RelinkBaseException):
+    """Исключение для ошибок соединения с Ollama"""
+    def __init__(self, message: str, details: dict = None):
+        super().__init__(
+            message=message,
+            error_code="OLLAMA_CONNECTION_ERROR",
+            details=details,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+
 class ErrorHandler:
     """Класс для централизованной обработки ошибок"""
     

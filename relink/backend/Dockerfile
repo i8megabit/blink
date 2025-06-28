@@ -66,6 +66,7 @@ RUN chown -R appuser:appuser /app && \
 
 # Копируем код приложения
 COPY --chown=appuser:appuser backend/app ./app
+RUN ls -l /app/app
 
 # Переключаемся на непривилегированного пользователя
 USER appuser

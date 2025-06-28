@@ -738,3 +738,5 @@ class TestingService:
 
 # Глобальный экземпляр сервиса тестирования
 testing_service = TestingService()
+
+__all__ = ['testing_service']
