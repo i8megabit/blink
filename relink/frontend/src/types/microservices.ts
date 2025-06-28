@@ -226,11 +226,12 @@ export interface BenchmarkSuite {
   id: string
   name: string
   description: string
-  category: string
-  metrics: BenchmarkMetric[]
-  test_data: BenchmarkTestData[]
+  metrics: string[]
+  test_cases: any[]
+  results: BenchmarkResult[]
+  status: 'ready' | 'running' | 'completed' | 'failed'
   created_at: string
-  updated_at: string
+  last_run?: string
 }
 
 export interface BenchmarkMetric {
