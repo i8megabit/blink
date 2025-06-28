@@ -413,7 +413,7 @@ class TestResult(BaseModel):
     stack_trace: Optional[str] = None
     memory_usage: Optional[float] = Field(None, ge=0)
     cpu_usage: Optional[float] = Field(None, ge=0, le=100)
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    test_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class TestExecution(BaseModel):
@@ -427,7 +427,7 @@ class TestExecution(BaseModel):
     finished_at: Optional[datetime] = None
     results: List[TestResult] = Field(default_factory=list)
     user_id: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    test_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class TestSuite(BaseModel):
@@ -457,7 +457,7 @@ class TestReport(BaseModel):
     success_rate: float = Field(..., ge=0, le=100)
     results: List[TestResult]
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    test_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TestMetrics(BaseModel):
@@ -503,7 +503,7 @@ class TestResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     tags: List[str]
-    metadata: Dict[str, Any]
+    test_metadata: Dict[str, Any]
 
 
 class TestExecutionResponse(BaseModel):
@@ -517,7 +517,7 @@ class TestExecutionResponse(BaseModel):
     finished_at: Optional[datetime]
     results: List[TestResult]
     user_id: Optional[int]
-    metadata: Dict[str, Any]
+    test_metadata: Dict[str, Any]
 
 
 class TestSuiteRequest(BaseModel):
@@ -587,12 +587,19 @@ class TestExecution(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    test_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Связи
     test: Mapped[Optional["Test"]] = relationship("Test", back_populates="executions")
     user: Mapped[Optional["User"]] = relationship("User", back_populates="test_executions")
     results: Mapped[List["TestResult"]] = relationship("TestResult", back_populates="execution", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_execution_test', 'test_id'),
+        Index('idx_execution_user', 'user_id'),
+        Index('idx_execution_status', 'status'),
+        Index('idx_execution_created', 'created_at'),
+    )
 
 
 class TestResult(Base):
@@ -615,7 +622,7 @@ class TestResult(Base):
     stack_trace: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     memory_usage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     cpu_usage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    test_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Связи
     execution: Mapped["TestExecution"] = relationship("TestExecution", back_populates="results")
@@ -656,7 +663,7 @@ class TestReport(Base):
     success_rate: Mapped[float] = mapped_column(Float, nullable=False)
     results: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    test_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Связи
     execution: Mapped["TestExecution"] = relationship("TestExecution")

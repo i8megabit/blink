@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import uuid
 import httpx
 import psutil
+import traceback
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
@@ -171,107 +172,102 @@ class TestingService:
             if not test:
                 raise_not_found("Тест не найден")
             
-            # Создаем выполнение
+            # Создаем выполнение теста
             execution = TestExecution(
-                id=str(uuid.uuid4()),
-                test_id=test_id,
-                status=TestStatus.PENDING.value,
+                test_id=test.id,
+                status=TestStatus.RUNNING,
                 progress=0.0,
+                started_at=datetime.utcnow(),
                 user_id=user_id,
-                metadata={"test_name": test.name, "test_type": test.test_type.value}
+                test_metadata=test.test_metadata or {}
             )
             
+            # Сохраняем выполнение
             db.add(execution)
             await db.commit()
             await db.refresh(execution)
             
-            # Запускаем выполнение в фоне
-            task = asyncio.create_task(
-                self._execute_test_background(execution.id, test, db)
-            )
-            self.running_executions[execution.id] = task
-            
-            logger.info(f"Запущено выполнение теста: {execution.id}")
-            
-            return TestExecutionResponse(
-                id=execution.id,
-                test_request=TestRequest(
-                    name=test.name,
-                    description=test.description,
-                    test_type=test.test_type,
-                    priority=test.priority,
-                    environment=test.environment,
-                    timeout=test.metadata.get("timeout"),
-                    parameters=test.metadata,
-                    retry_count=test.metadata.get("retry_count", 0),
-                    parallel=test.metadata.get("parallel", False),
-                    dependencies=test.metadata.get("dependencies", []),
-                    tags=test.tags
-                ),
-                status=TestStatus(execution.status),
-                progress=execution.progress,
-                created_at=execution.created_at,
-                started_at=execution.started_at,
-                finished_at=execution.finished_at,
-                results=[],
-                user_id=execution.user_id,
-                metadata=execution.metadata or {}
-            )
+            try:
+                # Выполняем тест в зависимости от типа
+                if test.test_type == TestType.UNIT:
+                    result = await self._run_unit_test(test, execution)
+                elif test.test_type == TestType.API:
+                    result = await self._run_api_test(test, execution)
+                elif test.test_type == TestType.PERFORMANCE:
+                    result = await self._run_performance_test(test, execution)
+                elif test.test_type == TestType.SEO:
+                    result = await self._run_seo_test(test, execution)
+                elif test.test_type == TestType.LLM:
+                    result = await self._run_llm_test(test, execution)
+                else:
+                    result = await self._run_generic_test(test, execution)
+                
+                # Обновляем выполнение
+                execution.status = TestStatus.PASSED if result.passed > 0 else TestStatus.FAILED
+                execution.finished_at = datetime.utcnow()
+                execution.progress = 100.0
+                
+                # Сохраняем результат
+                test_result = TestResult(
+                    execution_id=execution.id,
+                    test_id=test.id,
+                    status=result.status,
+                    started_at=result.started_at,
+                    finished_at=result.finished_at,
+                    duration=result.duration,
+                    passed=result.passed,
+                    failed=result.failed,
+                    skipped=result.skipped,
+                    total=result.total,
+                    message=result.message,
+                    error=result.error,
+                    stack_trace=result.stack_trace,
+                    memory_usage=result.memory_usage,
+                    cpu_usage=result.cpu_usage,
+                    test_metadata=result.test_metadata or {}
+                )
+                
+                db.add(test_result)
+                await db.commit()
+                
+                return execution
+                
+            except Exception as e:
+                # Обработка ошибок
+                execution.status = TestStatus.ERROR
+                execution.finished_at = datetime.utcnow()
+                execution.progress = 100.0
+                
+                # Сохраняем ошибку
+                test_result = TestResult(
+                    execution_id=execution.id,
+                    test_id=test.id,
+                    status=TestStatus.ERROR,
+                    started_at=execution.started_at,
+                    finished_at=datetime.utcnow(),
+                    duration=(datetime.utcnow() - execution.started_at).total_seconds(),
+                    error=str(e),
+                    stack_trace=traceback.format_exc(),
+                    test_metadata=execution.test_metadata or {}
+                )
+                
+                db.add(test_result)
+                await db.commit()
+                
+                raise
             
         except Exception as e:
             await db.rollback()
             logger.error(f"Ошибка выполнения теста {test_id}: {e}")
             raise_validation_error(f"Не удалось выполнить тест: {str(e)}")
     
-    async def _execute_test_background(self, execution_id: str, test: TestResponse, db: AsyncSession):
-        """Фоновое выполнение теста"""
-        try:
-            # Обновляем статус на RUNNING
-            await self._update_execution_status(execution_id, TestStatus.RUNNING, 0.0, db)
-            
-            # Определяем тип теста и запускаем соответствующий исполнитель
-            if test.test_type == TestType.UNIT:
-                result = await self._run_unit_test(test)
-            elif test.test_type == TestType.API:
-                result = await self._run_api_test(test)
-            elif test.test_type == TestType.PERFORMANCE:
-                result = await self._run_performance_test(test)
-            elif test.test_type == TestType.SEO:
-                result = await self._run_seo_test(test)
-            elif test.test_type == TestType.LLM:
-                result = await self._run_llm_test(test)
-            else:
-                result = await self._run_generic_test(test)
-            
-            # Сохраняем результат
-            await self._save_test_result(execution_id, test.id, result, db)
-            
-            # Обновляем статус выполнения
-            final_status = TestStatus.PASSED if result["status"] == "passed" else TestStatus.FAILED
-            await self._update_execution_status(execution_id, final_status, 100.0, db)
-            
-            logger.info(f"Завершено выполнение теста: {execution_id} - {final_status.value}")
-            
-        except Exception as e:
-            logger.error(f"Ошибка фонового выполнения теста {execution_id}: {e}")
-            await self._update_execution_status(execution_id, TestStatus.ERROR, 0.0, db)
-            await self._save_test_result(execution_id, test.id, {
-                "status": "error",
-                "error": str(e),
-                "duration": 0.0
-            }, db)
-        finally:
-            # Удаляем из списка выполняющихся
-            if execution_id in self.running_executions:
-                del self.running_executions[execution_id]
-    
-    async def _run_unit_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_unit_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение unit теста"""
         start_time = datetime.utcnow()
         
         try:
             # Запускаем pytest для unit тестов
-            test_path = test.metadata.get("test_path", "tests/")
+            test_path = test.test_metadata.get("test_path", "tests/")
             cmd = [
                 sys.executable, "-m", "pytest", test_path,
                 "-v", "--tb=short", "--json-report"
@@ -319,16 +315,16 @@ class TestingService:
                 "total": 1
             }
     
-    async def _run_api_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_api_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение API теста"""
         start_time = datetime.utcnow()
         
         try:
             # Получаем параметры теста
-            url = test.metadata.get("url")
-            method = test.metadata.get("method", "GET")
-            expected_status = test.metadata.get("expected_status", 200)
-            timeout = test.metadata.get("timeout", 30)
+            url = test.test_metadata.get("url")
+            method = test.test_metadata.get("method", "GET")
+            expected_status = test.test_metadata.get("expected_status", 200)
+            timeout = test.test_metadata.get("timeout", 30)
             
             if not url:
                 raise ValueError("URL не указан для API теста")
@@ -372,15 +368,15 @@ class TestingService:
                 "total": 1
             }
     
-    async def _run_performance_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_performance_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение performance теста"""
         start_time = datetime.utcnow()
         
         try:
             # Простой performance тест - измеряем время выполнения операции
-            url = test.metadata.get("url")
-            iterations = test.metadata.get("iterations", 10)
-            timeout = test.metadata.get("timeout", 30)
+            url = test.test_metadata.get("url")
+            iterations = test.test_metadata.get("iterations", 10)
+            timeout = test.test_metadata.get("timeout", 30)
             
             if not url:
                 raise ValueError("URL не указан для performance теста")
@@ -400,7 +396,7 @@ class TestingService:
             min_response_time = min(response_times)
             
             # Проверяем критерии производительности
-            max_allowed = test.metadata.get("max_response_time", 1.0)
+            max_allowed = test.test_metadata.get("max_response_time", 1.0)
             success = avg_response_time <= max_allowed
             
             return {
@@ -427,13 +423,13 @@ class TestingService:
                 "total": 1
             }
     
-    async def _run_seo_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_seo_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение SEO теста"""
         start_time = datetime.utcnow()
         
         try:
             # SEO тест - проверяем базовые SEO параметры
-            url = test.metadata.get("url")
+            url = test.test_metadata.get("url")
             if not url:
                 raise ValueError("URL не указан для SEO теста")
             
@@ -476,7 +472,7 @@ class TestingService:
                 "total": 1
             }
     
-    async def _run_llm_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_llm_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение LLM теста"""
         start_time = datetime.utcnow()
         
@@ -484,8 +480,8 @@ class TestingService:
             # LLM тест - проверяем работу с Ollama
             from .llm_router import llm_router
             
-            prompt = test.metadata.get("prompt", "Привет, как дела?")
-            model = test.metadata.get("model", "qwen2.5:7b")
+            prompt = test.test_metadata.get("prompt", "Привет, как дела?")
+            model = test.test_metadata.get("model", "qwen2.5:7b")
             
             response = await llm_router.generate_response(
                 prompt=prompt,
@@ -528,7 +524,7 @@ class TestingService:
                 "total": 1
             }
     
-    async def _run_generic_test(self, test: TestResponse) -> Dict[str, Any]:
+    async def _run_generic_test(self, test: TestResponse, execution: TestExecution) -> Dict[str, Any]:
         """Выполнение общего теста"""
         start_time = datetime.utcnow()
         
@@ -555,46 +551,6 @@ class TestingService:
                 "failed": 1,
                 "total": 1
             }
-    
-    async def _update_execution_status(self, execution_id: str, status: TestStatus, progress: float, db: AsyncSession):
-        """Обновление статуса выполнения"""
-        try:
-            stmt = update(TestExecution).where(TestExecution.id == execution_id).values(
-                status=status.value,
-                progress=progress,
-                started_at=datetime.utcnow() if status == TestStatus.RUNNING else None,
-                finished_at=datetime.utcnow() if status in [TestStatus.PASSED, TestStatus.FAILED, TestStatus.ERROR] else None
-            )
-            await db.execute(stmt)
-            await db.commit()
-        except Exception as e:
-            logger.error(f"Ошибка обновления статуса выполнения {execution_id}: {e}")
-    
-    async def _save_test_result(self, execution_id: str, test_id: str, result: Dict[str, Any], db: AsyncSession):
-        """Сохранение результата теста"""
-        try:
-            test_result = TestResult(
-                id=str(uuid.uuid4()),
-                execution_id=execution_id,
-                test_id=test_id,
-                status=result["status"],
-                started_at=datetime.utcnow() - timedelta(seconds=result.get("duration", 0)),
-                finished_at=datetime.utcnow(),
-                duration=result.get("duration", 0),
-                passed=result.get("passed", 0),
-                failed=result.get("failed", 0),
-                skipped=result.get("skipped", 0),
-                total=result.get("total", 1),
-                message=result.get("message"),
-                error=result.get("error"),
-                metadata=result
-            )
-            
-            db.add(test_result)
-            await db.commit()
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения результата теста: {e}")
     
     async def get_executions(self, skip: int, limit: int, test_id: Optional[str], status: Optional[TestStatus], db: AsyncSession) -> List[TestExecutionResponse]:
         """Получение списка выполнений"""
@@ -638,7 +594,7 @@ class TestingService:
                         for r in execution.results
                     ],
                     user_id=execution.user_id,
-                    metadata=execution.metadata or {}
+                    metadata=execution.test_metadata or {}
                 )
                 for execution in executions
             ]

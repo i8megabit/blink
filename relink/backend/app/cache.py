@@ -416,7 +416,7 @@ class CacheManager:
     
     def __init__(self):
         self.memory_cache = MemoryCache()
-        self.redis_cache = RedisCache(settings.REDIS_URL) if settings.REDIS_URL else None
+        self.redis_cache = RedisCache(settings.redis.url) if settings.redis.url else None
         self.rag_cache = RAGCache()  # Новый RAG-специфичный кэш
         
     async def get(self, key: str, use_redis: bool = True) -> Optional[Any]:

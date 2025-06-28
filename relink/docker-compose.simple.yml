@@ -79,29 +79,10 @@ services:
       - "11434:11434"
     volumes:
       - ./ollama_models:/root/.ollama
-      - ./scripts:/scripts
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_ORIGINS=*
-      - OLLAMA_DEBUG=0
-      - OLLAMA_THREADS=8
-      - OLLAMA_PREFER_CPU=true
-      - OLLAMA_ARM64_OPTIMIZED=1
-      - OLLAMA_MEM_FRACTION=0.85
-      - OLLAMA_MMAP_ENABLED=1
-      - OLLAMA_HUGE_PAGES=1
-      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-turbo
-      - OLLAMA_WORKERS=2
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      "ollama serve & 
-      sleep 45 && 
-      echo '🚀 Загружаем модели для A/B тестирования...' && 
-      ollama pull qwen2.5:7b && 
-      ollama pull qwen2.5:7b-turbo && 
-      echo '✅ Модели загружены!' && 
-      wait"
 
 volumes:
   redis_data: 
