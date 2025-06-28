@@ -786,18 +786,31 @@ class ScenarioService:
         )
     
     def get_scenario_statistics(self) -> Dict[str, Any]:
-        """Получение статистики по сценариям"""
+        """Получение статистики сценариев"""
         total_scenarios = len(self.scenarios)
-        scenarios_by_priority = {}
+        total_steps = sum(len(scenario.steps) for scenario in self.scenarios.values())
         
+        # Группировка по типам
+        scenario_types = {}
         for scenario in self.scenarios.values():
-            priority = scenario.priority
-            if priority not in scenarios_by_priority:
-                scenarios_by_priority[priority] = 0
-            scenarios_by_priority[priority] += 1
+            scenario_type = getattr(scenario, 'type', 'unknown')
+            if scenario_type not in scenario_types:
+                scenario_types[scenario_type] = 0
+            scenario_types[scenario_type] += 1
+        
+        # Группировка по приоритетам
+        priorities = {}
+        for scenario in self.scenarios.values():
+            priority = getattr(scenario, 'priority', 'medium')
+            if priority not in priorities:
+                priorities[priority] = 0
+            priorities[priority] += 1
         
         return {
             "total_scenarios": total_scenarios,
-            "by_priority": scenarios_by_priority,
-            "scenarios": [s.scenario_id for s in self.scenarios.values()]
+            "total_steps": total_steps,
+            "average_steps_per_scenario": total_steps / total_scenarios if total_scenarios > 0 else 0,
+            "scenario_types": scenario_types,
+            "priorities": priorities,
+            "user_profiles_count": len(self.user_profiles)
         } 
