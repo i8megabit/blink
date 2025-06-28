@@ -1,13 +1,14 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 import ArchGen from '../ArchGen';
 
 // Мокаем хуки
-jest.mock('../../hooks/useApi', () => ({
+vi.mock('../../hooks/useApi', () => ({
   useApi: () => ({
     api: {
-      post: jest.fn().mockResolvedValue({
+      post: vi.fn().mockResolvedValue({
         data: {
           diagram_id: 1,
           svg_content: '<svg>test</svg>',
@@ -22,13 +23,13 @@ jest.mock('../../hooks/useApi', () => ({
   })
 }));
 
-jest.mock('../../hooks/useNotifications', () => ({
+vi.mock('../../hooks/useNotifications', () => ({
   useNotifications: () => ({
-    showNotification: jest.fn()
+    showNotification: vi.fn()
   })
 }));
 
-jest.mock('../../hooks/useTheme', () => ({
+vi.mock('../../hooks/useTheme', () => ({
   useTheme: () => ({
     theme: 'light'
   })
