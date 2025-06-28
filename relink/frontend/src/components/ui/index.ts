@@ -1,10 +1,14 @@
 // ===== UI КОМПОНЕНТЫ =====
 
-export { Card } from './Card'
+export { default as Button } from './Button'
+export { default as Card } from './Card'
+export { default as Input } from './Input'
+export { default as Badge } from './Badge'
+export { default as Logo } from './Logo'
+export { default as Progress } from './Progress'
 export { Button } from './Button'
 export { Badge } from './Badge'
 export { Progress } from './Progress'
-export { Input } from './Input'
 export { Textarea } from './Textarea'
 export { Select } from './Select'
 export { Modal } from './Modal'
