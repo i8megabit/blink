@@ -176,9 +176,48 @@ cleanup-test-data: ## Очистка тестовых данных
 	@echo "$(GREEN)Очистка тестовых данных...$(NC)"
 	$(PYTHON) scripts/cleanup_test_data.py
 
-benchmark: ## Запуск бенчмарков
-	@echo "$(GREEN)Запуск бенчмарков...$(NC)"
-	$(PYTHON) -m pytest tests/test_performance.py -v
+benchmark: ## Запуск всех бенчмарков
+	@echo "$(GREEN)Запуск всех бенчмарков производительности...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py
+
+benchmark-ab-testing: ## Бенчмарк A/B тестирования
+	@echo "$(GREEN)Запуск бенчмарка A/B тестирования...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py ab_testing
+
+benchmark-optimization: ## Бенчмарк оптимизации
+	@echo "$(GREEN)Запуск бенчмарка оптимизации...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py optimization
+
+benchmark-quality-assessment: ## Бенчмарк оценки качества
+	@echo "$(GREEN)Запуск бенчмарка оценки качества...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py quality_assessment
+
+benchmark-system-health: ## Бенчмарк мониторинга здоровья
+	@echo "$(GREEN)Запуск бенчмарка мониторинга здоровья...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py system_health
+
+benchmark-extended-stats: ## Бенчмарк расширенной статистики
+	@echo "$(GREEN)Запуск бенчмарка расширенной статистики...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py extended_stats
+
+benchmark-stress: ## Стресс-тестирование
+	@echo "$(GREEN)Запуск стресс-тестирования...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py system_health 1000
+	cd benchmarks && $(PYTHON) performance_test.py extended_stats 500
+
+benchmark-quick: ## Быстрый бенчмарк
+	@echo "$(GREEN)Запуск быстрого бенчмарка...$(NC)"
+	cd benchmarks && $(PYTHON) performance_test.py ab_testing 10
+	cd benchmarks && $(PYTHON) performance_test.py quality_assessment 20
+
+benchmark-install-deps: ## Установка зависимостей для бенчмарков
+	@echo "$(GREEN)Установка зависимостей для бенчмарков...$(NC)"
+	$(PIP) install aiohttp psutil matplotlib numpy
+
+benchmark-clean: ## Очистка результатов бенчмарков
+	@echo "$(GREEN)Очистка результатов бенчмарков...$(NC)"
+	rm -f benchmarks/benchmark_report.txt
+	rm -f benchmarks/benchmark_results.png
 
 security-check: ## Проверка безопасности
 	@echo "$(GREEN)Проверка безопасности...$(NC)"
