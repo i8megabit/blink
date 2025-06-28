@@ -88,6 +88,37 @@ data/relink_db/
 data/ollama_models/
 data/chroma_db/
 
+# 🐍 PostgreSQL specific files
+data/relink_db/**/*
+data/ollama_models/**/*
+data/chroma_db/**/*
+*.pid
+*.pid.lock
+postmaster.pid
+postmaster.opts
+pg_ctl.pid
+pg_ctl.lock
+*.conf
+pg_hba.conf
+pg_ident.conf
+postgresql.conf
+*.log
+*.csv
+*.sql
+*.dump
+*.backup
+*.tar
+*.gz
+*.bz2
+*.xz
+
+# 🐍 Database directories
+data/
+postgres_data/
+mysql_data/
+mongo_data/
+redis_data/
+
 # 🐍 Ollama Models (большие файлы)
 ollama_models/
 models/
