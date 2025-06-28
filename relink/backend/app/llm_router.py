@@ -753,7 +753,8 @@ class LLMRouter:
             logger.error(f"Ошибка проверки здоровья: {e}")
             return False
 
-# Глобальный экземпляр роутера
+# Глобальные экземпляры для экспорта
+system_analyzer = SystemAnalyzer()
 _llm_router: Optional[LLMRouter] = None
 
 async def get_llm_router() -> LLMRouter:
@@ -765,6 +766,9 @@ async def get_llm_router() -> LLMRouter:
         await _llm_router.start()
     
     return _llm_router
+
+# Инициализация llm_router для экспорта
+llm_router = LLMRouter()
 
 # Утилиты для быстрого доступа к функциям
 async def generate_seo_recommendations(prompt: str, context: Optional[Dict] = None) -> str:
