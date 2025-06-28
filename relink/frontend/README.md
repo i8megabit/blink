@@ -1,394 +1,534 @@
-# SEO Link Recommender Frontend
+# 🎨 reLink Frontend
 
-🚀 **Профессиональный фронтенд для SEO-платформы** с TypeScript, React 18, Vite и Tailwind CSS.
+Элегантный, масштабируемый фронтенд для мощной микросервисной архитектуры reLink. Спроектирован как "солист группы" - лицо продукта, которое видят все первым.
 
-## ✨ Особенности
+## 🚀 Особенности
 
-- **TypeScript** - полная типизация для надежности кода
-- **React 18** - современные хуки и компоненты
-- **Vite** - быстрая сборка и разработка
-- **Tailwind CSS** - утилитарные стили для быстрого прототипирования
-- **WebSocket** - реальное время для отслеживания прогресса
-- **Профессиональный UI** - вдохновлен лучшими AI-интерфейсами
+- **🎯 Микросервисная интеграция** - единый интерфейс для всех сервисов
+- **⚡ Высокая производительность** - оптимизированная загрузка и кэширование
+- **🎨 Современный дизайн** - элегантный UI с темной темой
+- **📱 Адаптивность** - работает на всех устройствах
+- **🔍 Глобальный поиск** - поиск по всем данным и сервисам
+- **🧪 A/B тестирование** - сравнение производительности моделей
+- **🏆 Бенчмарки** - измерение качества и скорости
+- **📊 Мониторинг** - отслеживание состояния системы
 
 ## 🏗️ Архитектура
 
 ```
-src/
-├── components/          # React компоненты
-│   ├── ui/             # Базовые UI компоненты
-│   │   ├── Button.tsx  # Кнопка с вариантами
-│   │   └── Card.tsx    # Карточка контейнер
-│   ├── Notifications.tsx      # Система уведомлений
-│   ├── AnalysisProgress.tsx   # Прогресс анализа
-│   └── Recommendations.tsx    # Отображение рекомендаций
-├── hooks/              # Кастомные React хуки
-│   ├── useWebSocket.ts # WebSocket соединение
-│   ├── useNotifications.ts # Управление уведомлениями
-│   └── useApi.ts       # API запросы
-├── types/              # TypeScript типы
-│   └── index.ts        # Все типы приложения
-├── lib/                # Утилиты
-│   └── utils.ts        # Вспомогательные функции
-└── App.tsx             # Главный компонент
+Frontend (React + TypeScript)
+├── Dashboard - Главный дашборд
+├── LLM Models - Управление моделями
+├── System Monitoring - Мониторинг
+├── Global Search - Поиск
+├── A/B Testing - Тестирование
+└── Benchmarks - Бенчмарки
 ```
 
 ## 🚀 Быстрый старт
 
-### Установка зависимостей
+### Предварительные требования
+
+- Node.js 18+
+- npm или yarn
+- Доступ к микросервисам reLink
+
+### Установка
 
 ```bash
+# Клонирование репозитория
+git clone https://github.com/your-org/relink.git
+cd relink/frontend
+
+# Установка зависимостей
 npm install
+
+# Настройка окружения
+cp .env.example .env.local
 ```
 
-### Разработка
+### Настройка окружения
+
+Отредактируйте `.env.local`:
+
+```env
+# Основной бэкенд
+REACT_APP_BACKEND_URL=http://localhost:8000
+
+# LLM Tuning микросервис
+REACT_APP_LLM_TUNING_URL=http://localhost:8001
+
+# Мониторинг
+REACT_APP_MONITORING_URL=http://localhost:8002
+
+# Тестирование
+REACT_APP_TESTING_URL=http://localhost:8003
+
+# Документация
+REACT_APP_DOCS_URL=http://localhost:8004
+
+# Бенчмарки
+REACT_APP_BENCHMARK_URL=http://localhost:8005
+
+# Поиск
+REACT_APP_SEARCH_URL=http://localhost:8006
+
+# Workflow
+REACT_APP_WORKFLOW_URL=http://localhost:8007
+```
+
+### Запуск
 
 ```bash
-npm run dev
+# Режим разработки
+npm start
+
+# Production сборка
+npm run build
+
+# Запуск production версии
+npm run serve
 ```
 
-Приложение будет доступно по адресу: http://localhost:3000
+## 📁 Структура проекта
 
-### Сборка
+```
+src/
+├── components/           # React компоненты
+│   ├── ui/              # Базовые UI компоненты
+│   │   ├── Card.tsx     # Карточки
+│   │   ├── Button.tsx   # Кнопки
+│   │   ├── Badge.tsx    # Бейджи
+│   │   └── Progress.tsx # Прогресс-бары
+│   ├── LLMModels.tsx    # Управление LLM моделями
+│   ├── SystemMonitoring.tsx # Мониторинг системы
+│   ├── GlobalSearch.tsx # Глобальный поиск
+│   ├── ABTesting.tsx    # A/B тестирование
+│   └── Benchmarks.tsx   # Бенчмарки
+├── hooks/               # React хуки
+│   └── useMicroservices.ts # Хуки для работы с микросервисами
+├── lib/                 # Утилиты и конфигурация
+│   └── microservices.ts # Конфигурация микросервисов
+├── types/               # TypeScript типы
+│   └── microservices.ts # Типы для микросервисов
+├── pages/               # Страницы приложения
+│   └── Dashboard.tsx    # Главный дашборд
+└── App.tsx              # Главный компонент
+```
+
+## 🎯 Основные компоненты
+
+### Dashboard
+
+Главная страница с интеграцией всех сервисов:
+
+- **Обзор системы** - статистика и быстрые действия
+- **Управление моделями** - создание и настройка LLM
+- **Мониторинг** - отслеживание состояния сервисов
+- **A/B тестирование** - сравнение производительности
+- **Бенчмарки** - измерение качества моделей
+- **Глобальный поиск** - поиск по всем данным
+
+### LLM Models
+
+Управление языковыми моделями:
+
+- Просмотр доступных моделей
+- Создание новых моделей
+- Настройка параметров
+- Мониторинг производительности
+- Управление версиями
+
+### System Monitoring
+
+Мониторинг состояния системы:
+
+- Статус всех сервисов
+- Метрики производительности
+- Алерты и уведомления
+- Логи и ошибки
+- Ресурсы системы
+
+### Global Search
+
+Глобальный поиск по всем сервисам:
+
+- Поиск по моделям, тестам, бенчмаркам
+- Фильтрация по типам и датам
+- История поиска
+- Подсказки и автодополнение
+- Фасетный поиск
+
+### A/B Testing
+
+A/B тестирование моделей:
+
+- Создание тестовых конфигураций
+- Настройка распределения трафика
+- Мониторинг результатов
+- Статистический анализ
+- Автоматическое определение победителя
+
+### Benchmarks
+
+Бенчмарки производительности:
+
+- Создание наборов тестов
+- Измерение метрик качества
+- Сравнение моделей
+- Отчеты и визуализация
+- Экспорт результатов
+
+## 🎣 Хуки
+
+### useLLMModels
+
+```tsx
+import { useLLMModels } from './hooks/useMicroservices'
+
+const { models, loading, error, createModel, updateModel, deleteModel } = useLLMModels()
+```
+
+### useSystemMonitoring
+
+```tsx
+import { useSystemMonitoring } from './hooks/useMicroservices'
+
+const { health, loading, error, acknowledgeAlert } = useSystemMonitoring()
+```
+
+### useABTests
+
+```tsx
+import { useABTests } from './hooks/useMicroservices'
+
+const { tests, loading, error, createTest, startTest, stopTest } = useABTests()
+```
+
+### useBenchmarks
+
+```tsx
+import { useBenchmarks } from './hooks/useMicroservices'
+
+const { benchmarkSuites, loading, error, createBenchmarkSuite, runBenchmarkSuite } = useBenchmarks()
+```
+
+### useGlobalSearch
+
+```tsx
+import { useGlobalSearch } from './hooks/useMicroservices'
+
+const { searchResults, loading, error, search, getSuggestions } = useGlobalSearch()
+```
+
+## 🎨 UI Компоненты
+
+### Card
+
+```tsx
+import { Card } from './components/ui'
+
+<Card className="p-6">
+  <h3>Заголовок</h3>
+  <p>Содержимое</p>
+</Card>
+```
+
+### Button
+
+```tsx
+import { Button } from './components/ui'
+
+<Button 
+  onClick={handleClick}
+  className="bg-blue-600 hover:bg-blue-700 text-white"
+>
+  Нажми меня
+</Button>
+```
+
+### Badge
+
+```tsx
+import { Badge } from './components/ui'
+
+<Badge color="green" size="sm">
+  Успех
+</Badge>
+```
+
+### Progress
+
+```tsx
+import { Progress } from './components/ui'
+
+<Progress 
+  value={75} 
+  max={100}
+  color="blue"
+  size="md"
+/>
+```
+
+## 🔧 Конфигурация
+
+### Микросервисы
+
+Центральная конфигурация в `src/lib/microservices.ts`:
+
+```tsx
+export const MICROSERVICES_CONFIG = {
+  backend: {
+    service_name: 'backend',
+    base_url: process.env.REACT_APP_BACKEND_URL,
+    api_version: 'v1',
+    authentication: { type: 'none' },
+    rate_limits: { requests_per_minute: 1000 },
+    retry_config: { max_retries: 3 }
+  },
+  llm_tuning: {
+    service_name: 'llm_tuning',
+    base_url: process.env.REACT_APP_LLM_TUNING_URL,
+    api_version: 'v1',
+    authentication: { type: 'none' },
+    rate_limits: { requests_per_minute: 500 },
+    retry_config: { max_retries: 3 }
+  }
+  // ... другие сервисы
+}
+```
+
+### Типы
+
+TypeScript типы для всех микросервисов в `src/types/microservices.ts`:
+
+```tsx
+export interface LLMModel {
+  id: string
+  name: string
+  display_name: string
+  version: string
+  model_type: 'base' | 'tuned' | 'custom'
+  status: 'available' | 'loading' | 'error' | 'unavailable'
+  // ... другие поля
+}
+
+export interface ABTestConfig {
+  id: string
+  name: string
+  description: string
+  models: string[]
+  test_cases: ABTestCase[]
+  // ... другие поля
+}
+```
+
+## 🧪 Тестирование
+
+### Unit тесты
+
+```bash
+npm test
+```
+
+### Integration тесты
+
+```bash
+npm run test:integration
+```
+
+### E2E тесты
+
+```bash
+npm run test:e2e
+```
+
+## 🚀 Деплой
+
+### Production сборка
 
 ```bash
 npm run build
 ```
 
-### Предпросмотр сборки
+### Docker
 
 ```bash
-npm run preview
+# Сборка образа
+docker build -t relink-frontend .
+
+# Запуск контейнера
+docker run -p 3000:3000 relink-frontend
 ```
 
-## 🧪 Тестирование
+### Docker Compose
 
-### Unit-тесты (Vitest)
+```yaml
+version: '3.8'
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BACKEND_URL=http://backend:8000
+      - REACT_APP_LLM_TUNING_URL=http://llm-tuning:8001
+    depends_on:
+      - backend
+      - llm-tuning
+```
 
-    npm run test:unit
+## 📊 Производительность
 
-### E2E-тесты (Playwright)
+### Оптимизации
 
-    npm run test:e2e
+- **Code Splitting** - ленивая загрузка компонентов
+- **Memoization** - кэширование вычислений
+- **Virtual Scrolling** - для больших списков
+- **Image Optimization** - сжатие и lazy loading
+- **Bundle Analysis** - анализ размера бандла
 
-### Все тесты и покрытие
+### Метрики
 
-    npm test
-    npm run coverage
+- **First Contentful Paint**: < 1.5s
+- **Largest Contentful Paint**: < 2.5s
+- **Cumulative Layout Shift**: < 0.1
+- **First Input Delay**: < 100ms
 
-Покрытие кода отображается в терминале и в папке coverage/ после запуска unit-тестов.
+## 🔒 Безопасность
 
-## 📝 Код и качество
+### Аутентификация
+
+- JWT токены
+- Автоматическое обновление
+- Защищенные роуты
+
+### Валидация
+
+- TypeScript типы
+- Runtime валидация
+- Санитизация данных
+
+### HTTPS
+
+- Принудительное HTTPS в production
+- Secure cookies
+- CSP заголовки
+
+## 📈 Мониторинг
+
+### Web Vitals
+
+```tsx
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals'
+
+// Отправка метрик
+function sendToAnalytics(metric: any) {
+  analytics.track('web_vital', metric)
+}
+```
+
+### Error Tracking
+
+```tsx
+// Отслеживание ошибок
+window.addEventListener('error', (event) => {
+  errorTracker.captureException(event.error)
+})
+```
+
+## 🤝 Разработка
+
+### Code Style
+
+- ESLint + Prettier
+- TypeScript strict mode
+- Conventional Commits
+- Pre-commit hooks
+
+### Git Workflow
+
+1. Создание feature ветки
+2. Разработка с тестами
+3. Code review
+4. Merge в main
+5. Автоматический деплой
+
+### Команды
 
 ```bash
-# Проверка типов
-npm run type-check
+# Разработка
+npm start
+
+# Тестирование
+npm test
+npm run test:watch
+npm run test:coverage
 
 # Линтинг
 npm run lint
-
-# Исправление ошибок линтера
 npm run lint:fix
 
-# Форматирование кода
-npm run format
+# Типы
+npm run type-check
 
-# Проверка форматирования
-npm run format:check
+# Сборка
+npm run build
+npm run build:analyze
 ```
 
-## 🎨 UI Компоненты
+## 📚 Документация
 
-### Button
+- [Frontend Integration Guide](./FRONTEND_INTEGRATION.md)
+- [API Documentation](../docs/API_EXTENDED.md)
+- [Integration Guide](../INTEGRATION.md)
 
-Многофункциональная кнопка с различными вариантами:
+## 🐛 Отладка
+
+### DevTools
+
+- React Developer Tools
+- Redux DevTools (если используется)
+- Network tab для API запросов
+
+### Логи
 
 ```tsx
-import { Button } from './components/ui/Button';
-
-// Основная кнопка
-<Button>Нажми меня</Button>
-
-// Вторичная кнопка
-<Button variant="secondary">Вторичная</Button>
-
-// Призрачная кнопка
-<Button variant="ghost">Призрачная</Button>
-
-// Разные размеры
-<Button size="sm">Маленькая</Button>
-<Button size="lg">Большая</Button>
-
-// Отключенная
-<Button disabled>Отключена</Button>
+// Включение debug логов
+localStorage.setItem('debug', 'relink:*')
 ```
 
-### Card
-
-Контейнер для контента:
+### Профилирование
 
 ```tsx
-import { Card } from './components/ui/Card';
+// Профилирование производительности
+import { Profiler } from 'react'
 
-<Card className="p-6">
-  <h2>Заголовок</h2>
-  <p>Содержимое карточки</p>
-</Card>
+<Profiler id="Dashboard" onRender={onRenderCallback}>
+  <Dashboard />
+</Profiler>
 ```
 
-## 🔌 Хуки
+## 🤝 Поддержка
 
-### useWebSocket
+### Сообщество
 
-Хук для работы с WebSocket соединениями:
+- [GitHub Issues](https://github.com/your-org/relink/issues)
+- [Discord](https://discord.gg/relink)
+- [Documentation](https://docs.relink.com)
 
-```tsx
-import { useWebSocket } from './hooks/useWebSocket';
+### Команда
 
-const { status, sendMessage, lastMessage, error, reconnect } = useWebSocket({
-  url: 'ws://localhost:8000/ws',
-  clientId: 'unique-client-id',
-  onMessage: (message) => console.log('Получено:', message),
-  onError: (error) => console.error('Ошибка:', error),
-  onClose: () => console.log('Соединение закрыто')
-});
-```
-
-### useNotifications
-
-Хук для управления уведомлениями:
-
-```tsx
-import { useNotifications } from './hooks/useNotifications';
-
-const { notifications, addNotification, removeNotification, clearNotifications } = useNotifications();
-
-// Добавить уведомление
-addNotification({
-  type: 'success',
-  title: 'Успех!',
-  message: 'Операция выполнена успешно',
-  details: 'Дополнительная информация',
-  duration: 5000
-});
-```
-
-### useApi
-
-Хук для API запросов:
-
-```tsx
-import { useDomains, useOllamaStatus } from './hooks/useApi';
-
-const { data: domains, loading, execute: loadDomains } = useDomains();
-const { data: ollamaStatus, loading: ollamaLoading } = useOllamaStatus();
-```
-
-## 📊 Типы данных
-
-### Domain
-
-```tsx
-interface Domain {
-  id: number;
-  name: string;
-  display_name: string;
-  total_posts: number;
-  total_analyses: number;
-  last_analysis_at: string | null;
-  is_indexed: boolean;
-  // ... другие поля
-}
-```
-
-### Recommendation
-
-```tsx
-interface Recommendation {
-  from: string;
-  to: string;
-  anchor: string;
-  comment: string;
-  quality_score?: number;
-}
-```
-
-### WebSocketMessage
-
-```tsx
-interface WebSocketMessage {
-  type: 'progress' | 'error' | 'ollama' | 'ai_thinking' | 'enhanced_ai_thinking' | 'ping';
-  step?: string;
-  current?: number;
-  total?: number;
-  percentage?: number;
-  details?: string;
-  // ... другие поля
-}
-```
-
-## 🎯 Основные функции
-
-### 1. Мониторинг статуса Ollama
-- Проверка готовности модели
-- Отображение статуса в реальном времени
-- Автоматическое обновление
-
-### 2. Управление доменами
-- Список индексированных доменов
-- Статистика по каждому домену
-- История анализов
-
-### 3. Анализ в реальном времени
-- WebSocket соединение для отслеживания прогресса
-- Отображение мыслей ИИ
-- Детальная информация о каждом этапе
-
-### 4. Рекомендации
-- Красивое отображение рекомендаций
-- Копирование в буфер обмена
-- Фильтрация по качеству
-- Статистика
-
-### 5. Уведомления
-- Система уведомлений с типами
-- Автоматическое исчезновение
-- Возможность расширения деталей
-
-## 🔧 Конфигурация
-
-### Vite
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: '0.0.0.0',
-    port: 3000
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true
-  }
-});
-```
-
-### Tailwind CSS
-
-```js
-// tailwind.config.js
-module.exports = {
-  content: ['./src/**/*.{js,ts,jsx,tsx}'],
-  darkMode: 'class',
-  theme: {
-    extend: {
-      colors: {
-        // Кастомные цвета
-      }
-    }
-  },
-  plugins: []
-};
-```
-
-### TypeScript
-
-```json
-// tsconfig.json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
-}
-```
-
-## 🚀 Развертывание
-
-### Docker
-
-```dockerfile
-# Dockerfile
-FROM node:18-alpine as builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-### Nginx конфигурация
-
-```nginx
-# nginx.conf
-server {
-    listen 80;
-    server_name localhost;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location /ws/ {
-        proxy_pass http://backend:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
-## 🤝 Вклад в проект
-
-1. Форкните репозиторий
-2. Создайте ветку для новой функции
-3. Внесите изменения
-4. Добавьте тесты
-5. Создайте Pull Request
+- **Frontend Lead**: [@your-name](https://github.com/your-name)
+- **UI/UX**: [@designer](https://github.com/designer)
+- **DevOps**: [@devops](https://github.com/devops)
 
 ## 📄 Лицензия
 
-MIT License - см. файл [LICENSE](../LICENSE) для деталей.
-
-## 🆘 Поддержка
-
-Если у вас есть вопросы или проблемы:
-
-1. Проверьте [документацию](../README.md)
-2. Создайте [Issue](../../issues)
-3. Обратитесь к команде разработки
+MIT License - см. [LICENSE](../LICENSE) файл.
 
 ---
 
-**Сделано с ❤️ для SEO-инженеров** 
+**Frontend reLink** - элегантный интерфейс для мощной микросервисной архитектуры! 🚀
+
+Создано с ❤️ командой reLink 
