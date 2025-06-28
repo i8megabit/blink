@@ -67,18 +67,104 @@ class OptimizedConfig:
 
 class SystemAnalyzer:
     """
-    🔍 Анализатор системы для автоопределения оптимальной конфигурации
+    🔍 Интеллектуальный анализатор системы с RAG и LLM
     
-    Автоматически определяет:
-    - Тип процессора (Apple Silicon, Intel, AMD)
-    - Доступность GPU
-    - Объем памяти
-    - Оптимальные параметры для Ollama
+    Автоматически определяет оптимальную конфигурацию используя:
+    - Анализ системных характеристик
+    - RAG с базой знаний о производительности
+    - LLM для принятия решений о конфигурации
+    - Адаптивную оптимизацию на основе результатов
     """
     
     def __init__(self):
         self.specs: Optional[SystemSpecs] = None
         self.optimized_config: Optional[OptimizedConfig] = None
+        self.performance_history: List[Dict[str, Any]] = []
+        self.knowledge_base: List[Dict[str, Any]] = []
+        self._initialize_knowledge_base()
+    
+    def _initialize_knowledge_base(self):
+        """Инициализация базы знаний о производительности"""
+        self.knowledge_base = [
+            {
+                "system_type": "apple_silicon_m1_m2_m4",
+                "optimal_config": {
+                    "num_gpu": 1,
+                    "num_thread": 8,
+                    "batch_size": 1024,
+                    "f16_kv": True,
+                    "context_length": 8192,
+                    "semaphore_limit": 8
+                },
+                "performance_notes": "Apple Silicon M1/M2/M4 показывает лучшую производительность с GPU acceleration и большими batch sizes",
+                "memory_optimization": "Использует Unified Memory Architecture для эффективного распределения ресурсов"
+            },
+            {
+                "system_type": "apple_silicon_generic",
+                "optimal_config": {
+                    "num_gpu": 1,
+                    "num_thread": 6,
+                    "batch_size": 768,
+                    "f16_kv": True,
+                    "context_length": 6144,
+                    "semaphore_limit": 6
+                },
+                "performance_notes": "Общие Apple Silicon процессоры хорошо работают с Metal acceleration",
+                "memory_optimization": "Оптимизированное использование GPU memory"
+            },
+            {
+                "system_type": "nvidia_gpu",
+                "optimal_config": {
+                    "num_gpu": 1,
+                    "num_thread": 6,
+                    "batch_size": 1024,
+                    "f16_kv": True,
+                    "context_length": 8192,
+                    "semaphore_limit": 6
+                },
+                "performance_notes": "NVIDIA GPU обеспечивает высокую производительность с CUDA acceleration",
+                "memory_optimization": "Использует GPU memory для KV cache"
+            },
+            {
+                "system_type": "amd_gpu",
+                "optimal_config": {
+                    "num_gpu": 1,
+                    "num_thread": 6,
+                    "batch_size": 768,
+                    "f16_kv": True,
+                    "context_length": 6144,
+                    "semaphore_limit": 6
+                },
+                "performance_notes": "AMD GPU работает с ROCm acceleration",
+                "memory_optimization": "Оптимизированное использование VRAM"
+            },
+            {
+                "system_type": "cpu_only_high_memory",
+                "optimal_config": {
+                    "num_gpu": 0,
+                    "num_thread": 8,
+                    "batch_size": 512,
+                    "f16_kv": False,
+                    "context_length": 8192,
+                    "semaphore_limit": 6
+                },
+                "performance_notes": "CPU-only системы с большим объемом памяти могут использовать большие контексты",
+                "memory_optimization": "Использует RAM для всех операций"
+            },
+            {
+                "system_type": "cpu_only_low_memory",
+                "optimal_config": {
+                    "num_gpu": 0,
+                    "num_thread": 4,
+                    "batch_size": 256,
+                    "f16_kv": False,
+                    "context_length": 2048,
+                    "semaphore_limit": 3
+                },
+                "performance_notes": "Системы с ограниченной памятью требуют консервативных настроек",
+                "memory_optimization": "Минимизирует использование памяти"
+            }
+        ]
     
     async def analyze_system(self) -> SystemSpecs:
         """Анализ системы и определение спецификаций"""
@@ -145,8 +231,125 @@ class SystemAnalyzer:
         logger.info(f"🔍 System analysis completed: {self.specs}")
         return self.specs
     
+    async def _get_llm_recommendation(self, specs: SystemSpecs, performance_data: List[Dict]) -> Dict[str, Any]:
+        """
+        🧠 Получение рекомендаций от LLM для оптимизации конфигурации
+        
+        Использует RAG с базой знаний и историей производительности
+        """
+        try:
+            # Формирование контекста для LLM
+            context_parts = [
+                f"Системные характеристики:",
+                f"- Платформа: {specs.platform}",
+                f"- Архитектура: {specs.architecture}",
+                f"- CPU ядер: {specs.cpu_count}",
+                f"- Память: {specs.memory_gb:.1f} GB",
+                f"- GPU доступен: {specs.gpu_available}",
+                f"- Тип GPU: {specs.gpu_type}",
+                f"- Apple Silicon: {specs.apple_silicon}",
+                f"- M1/M2/M4: {specs.m1_m2_m4}"
+            ]
+            
+            if performance_data:
+                context_parts.append("\nИстория производительности:")
+                for perf in performance_data[-3:]:  # Последние 3 записи
+                    context_parts.append(f"- {perf['timestamp']}: {perf['avg_response_time']:.2f}s, {perf['success_rate']:.1%}")
+            
+            context_parts.append("\nБаза знаний о производительности:")
+            for kb in self.knowledge_base:
+                context_parts.append(f"- {kb['system_type']}: {kb['performance_notes']}")
+            
+            context = "\n".join(context_parts)
+            
+            # Промпт для LLM
+            prompt = f"""
+            Ты эксперт по оптимизации LLM систем. Проанализируй характеристики системы и историю производительности, чтобы дать рекомендации по оптимальной конфигурации Ollama.
+
+            Контекст:
+            {context}
+
+            Задача: Определи оптимальные параметры для максимальной производительности и стабильности.
+
+            Ответь в формате JSON с параметрами:
+            {{
+                "num_gpu": <0 или 1>,
+                "num_thread": <количество потоков>,
+                "batch_size": <размер батча>,
+                "f16_kv": <true/false>,
+                "context_length": <длина контекста>,
+                "semaphore_limit": <лимит одновременных запросов>,
+                "temperature": <температура для генерации>,
+                "max_tokens": <максимум токенов>,
+                "keep_alive": <время жизни модели>,
+                "request_timeout": <таймаут запроса в секундах>,
+                "cache_ttl": <время жизни кэша в секундах>,
+                "reasoning": "<объяснение выбора параметров>"
+            }}
+            """
+            
+            # Создание временного LLM роутера для получения рекомендаций
+            temp_router = LLMRouter()
+            await temp_router.start()
+            
+            request = LLMRequest(
+                service_type=LLMServiceType.LLM_TUNING,
+                prompt=prompt,
+                context={"task": "system_optimization"},
+                model="qwen2.5:7b-instruct-turbo",
+                temperature=0.3,  # Низкая температура для консистентности
+                max_tokens=1024,
+                use_rag=False  # Отключаем RAG для этого запроса
+            )
+            
+            response = await temp_router.process_request(request)
+            await temp_router.stop()
+            
+            # Парсинг JSON ответа
+            try:
+                import re
+                json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+                if json_match:
+                    recommendation = json.loads(json_match.group())
+                    logger.info(f"🧠 LLM recommendation: {recommendation['reasoning']}")
+                    return recommendation
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM recommendation: {e}")
+            
+        except Exception as e:
+            logger.error(f"LLM recommendation failed: {e}")
+        
+        # Fallback к базовым настройкам
+        return None
+    
+    async def _search_knowledge_base(self, specs: SystemSpecs) -> List[Dict[str, Any]]:
+        """Поиск релевантных знаний в базе знаний"""
+        relevant_knowledge = []
+        
+        # Определение типа системы
+        if specs.apple_silicon and specs.m1_m2_m4:
+            system_type = "apple_silicon_m1_m2_m4"
+        elif specs.apple_silicon:
+            system_type = "apple_silicon_generic"
+        elif specs.gpu_available and specs.gpu_type == "NVIDIA":
+            system_type = "nvidia_gpu"
+        elif specs.gpu_available and specs.gpu_type == "AMD":
+            system_type = "amd_gpu"
+        elif specs.memory_gb >= 16:
+            system_type = "cpu_only_high_memory"
+        else:
+            system_type = "cpu_only_low_memory"
+        
+        # Поиск соответствующих знаний
+        for kb in self.knowledge_base:
+            if kb["system_type"] == system_type:
+                relevant_knowledge.append(kb)
+                break
+        
+        return relevant_knowledge
+    
     async def optimize_config(self) -> OptimizedConfig:
-        """Оптимизация конфигурации на основе анализа системы"""
+        """Интеллектуальная оптимизация конфигурации с использованием LLM"""
         if self.optimized_config:
             return self.optimized_config
         
@@ -168,55 +371,38 @@ class SystemAnalyzer:
             cache_ttl=3600
         )
         
-        # Оптимизация для Apple Silicon M1/M2/M4
-        if specs.apple_silicon and specs.m1_m2_m4:
-            config.num_gpu = 1
-            config.num_thread = min(8, specs.cpu_count)
-            config.batch_size = 1024
-            config.f16_kv = True
-            config.context_length = 8192
-            config.semaphore_limit = 8
-            logger.info("🍎 Optimized for Apple Silicon M1/M2/M4")
+        # Получение рекомендаций от LLM
+        llm_recommendation = await self._get_llm_recommendation(specs, self.performance_history)
         
-        # Оптимизация для других Apple Silicon
-        elif specs.apple_silicon:
-            config.num_gpu = 1
-            config.num_thread = min(6, specs.cpu_count)
-            config.batch_size = 768
-            config.f16_kv = True
-            config.context_length = 6144
-            config.semaphore_limit = 6
-            logger.info("🍎 Optimized for Apple Silicon")
-        
-        # Оптимизация для NVIDIA GPU
-        elif specs.gpu_available and specs.gpu_type == "NVIDIA":
-            config.num_gpu = 1
-            config.num_thread = min(6, specs.cpu_count)
-            config.batch_size = 1024
-            config.f16_kv = True
-            config.context_length = 8192
-            config.semaphore_limit = 6
-            logger.info("🟢 Optimized for NVIDIA GPU")
-        
-        # Оптимизация для AMD GPU
-        elif specs.gpu_available and specs.gpu_type == "AMD":
-            config.num_gpu = 1
-            config.num_thread = min(6, specs.cpu_count)
-            config.batch_size = 768
-            config.f16_kv = True
-            config.context_length = 6144
-            config.semaphore_limit = 6
-            logger.info("🔴 Optimized for AMD GPU")
-        
-        # Оптимизация для CPU-only
+        if llm_recommendation:
+            # Применение рекомендаций LLM
+            config.num_gpu = llm_recommendation.get("num_gpu", config.num_gpu)
+            config.num_thread = llm_recommendation.get("num_thread", config.num_thread)
+            config.batch_size = llm_recommendation.get("batch_size", config.batch_size)
+            config.f16_kv = llm_recommendation.get("f16_kv", config.f16_kv)
+            config.context_length = llm_recommendation.get("context_length", config.context_length)
+            config.semaphore_limit = llm_recommendation.get("semaphore_limit", config.semaphore_limit)
+            config.temperature = llm_recommendation.get("temperature", config.temperature)
+            config.max_tokens = llm_recommendation.get("max_tokens", config.max_tokens)
+            config.keep_alive = llm_recommendation.get("keep_alive", config.keep_alive)
+            config.request_timeout = llm_recommendation.get("request_timeout", config.request_timeout)
+            config.cache_ttl = llm_recommendation.get("cache_ttl", config.cache_ttl)
+            
+            logger.info(f"🧠 Applied LLM recommendations: {llm_recommendation.get('reasoning', 'No reasoning provided')}")
         else:
-            config.num_gpu = 0
-            config.num_thread = min(8, specs.cpu_count)
-            config.batch_size = 256
-            config.f16_kv = False
-            config.context_length = 4096
-            config.semaphore_limit = 4
-            logger.info("💻 Optimized for CPU-only")
+            # Fallback к правилам на основе знаний
+            relevant_knowledge = await self._search_knowledge_base(specs)
+            
+            if relevant_knowledge:
+                kb_config = relevant_knowledge[0]["optimal_config"]
+                config.num_gpu = kb_config.get("num_gpu", config.num_gpu)
+                config.num_thread = min(kb_config.get("num_thread", config.num_thread), specs.cpu_count)
+                config.batch_size = kb_config.get("batch_size", config.batch_size)
+                config.f16_kv = kb_config.get("f16_kv", config.f16_kv)
+                config.context_length = kb_config.get("context_length", config.context_length)
+                config.semaphore_limit = kb_config.get("semaphore_limit", config.semaphore_limit)
+                
+                logger.info(f"📚 Applied knowledge base config: {relevant_knowledge[0]['system_type']}")
         
         # Дополнительная оптимизация по памяти
         if specs.memory_gb >= 32:
@@ -233,6 +419,48 @@ class SystemAnalyzer:
         self.optimized_config = config
         logger.info(f"⚙️ Optimized config: {config}")
         return config
+    
+    async def record_performance(self, response_time: float, success: bool, tokens_used: int):
+        """Запись производительности для адаптивной оптимизации"""
+        performance_record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "response_time": response_time,
+            "success": success,
+            "tokens_used": tokens_used,
+            "config_snapshot": {
+                "num_gpu": self.optimized_config.num_gpu if self.optimized_config else 0,
+                "num_thread": self.optimized_config.num_thread if self.optimized_config else 4,
+                "batch_size": self.optimized_config.batch_size if self.optimized_config else 512,
+                "context_length": self.optimized_config.context_length if self.optimized_config else 4096
+            }
+        }
+        
+        self.performance_history.append(performance_record)
+        
+        # Ограничиваем историю последними 100 записями
+        if len(self.performance_history) > 100:
+            self.performance_history = self.performance_history[-100:]
+        
+        # Анализируем производительность и при необходимости переоптимизируем
+        await self._analyze_and_adapt()
+    
+    async def _analyze_and_adapt(self):
+        """Анализ производительности и адаптивная оптимизация"""
+        if len(self.performance_history) < 10:
+            return
+        
+        recent_performance = self.performance_history[-10:]
+        avg_response_time = sum(p["response_time"] for p in recent_performance) / len(recent_performance)
+        success_rate = sum(1 for p in recent_performance if p["success"]) / len(recent_performance)
+        
+        # Если производительность ухудшилась, переоптимизируем
+        if avg_response_time > 5.0 or success_rate < 0.8:
+            logger.warning(f"Performance degradation detected: avg_time={avg_response_time:.2f}s, success_rate={success_rate:.1%}")
+            logger.info("🔄 Triggering adaptive reoptimization...")
+            
+            # Сбрасываем оптимизированную конфигурацию для пересчета
+            self.optimized_config = None
+            await self.optimize_config()
     
     async def get_environment_variables(self) -> Dict[str, str]:
         """Получение переменных окружения для Ollama"""
@@ -259,6 +487,44 @@ class SystemAnalyzer:
             })
         
         return env_vars
+    
+    async def get_optimization_report(self) -> Dict[str, Any]:
+        """Получение отчета об оптимизации"""
+        specs = await self.analyze_system()
+        config = await self.optimize_config()
+        
+        return {
+            "system_specs": {
+                "platform": specs.platform,
+                "architecture": specs.architecture,
+                "cpu_count": specs.cpu_count,
+                "memory_gb": specs.memory_gb,
+                "gpu_available": specs.gpu_available,
+                "gpu_type": specs.gpu_type,
+                "apple_silicon": specs.apple_silicon,
+                "m1_m2_m4": specs.m1_m2_m4
+            },
+            "optimized_config": {
+                "model": config.model,
+                "num_gpu": config.num_gpu,
+                "num_thread": config.num_thread,
+                "batch_size": config.batch_size,
+                "f16_kv": config.f16_kv,
+                "temperature": config.temperature,
+                "max_tokens": config.max_tokens,
+                "context_length": config.context_length,
+                "keep_alive": config.keep_alive,
+                "request_timeout": config.request_timeout,
+                "semaphore_limit": config.semaphore_limit,
+                "cache_ttl": config.cache_ttl
+            },
+            "performance_history": {
+                "total_records": len(self.performance_history),
+                "recent_avg_response_time": sum(p["response_time"] for p in self.performance_history[-10:]) / min(10, len(self.performance_history)) if self.performance_history else 0,
+                "recent_success_rate": sum(1 for p in self.performance_history[-10:] if p["success"]) / min(10, len(self.performance_history)) if self.performance_history else 0
+            },
+            "knowledge_base_entries": len(self.knowledge_base)
+        }
 
 # Глобальный экземпляр анализатора
 system_analyzer = SystemAnalyzer()
