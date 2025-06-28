@@ -29,10 +29,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import (
     DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text,
-    func, select
+    func, select, update, delete
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, selectinload
 
 # Импортируем модули
 from .config import settings, get_settings
@@ -66,6 +66,7 @@ from .database import get_db, engine
 from .models import Base, User, Domain, WordPressPost, AnalysisHistory, Diagram, DiagramEmbedding
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
+from .testing_service import testing_service
 
 # Загрузка NLTK данных при старте
 try:
@@ -1245,6 +1246,131 @@ async def get_user_diagrams(
             status_code=500,
             detail=f"Ошибка получения диаграмм: {str(e)}"
         )
+
+# ============================================================================
+# API ЭНДПОИНТЫ ДЛЯ ТЕСТИРОВАНИЯ
+# ============================================================================
+
+@app.post("/api/v1/tests/", response_model=TestResponse)
+async def create_test(
+    test_request: TestRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Создание нового теста"""
+    return await testing_service.create_test(test_request, current_user.id, db)
+
+@app.get("/api/v1/tests/", response_model=List[TestResponse])
+async def get_tests(
+    test_type: Optional[TestType] = None,
+    status: Optional[TestStatus] = None,
+    priority: Optional[TestPriority] = None,
+    environment: Optional[TestEnvironment] = None,
+    name_contains: Optional[str] = None,
+    description_contains: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение списка тестов с фильтрацией"""
+    filters = TestFilter(
+        test_type=test_type,
+        status=status,
+        priority=priority,
+        environment=environment,
+        name_contains=name_contains,
+        description_contains=description_contains,
+        tags=tags,
+        limit=limit,
+        offset=offset,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+    return await testing_service.get_tests(filters, offset, limit, db)
+
+@app.get("/api/v1/tests/{test_id}", response_model=TestResponse)
+async def get_test(
+    test_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение теста по ID"""
+    test = await testing_service.get_test(test_id, db)
+    if not test:
+        raise_not_found("Тест не найден")
+    return test
+
+@app.post("/api/v1/tests/{test_id}/execute", response_model=TestExecutionResponse)
+async def execute_test(
+    test_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Выполнение теста"""
+    return await testing_service.execute_test(test_id, current_user.id, db)
+
+@app.get("/api/v1/test-executions/", response_model=List[TestExecutionResponse])
+async def get_test_executions(
+    test_id: Optional[str] = None,
+    status: Optional[TestStatus] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение списка выполнений тестов"""
+    return await testing_service.get_executions(offset, limit, test_id, status, db)
+
+@app.post("/api/v1/test-executions/{execution_id}/cancel")
+async def cancel_test_execution(
+    execution_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Отмена выполнения теста"""
+    success = await testing_service.cancel_execution(execution_id, db)
+    if not success:
+        raise HTTPException(status_code=404, detail="Выполнение не найдено")
+    return {"message": "Выполнение отменено"}
+
+@app.post("/api/v1/test-suites/", response_model=TestSuiteResponse)
+async def create_test_suite(
+    suite_request: TestSuiteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Создание набора тестов"""
+    return await testing_service.create_test_suite(suite_request, current_user.id, db)
+
+@app.post("/api/v1/test-suites/{suite_id}/execute", response_model=List[TestExecutionResponse])
+async def execute_test_suite(
+    suite_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Выполнение набора тестов"""
+    return await testing_service.execute_test_suite(suite_id, current_user.id, db)
+
+@app.get("/api/v1/testing/metrics")
+async def get_testing_metrics(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение метрик тестирования"""
+    return await testing_service.get_test_metrics(db=db)
+
+@app.get("/api/v1/testing/health")
+async def get_testing_health():
+    """Проверка здоровья системы тестирования"""
+    return {
+        "status": "healthy",
+        "running_executions": len(testing_service.running_executions),
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 if __name__ == "__main__":
     import uvicorn

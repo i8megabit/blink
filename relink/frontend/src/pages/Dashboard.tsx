@@ -7,6 +7,7 @@ import { GlobalSearch } from '../components/GlobalSearch'
 import { ABTesting } from '../components/ABTesting'
 import { Benchmarks } from '../components/Benchmarks'
 import ArchGen from '../components/ArchGen'
+import Testing from '../components/Testing'
 import { Card, Button, Badge } from '../components/ui'
 
 interface DashboardProps {
@@ -24,7 +25,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     { id: 'ab-testing', name: 'A/B Тесты', icon: '🧪' },
     { id: 'benchmarks', name: 'Бенчмарки', icon: '🏆' },
     { id: 'search', name: 'Поиск', icon: '🔍' },
-    { id: 'archgen', name: 'ArchGen', icon: '🏗️' }
+    { id: 'archgen', name: 'ArchGen', icon: '🏗️' },
+    { id: 'testing', name: 'Тестирование', icon: '🧪' }
   ]
 
   const renderTabContent = () => {
@@ -43,6 +45,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         return <GlobalSearch />
       case 'archgen':
         return <ArchGen />
+      case 'testing':
+        return <Testing />
       default:
         return <OverviewTab />
     }
@@ -376,6 +380,8 @@ const getTabDescription = (tabId: string): string => {
       return 'Глобальный поиск по всем данным'
     case 'archgen':
       return 'Генерация архитектуры системы'
+    case 'testing':
+      return 'Тестирование моделей и системы'
     default:
       return ''
   }

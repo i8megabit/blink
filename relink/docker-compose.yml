@@ -112,23 +112,23 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=1
-      - CACHE_TTL=3600
-      - CACHE_PREFIX=testing:
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-      - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
-      - MAX_CONCURRENT_TESTS=10
-      - TEST_TIMEOUT=300
-      - REPORT_RETENTION_DAYS=30
-      - METRICS_ENABLED=true
-      - PROMETHEUS_PORT=9090
-      - JAEGER_HOST=jaeger
-      - JAEGER_PORT=6831
+      PYTHONUNBUFFERED: 1
+      DATABASE_URL: postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+      CACHE_TTL: 3600
+      CACHE_PREFIX: "testing:"
+      CORS_ORIGINS: http://localhost:3000,http://frontend:80
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      MAX_CONCURRENT_TESTS: 10
+      TEST_TIMEOUT: 300
+      REPORT_RETENTION_DAYS: 30
+      METRICS_ENABLED: true
+      PROMETHEUS_PORT: 9090
+      JAEGER_HOST: jaeger
+      JAEGER_PORT: 6831
     deploy:
       resources:
         limits:
