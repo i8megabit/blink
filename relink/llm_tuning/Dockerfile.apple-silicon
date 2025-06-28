@@ -1,0 +1,85 @@
+# 🍎 Dockerfile для Apple Silicon - оптимизированный для M1/M2/M3
+# Многоэтапная сборка с оптимизацией для ARM64
+
+# Этап 1: Базовый образ для компиляции
+FROM python:3.11-slim as builder
+
+# Установка системных зависимостей для компиляции
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание виртуального окружения
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Копирование и установка зависимостей Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Этап 2: Финальный образ
+FROM python:3.11-slim
+
+# Метаданные
+LABEL maintainer="reLink Team <i8megabit@gmail.com>"
+LABEL description="LLM Tuning микросервис для Apple Silicon"
+LABEL version="1.0.0"
+LABEL architecture="arm64"
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    postgresql-client \
+    redis-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя приложения
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Копирование виртуального окружения из builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Установка рабочей директории
+WORKDIR /app
+
+# Копирование кода приложения
+COPY app/ ./app/
+COPY alembic.ini .
+COPY migrations/ ./migrations/
+
+# Создание необходимых директорий
+RUN mkdir -p /app/logs /app/data /app/models /app/cache
+
+# Установка прав доступа
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Переменные окружения для Apple Silicon
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Оптимизации для ARM64
+ENV OLLAMA_METAL=1
+ENV OLLAMA_FLASH_ATTENTION=1
+ENV OLLAMA_KV_CACHE_TYPE=q8_0
+ENV OLLAMA_CONTEXT_LENGTH=4096
+ENV OLLAMA_BATCH_SIZE=512
+ENV OLLAMA_NUM_PARALLEL=2
+ENV OLLAMA_MEM_FRACTION=0.9
+
+# Порт приложения
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Команда запуска
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"] 
