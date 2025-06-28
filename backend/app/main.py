@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import re
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -33,6 +34,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, selectinload
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('app.log')
+    ]
+)
 
 # Импортируем модули
 from .config import settings, get_settings
@@ -71,6 +82,7 @@ from .models import (
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
 from .testing_service import testing_service, router as testing_router
+from .api.auth import router as auth_router
 
 # Загрузка NLTK данных при старте
 try:
@@ -733,102 +745,6 @@ async def clear_cache_pattern(pattern: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка очистки кэша")
 
-# Endpoints для аутентификации
-@app.post("/api/v1/auth/register", response_model=UserResponse)
-async def register_user(user_data: UserRegistrationRequest, db: AsyncSession = Depends(get_db)):
-    """Регистрация нового пользователя"""
-    try:
-        # Проверяем, существует ли пользователь с таким email
-        result = await db.execute(select(User).where(User.email == user_data.email))
-        if result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=400,
-                detail="Пользователь с таким email уже существует"
-            )
-        
-        # Создаем нового пользователя
-        hashed_password = get_password_hash(user_data.password)
-        db_user = User(
-            email=user_data.email,
-            username=user_data.username,
-            hashed_password=hashed_password
-        )
-        
-        db.add(db_user)
-        await db.commit()
-        await db.refresh(db_user)
-        
-        return UserResponse(
-            id=db_user.id,
-            email=db_user.email,
-            username=db_user.username,
-            is_active=db_user.is_active,
-            created_at=db_user.created_at
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка регистрации пользователя")
-
-@app.post("/api/v1/auth/login", response_model=Token)
-async def login_user(user_data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
-    """Вход пользователя"""
-    try:
-        # Ищем пользователя
-        result = await db.execute(select(User).where(User.email == user_data.email))
-        user = result.scalar_one_or_none()
-        
-        if not user or not verify_password(user_data.password, user.hashed_password):
-            raise HTTPException(
-                status_code=401,
-                detail="Неверный email или пароль"
-            )
-        
-        if not user.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail="Пользователь неактивен"
-            )
-        
-        # Создаем токен доступа
-        access_token = create_access_token(data={"sub": str(user.id)})
-        
-        return Token(access_token=access_token, token_type="bearer")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка входа")
-
-@app.get("/api/v1/auth/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Получение информации о текущем пользователе"""
-    return UserResponse(
-        id=current_user.id,
-        email=current_user.email,
-        username=current_user.username,
-        is_active=current_user.is_active,
-        created_at=current_user.created_at
-    )
-
-@app.post("/api/v1/auth/refresh", response_model=Token)
-async def refresh_token(current_user: User = Depends(get_current_user)):
-    """Обновление токена доступа"""
-    try:
-        access_token = create_access_token(data={"sub": str(current_user.id)})
-        return Token(access_token=access_token, token_type="bearer")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка обновления токена")
-
-@app.post("/api/v1/auth/logout")
-async def logout_user(current_user: User = Depends(get_current_user)):
-    """Выход пользователя"""
-    try:
-        return {"message": "Успешный выход из системы"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка выхода")
-
 # Endpoints для SEO анализа с валидацией
 @app.post("/api/v1/seo/analyze", response_model=SEOAnalysisResult)
 async def analyze_domain(
@@ -1377,6 +1293,7 @@ async def get_testing_health():
     }
 
 app.include_router(testing_router, prefix="/api/v1/testing")
+app.include_router(auth_router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn

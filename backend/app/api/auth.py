@@ -1,5 +1,6 @@
 """API endpoints для аутентификации."""
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,15 +16,18 @@ from ..auth import (
 from ..database import get_db, get_user_by_username, get_user_by_email, create_user
 from ..models import User
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["authentication"])
 security = HTTPBearer()
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """Регистрация нового пользователя."""
+    
+    logger.info(f"Registration request for username: {user_data.username}")
     
     # Проверка уникальности username
     existing_user = await get_user_by_username(db, user_data.username)
@@ -51,6 +55,8 @@ async def register(
         full_name=user_data.full_name
     )
     
+    logger.info(f"User {user.username} created successfully")
+    
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -60,7 +66,7 @@ async def register(
         created_at=user.created_at
     )
 
-@router.post("/login", response_model=Token)
+@router.post("/auth/login", response_model=Token)
 async def login(
     user_credentials: UserLogin,
     db: AsyncSession = Depends(get_db)
@@ -105,7 +111,7 @@ async def login(
         expires_in=30 * 60  # 30 минут в секундах
     )
 
-@router.post("/refresh", response_model=Token)
+@router.post("/auth/refresh", response_model=Token)
 async def refresh_token(
     refresh_token: str,
     db: AsyncSession = Depends(get_db)
@@ -160,7 +166,7 @@ async def refresh_token(
             detail="Could not validate credentials"
         )
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/auth/me", response_model=UserResponse)
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user)
 ):
@@ -174,12 +180,12 @@ async def get_current_user_info(
         created_at=current_user.created_at
     )
 
-@router.post("/logout")
+@router.post("/auth/logout")
 async def logout():
     """Выход пользователя (клиент должен удалить токены)."""
     return {"message": "Successfully logged out"}
 
-@router.post("/change-password")
+@router.post("/auth/change-password")
 async def change_password(
     current_password: str,
     new_password: str,

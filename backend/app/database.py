@@ -227,15 +227,21 @@ async def create_user(session: AsyncSession, username: str, email: str, hashed_p
     """Создание нового пользователя."""
     from .models import User
     
+    logger.info(f"Creating user: {username} with full_name: {full_name}")
+    
     user = User(
         username=username,
         email=email,
         hashed_password=hashed_password,
         full_name=full_name
     )
+    
     session.add(user)
     await session.commit()
     await session.refresh(user)
+    
+    logger.info(f"User {username} created with ID: {user.id}")
+    
     return user
 
 # Функции для работы с доменами

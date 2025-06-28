@@ -3,6 +3,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+    image: eberil/relink-backend:4.1.2
     ports:
       - "8000:8000"
     environment:
@@ -36,6 +37,7 @@ services:
     build:
       context: ../docs
       dockerfile: Dockerfile
+    image: eberil/relink-docs:4.1.2
     ports:
       - "8001:8001"
     environment:
@@ -113,6 +115,7 @@ services:
     build:
       context: ../testing
       dockerfile: Dockerfile
+    image: eberil/relink-testing:4.1.2
     ports:
       - "8003:8003"
     environment:
@@ -159,6 +162,7 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+    image: eberil/relink-frontend:4.1.2
     ports:
       - "3000:80"
     deploy:
