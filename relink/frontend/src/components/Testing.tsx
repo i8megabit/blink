@@ -46,7 +46,6 @@ const Testing: React.FC = () => {
   const [tests, setTests] = useState<Test[]>([]);
   const [executions, setExecutions] = useState<TestExecution[]>([]);
   const [metrics, setMetrics] = useState<TestMetrics | null>(null);
-  const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [isCreatingTest, setIsCreatingTest] = useState(false);
   const [filters, setFilters] = useState({
     test_type: '',
@@ -324,13 +323,6 @@ const Testing: React.FC = () => {
                   disabled={test.status === 'running'}
                 >
                   {test.status === 'running' ? 'Выполняется...' : 'Запустить'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSelectedTest(test)}
-                >
-                  Детали
                 </Button>
               </div>
             </div>

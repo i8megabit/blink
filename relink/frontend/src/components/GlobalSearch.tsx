@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useGlobalSearch } from '../hooks/useMicroservices'
-import { GlobalSearchQuery, SearchResult, SearchFacet } from '../types/microservices'
+import { GlobalSearchQuery } from '../types/microservices'
 import { Card, Button, Badge } from './ui'
 
 interface GlobalSearchProps {
@@ -62,6 +62,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
       setSuggestions([])
       setShowSuggestions(false)
     }
+    return undefined;
   }, [query, getSuggestions])
 
   const handleSearch = async (searchQuery: string = query) => {

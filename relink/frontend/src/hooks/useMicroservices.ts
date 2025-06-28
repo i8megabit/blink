@@ -20,12 +20,9 @@ import {
   DocumentationPage,
   BenchmarkSuite,
   RAGQuery,
-  RAGResponse,
   GlobalSearchQuery,
   GlobalSearchResult,
   Workflow,
-  WorkflowExecution,
-  ServiceDocumentation,
   DocumentationSearch
 } from '../types/microservices'
 

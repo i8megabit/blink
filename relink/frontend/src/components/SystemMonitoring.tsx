@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { useSystemMonitoring, useServicesHealth } from '../hooks/useMicroservices'
-import { SystemHealth, Microservice, Alert } from '../types/microservices'
+import { Microservice } from '../types/microservices'
 import { Card, Button, Badge, Progress } from './ui'
 
 interface SystemMonitoringProps {

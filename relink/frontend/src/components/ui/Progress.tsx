@@ -1,5 +1,4 @@
 import React from 'react'
-import { cn } from '../../lib/utils'
 
 interface ProgressProps {
   value: number
@@ -8,7 +7,6 @@ interface ProgressProps {
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple'
   size?: 'sm' | 'md' | 'lg'
   showLabel?: boolean
-  animated?: boolean
 }
 
 export const Progress: React.FC<ProgressProps> = ({
@@ -17,8 +15,7 @@ export const Progress: React.FC<ProgressProps> = ({
   className = '',
   color = 'blue',
   size = 'md',
-  showLabel = false,
-  animated = false
+  showLabel = false
 }) => {
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
   
