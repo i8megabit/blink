@@ -64,6 +64,7 @@ from .auth import (
 )
 from .database import get_db, engine
 from .models import Base, User, Domain, WordPressPost, AnalysisHistory
+from .llm_router import system_analyzer, llm_router
 
 # Загрузка NLTK данных при старте
 try:

@@ -738,13 +738,10 @@ class LLMRouter:
     
     async def _make_ollama_request(self, request: LLMRequest) -> LLMResponse:
         """
-        🔄 Выполнение запроса к Ollama с оптимизациями Apple Silicon M4
+        🔄 Выполнение запроса к Ollama с интеллектуальной оптимизацией
         
-        Основано на проверенных паттернах SEO-рекомендаций:
-        - Конкурентное управление
-        - Обработка ошибок
-        - Таймауты и retry
-        - Apple Silicon оптимизации
+        Использует автоопределенную конфигурацию и записывает производительность
+        для адаптивной оптимизации
         """
         start_time = time.time()
         
@@ -753,7 +750,10 @@ class LLMRouter:
                 # Подготовка промпта с RAG
                 enhanced_prompt = await self._generate_rag_context(request)
                 
-                # Формирование запроса к Ollama с Apple Silicon оптимизациями
+                # Получение оптимизированной конфигурации
+                config = await system_analyzer.optimize_config()
+                
+                # Формирование запроса к Ollama с интеллектуальными оптимизациями
                 ollama_request = {
                     "model": request.model,
                     "prompt": enhanced_prompt,
@@ -761,20 +761,20 @@ class LLMRouter:
                     "options": {
                         "temperature": request.temperature,
                         "num_predict": request.max_tokens,
-                        # 🚀 APPLE SILICON M4 ОПТИМИЗАЦИИ
-                        "num_gpu": 1,                    # Использование GPU
-                        "num_thread": 8,                 # Оптимальное количество потоков для M4
-                        "num_ctx": 4096,                 # Размер контекста
-                        "batch_size": 512,               # Размер батча для производительности
-                        "f16_kv": True,                  # 16-битные ключи-значения для экономии памяти
-                        "use_mmap": True,                # Memory mapping для быстрого доступа
-                        "use_mlock": True,               # Блокировка памяти
-                        "rope_freq_base": 10000,         # RoPE базовая частота
-                        "rope_freq_scale": 0.5,          # RoPE масштаб частоты
-                        "top_p": 0.9,                    # Top-p sampling
-                        "top_k": 40,                     # Top-k sampling
-                        "repeat_penalty": 1.1,           # Штраф за повторения
-                        "seed": 42                       # Фиксированный seed для воспроизводимости
+                        # 🧠 ИНТЕЛЛЕКТУАЛЬНЫЕ ОПТИМИЗАЦИИ
+                        "num_gpu": config.num_gpu,           # Автоопределенное количество GPU
+                        "num_thread": config.num_thread,     # Оптимальное количество потоков
+                        "num_ctx": config.context_length,    # Оптимизированный размер контекста
+                        "batch_size": config.batch_size,     # Оптимальный размер батча
+                        "f16_kv": config.f16_kv,             # 16-битные ключи-значения
+                        "use_mmap": True,                    # Memory mapping для быстрого доступа
+                        "use_mlock": True,                   # Блокировка памяти
+                        "rope_freq_base": 10000,             # RoPE базовая частота
+                        "rope_freq_scale": 0.5,              # RoPE масштаб частоты
+                        "top_p": 0.9,                        # Top-p sampling
+                        "top_k": 40,                         # Top-k sampling
+                        "repeat_penalty": 1.1,               # Штраф за повторения
+                        "seed": 42                           # Фиксированный seed для воспроизводимости
                     }
                 }
                 
@@ -787,29 +787,61 @@ class LLMRouter:
                         data = await response.json()
                         
                         response_time = time.time() - start_time
+                        tokens_used = data.get("eval_count", 0)
+                        
+                        # Запись производительности для адаптивной оптимизации
+                        await system_analyzer.record_performance(
+                            response_time=response_time,
+                            success=True,
+                            tokens_used=tokens_used
+                        )
                         
                         return LLMResponse(
                             content=data.get("response", ""),
                             service_type=request.service_type,
                             model_used=request.model,
-                            tokens_used=data.get("eval_count", 0),
+                            tokens_used=tokens_used,
                             response_time=response_time,
                             metadata={
                                 "prompt_tokens": data.get("prompt_eval_count", 0),
                                 "total_duration": data.get("total_duration", 0),
-                                "apple_silicon_optimized": True,
-                                "gpu_used": True,
-                                "batch_size": 512,
-                                "context_length": 4096
+                                "intelligent_optimization": True,
+                                "gpu_used": config.num_gpu > 0,
+                                "batch_size": config.batch_size,
+                                "context_length": config.context_length,
+                                "num_threads": config.num_thread,
+                                "f16_kv": config.f16_kv,
+                                "optimization_source": "llm_recommendation" if hasattr(system_analyzer, '_llm_recommendation_applied') else "knowledge_base"
                             }
                         )
                     else:
                         error_text = await response.text()
+                        response_time = time.time() - start_time
+                        
+                        # Запись неудачной производительности
+                        await system_analyzer.record_performance(
+                            response_time=response_time,
+                            success=False,
+                            tokens_used=0
+                        )
+                        
                         raise OllamaConnectionError(f"Ollama error {response.status}: {error_text}")
                         
         except asyncio.TimeoutError:
+            response_time = time.time() - start_time
+            await system_analyzer.record_performance(
+                response_time=response_time,
+                success=False,
+                tokens_used=0
+            )
             raise LLMServiceError("Request timeout")
         except Exception as e:
+            response_time = time.time() - start_time
+            await system_analyzer.record_performance(
+                response_time=response_time,
+                success=False,
+                tokens_used=0
+            )
             raise LLMServiceError(f"Request failed: {e}")
     
     async def process_request(self, request: LLMRequest) -> LLMResponse:
