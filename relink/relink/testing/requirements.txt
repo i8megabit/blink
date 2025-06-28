@@ -42,7 +42,6 @@ asyncio-mqtt==0.16.1
 celery==5.3.4
 
 # Безопасность
-cryptography
 bcrypt==4.1.2
 
 # Разработка
@@ -56,4 +55,5 @@ locust==2.17.0
 pytest-benchmark==4.0.0
 pytest-xdist==3.5.0
 pytest-html==4.1.1
-pytest-json-report==1.5.0 
+pytest-json-report==1.5.0
+cryptography
