@@ -92,6 +92,12 @@ models/
 chroma_db/
 chromadb/
 
+# 🐍 reLinkDB
+relink/data/
+
+# 🐍 Cursor Rules
+.cursor/
+
 # 🐍 Docker
 .dockerignore
 
