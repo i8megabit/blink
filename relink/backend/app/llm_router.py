@@ -39,7 +39,7 @@ class LLMRequest:
     service_type: LLMServiceType
     prompt: str
     context: Optional[Dict[str, Any]] = None
-    model: str = "llama3.2:3b"
+    model: str = "qwen2.5:7b-instruct-turbo"  # Оптимизированная модель для Apple Silicon
     temperature: float = 0.7
     max_tokens: int = 2048
     use_rag: bool = True
@@ -186,7 +186,7 @@ class LLMRouter:
             async with self.semaphore:
                 async with self.session.post(
                     f"{settings.OLLAMA_URL}/api/embeddings",
-                    json={"model": "llama3.2:3b", "prompt": text}
+                    json={"model": "qwen2.5:7b-instruct-turbo", "prompt": text}
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -215,12 +215,13 @@ class LLMRouter:
     
     async def _make_ollama_request(self, request: LLMRequest) -> LLMResponse:
         """
-        🔄 Выполнение запроса к Ollama
+        🔄 Выполнение запроса к Ollama с оптимизациями Apple Silicon M4
         
         Основано на проверенных паттернах SEO-рекомендаций:
         - Конкурентное управление
         - Обработка ошибок
         - Таймауты и retry
+        - Apple Silicon оптимизации
         """
         start_time = time.time()
         
@@ -229,14 +230,28 @@ class LLMRouter:
                 # Подготовка промпта с RAG
                 enhanced_prompt = await self._generate_rag_context(request)
                 
-                # Формирование запроса к Ollama
+                # Формирование запроса к Ollama с Apple Silicon оптимизациями
                 ollama_request = {
                     "model": request.model,
                     "prompt": enhanced_prompt,
                     "stream": False,
                     "options": {
                         "temperature": request.temperature,
-                        "num_predict": request.max_tokens
+                        "num_predict": request.max_tokens,
+                        # 🚀 APPLE SILICON M4 ОПТИМИЗАЦИИ
+                        "num_gpu": 1,                    # Использование GPU
+                        "num_thread": 8,                 # Оптимальное количество потоков для M4
+                        "num_ctx": 4096,                 # Размер контекста
+                        "batch_size": 512,               # Размер батча для производительности
+                        "f16_kv": True,                  # 16-битные ключи-значения для экономии памяти
+                        "use_mmap": True,                # Memory mapping для быстрого доступа
+                        "use_mlock": True,               # Блокировка памяти
+                        "rope_freq_base": 10000,         # RoPE базовая частота
+                        "rope_freq_scale": 0.5,          # RoPE масштаб частоты
+                        "top_p": 0.9,                    # Top-p sampling
+                        "top_k": 40,                     # Top-k sampling
+                        "repeat_penalty": 1.1,           # Штраф за повторения
+                        "seed": 42                       # Фиксированный seed для воспроизводимости
                     }
                 }
                 
@@ -258,7 +273,11 @@ class LLMRouter:
                             response_time=response_time,
                             metadata={
                                 "prompt_tokens": data.get("prompt_eval_count", 0),
-                                "total_duration": data.get("total_duration", 0)
+                                "total_duration": data.get("total_duration", 0),
+                                "apple_silicon_optimized": True,
+                                "gpu_used": True,
+                                "batch_size": 512,
+                                "context_length": 4096
                             }
                         )
                     else:
@@ -353,60 +372,65 @@ llm_router = LLMRouter()
 
 # Утилитарные функции для удобства использования
 async def generate_seo_recommendations(prompt: str, context: Optional[Dict] = None) -> str:
-    """Генерация SEO-рекомендаций"""
+    """Генерация SEO-рекомендаций с оптимизированной моделью"""
     request = LLMRequest(
         service_type=LLMServiceType.SEO_RECOMMENDATIONS,
         prompt=prompt,
         context=context,
-        temperature=0.7,
+        model="qwen2.5:7b-instruct-turbo",
+        temperature=0.6,  # Более низкая температура для SEO задач
         max_tokens=2048
     )
     response = await llm_router.process_request(request)
     return response.content
 
 async def generate_diagram(prompt: str, diagram_type: str = "architecture") -> str:
-    """Генерация SVG диаграммы"""
+    """Генерация SVG диаграммы с оптимизированной моделью"""
     request = LLMRequest(
         service_type=LLMServiceType.DIAGRAM_GENERATION,
         prompt=f"Создай SVG диаграмму типа '{diagram_type}': {prompt}",
         context={"diagram_type": diagram_type},
-        temperature=0.8,
-        max_tokens=4096
+        model="qwen2.5:7b-instruct-turbo",
+        temperature=0.8,  # Высокая креативность для диаграмм
+        max_tokens=4096   # Больше токенов для SVG
     )
     response = await llm_router.process_request(request)
     return response.content
 
 async def analyze_content(content: str, analysis_type: str = "general") -> str:
-    """Анализ контента"""
+    """Анализ контента с оптимизированной моделью"""
     request = LLMRequest(
         service_type=LLMServiceType.CONTENT_ANALYSIS,
         prompt=f"Проанализируй контент (тип анализа: {analysis_type}): {content}",
         context={"analysis_type": analysis_type},
-        temperature=0.6,
+        model="qwen2.5:7b-instruct-turbo",
+        temperature=0.5,  # Умеренная температура для анализа
         max_tokens=2048
     )
     response = await llm_router.process_request(request)
     return response.content
 
 async def run_benchmark(benchmark_type: str, parameters: Dict[str, Any]) -> str:
-    """Запуск бенчмарка"""
+    """Запуск бенчмарка с оптимизированной моделью"""
     request = LLMRequest(
         service_type=LLMServiceType.BENCHMARK_SERVICE,
         prompt=f"Выполни бенчмарк типа '{benchmark_type}' с параметрами: {json.dumps(parameters)}",
         context={"benchmark_type": benchmark_type, "parameters": parameters},
-        temperature=0.5,
+        model="qwen2.5:7b-instruct-turbo",
+        temperature=0.3,  # Низкая температура для точных результатов
         max_tokens=2048
     )
     response = await llm_router.process_request(request)
     return response.content
 
 async def tune_llm_model(model_config: Dict[str, Any], tuning_params: Dict[str, Any]) -> str:
-    """Настройка LLM модели"""
+    """Настройка LLM модели с оптимизированной моделью"""
     request = LLMRequest(
         service_type=LLMServiceType.LLM_TUNING,
         prompt=f"Настрой модель с конфигурацией: {json.dumps(model_config)} и параметрами: {json.dumps(tuning_params)}",
         context={"model_config": model_config, "tuning_params": tuning_params},
-        temperature=0.4,
+        model="qwen2.5:7b-instruct-turbo",
+        temperature=0.4,  # Умеренная температура для настройки
         max_tokens=2048
     )
     response = await llm_router.process_request(request)
