@@ -531,4 +531,4 @@ export const useRAG = () => {
     searchRAG,
     generateWithRAG
   }
-} 
+}
