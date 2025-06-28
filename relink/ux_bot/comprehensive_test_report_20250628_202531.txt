@@ -1,0 +1,12 @@
+КОМПЛЕКСНЫЙ ТЕСТ UX-БОТА RELINK
+==================================================
+
+Дата: 2025-06-28 20:25:31
+Длительность: 35.38 секунд
+
+РЕЗУЛЬТАТЫ:
+  initialization: PASSED
+  llm_integration: WARNING
+  self_integration: WARNING
+  scenarios: ERROR: 'dict' object has no attribute 'success'
+  final_checks: PASSED

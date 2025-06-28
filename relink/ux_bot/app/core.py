@@ -16,6 +16,7 @@ from datetime import datetime
 from enum import Enum
 import hashlib
 import uuid
+from uuid import UUID
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -26,8 +27,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from .config import settings
-from .api_client import APIClient
-from .models import TestReport, BrowserConfig, APIConfig, PageAnalysis, Issue, IssueSeverity, UserProfile, ScenarioContext, TestResult, TestStatus, HumanProfile
+from .api_client import APIClient, APIConfig
+from .models import (
+    UserProfile, TestScenario, TestStep, UserAction, 
+    PageAnalysis, TestReport, Issue, IssueSeverity, TestResult, BrowserConfig
+)
 from .services.browser_service import BrowserService
 from .services.scenario_service import ScenarioService
 
@@ -246,12 +250,12 @@ class HumanProfileGenerator:
             }
         ]
     
-    def generate_profile(self) -> HumanProfile:
+    def generate_profile(self) -> UserProfile:
         """Генерация случайного профиля"""
         base_profile = random.choice(self.profiles)
         
         # Добавление случайных вариаций
-        profile = HumanProfile(
+        profile = UserProfile(
             id=str(uuid.uuid4()),
             name=base_profile["name"],
             age=base_profile["age"] + random.randint(-5, 5),
@@ -312,13 +316,13 @@ class UXImpersonator:
         self.api_client = api_client
         self.driver: Optional[webdriver.Remote] = None
         self.profile_generator = HumanProfileGenerator()
-        self.current_profile: Optional[HumanProfile] = None
+        self.current_profile: Optional[UserProfile] = None
         self.ui_analyzer: Optional[UIAnalyzer] = None
         self.session_id = str(uuid.uuid4())
         self.actions_history: List[UserAction] = []
         self.analysis_data: Dict[str, Any] = {}
         
-    async def start_session(self, target_url: str, profile: Optional[HumanProfile] = None) -> bool:
+    async def start_session(self, target_url: str, profile: Optional[UserProfile] = None) -> bool:
         """Запуск сессии тестирования"""
         try:
             # Генерация профиля если не передан
@@ -1047,70 +1051,70 @@ class UXBotCore:
             return await self._create_test_report(scenario_id, [error_result])
     
     async def analyze_page(self, url: str) -> PageAnalysis:
-        """Анализ страницы"""
+        """Анализ страницы с использованием LLM"""
+        logger.info(f"🔍 Начинаю анализ страницы: {url}")
+        
         try:
-            logger.info(f"Анализ страницы: {url}")
+            # Получение содержимого страницы
+            page_content = await self.browser_service.get_page_content(url)
+            logger.info(f"📄 Получено содержимое страницы: {len(page_content)} символов")
             
-            # Переход на страницу
-            if not await self.browser_service.navigate_to(url):
-                raise RuntimeError(f"Не удалось перейти на страницу: {url}")
+            # Анализ через LLM
+            logger.info("🧠 Отправка запроса к LLM для анализа страницы...")
             
-            # Получение базовой информации
-            title = await self.browser_service.get_page_title()
-            current_url = await self.browser_service.get_current_url()
+            analysis_prompt = f"""
+            Проанализируй веб-страницу и предоставь детальный отчет:
             
-            # Поиск элементов на странице
-            elements = []
-            common_selectors = [
-                "button", "input", "a", "form", "img", "h1", "h2", "h3", 
-                ".btn", ".form-control", ".nav-link", ".card"
-            ]
+            URL: {url}
+            Содержимое: {page_content[:2000]}...
             
-            for selector in common_selectors:
-                found_elements = await self.browser_service.find_elements(selector)
-                for i, element in enumerate(found_elements):
-                    try:
-                        element_info = await self.browser_service.get_element_info(f"{selector}:nth-child({i+1})")
-                        if element_info:
-                            elements.append(element_info)
-                    except:
-                        continue
+            Проанализируй:
+            1. Структуру страницы
+            2. Основные элементы интерфейса
+            3. Потенциальные проблемы UX
+            4. Рекомендации по улучшению
             
-            # Создание скриншота
-            screenshot_path = await self.browser_service.take_screenshot(
-                f"analysis_{url.replace('://', '_').replace('/', '_')}.png"
+            Ответь в формате JSON.
+            """
+            
+            logger.info(f"📤 LLM промпт: {analysis_prompt[:300]}...")
+            
+            # Отправляем запрос к LLM через API
+            llm_response = await self.api_client.send_llm_request(
+                prompt=analysis_prompt,
+                service_type="content_analysis"
             )
             
-            # Анализ доступности
-            accessibility_issues = await self._analyze_accessibility()
+            logger.info(f"✅ LLM ответ получен: {len(llm_response)} символов")
+            logger.info(f"📄 LLM ответ: {llm_response[:500]}...")
             
-            # Анализ отзывчивости
-            responsiveness_issues = await self._analyze_responsiveness()
+            # Парсим ответ LLM
+            try:
+                analysis_data = json.loads(llm_response)
+                logger.info("✅ LLM ответ успешно распарсен как JSON")
+            except json.JSONDecodeError:
+                logger.warning("⚠️ LLM ответ не является валидным JSON, используем текстовый анализ")
+                analysis_data = {
+                    "title": "Анализ страницы",
+                    "elements": [],
+                    "issues": [],
+                    "recommendations": [llm_response]
+                }
             
-            # Метрики производительности
-            performance_metrics = await self._get_performance_metrics()
-            
-            # Создание анализа страницы
+            # Создаем объект анализа
             analysis = PageAnalysis(
-                url=current_url,
-                title=title,
-                elements=elements,
-                accessibility_issues=accessibility_issues,
-                responsiveness_issues=responsiveness_issues,
-                performance_metrics=performance_metrics,
-                screenshot_path=screenshot_path
+                url=url,
+                title=analysis_data.get("title", "Неизвестная страница"),
+                elements=analysis_data.get("elements", []),
+                accessibility_issues=analysis_data.get("accessibility_issues", []),
+                responsiveness_issues=analysis_data.get("responsiveness_issues", [])
             )
             
-            # Отправка анализа в бэкенд
-            if self.api_client:
-                await self.api_client.send_page_analysis(analysis)
-            
-            logger.info(f"Анализ страницы завершен. Найдено элементов: {len(elements)}")
-            
+            logger.info(f"🎯 Анализ страницы завершен: найдено {len(analysis.elements)} элементов")
             return analysis
             
         except Exception as e:
-            logger.error(f"Ошибка анализа страницы {url}: {e}")
+            logger.error(f"❌ Ошибка анализа страницы: {e}")
             raise
     
     async def get_llm_instruction(self, current_context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1443,4 +1447,131 @@ class UXBotCore:
             "actions_performed": len(self.action_history),
             "issues_found": len(self.issues_found),
             "scenarios_available": len(self.scenario_service.scenarios) if self.scenario_service else 0
-        } 
+        }
+    
+    async def execute_scenario(self, scenario: TestScenario) -> Dict[str, Any]:
+        """Выполнение сценария тестирования"""
+        logger.info(f"Запуск сценария: {scenario.name}")
+        
+        try:
+            completed_steps = []
+            issues = []
+            start_time = time.time()
+            
+            for step in scenario.steps:
+                try:
+                    logger.info(f"Выполнение шага: {step.name}")
+                    
+                    # Выполнение действия в зависимости от типа
+                    if step.action_type == UserAction.NAVIGATE:
+                        url = step.parameters.get("url")
+                        if url:
+                            await self.browser_service.navigate_to(url)
+                            logger.info(f"Переход на: {url}")
+                    
+                    elif step.action_type == UserAction.CLICK:
+                        selector = step.parameters.get("selector")
+                        if selector:
+                            element = await self.browser_service.find_element(selector)
+                            if element:
+                                await self.browser_service.click_element(element)
+                                logger.info(f"Клик по элементу: {selector}")
+                            else:
+                                logger.warning(f"Элемент не найден: {selector}")
+                                issues.append({
+                                    "type": "element_not_found",
+                                    "description": f"Элемент не найден: {selector}",
+                                    "step": step.name
+                                })
+                    
+                    elif step.action_type == UserAction.FIND_ELEMENT:
+                        selector = step.parameters.get("selector")
+                        if selector:
+                            element = await self.browser_service.find_element(selector)
+                            if element:
+                                logger.info(f"Элемент найден: {selector}")
+                            else:
+                                logger.warning(f"Элемент не найден: {selector}")
+                                issues.append({
+                                    "type": "element_not_found",
+                                    "description": f"Элемент не найден: {selector}",
+                                    "step": step.name
+                                })
+                    
+                    elif step.action_type == UserAction.FIND_ELEMENTS:
+                        selectors = step.parameters.get("selectors", [])
+                        found_elements = []
+                        for selector in selectors:
+                            try:
+                                element = await self.browser_service.find_element(selector)
+                                if element:
+                                    found_elements.append(element)
+                            except:
+                                continue
+                        
+                        if found_elements:
+                            logger.info(f"Найдено элементов: {len(found_elements)}")
+                        else:
+                            logger.warning("Элементы не найдены")
+                            issues.append({
+                                "type": "elements_not_found",
+                                "description": "Элементы не найдены",
+                                "step": step.name
+                            })
+                    
+                    elif step.action_type == UserAction.WAIT:
+                        timeout = step.parameters.get("timeout", 1)
+                        await asyncio.sleep(timeout)
+                        logger.info(f"Ожидание: {timeout} секунд")
+                    
+                    # Добавление выполненного шага
+                    completed_steps.append({
+                        "step_id": step.step_id,
+                        "name": step.name,
+                        "status": "completed",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    # Небольшая пауза между шагами
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка выполнения шага {step.name}: {e}")
+                    issues.append({
+                        "type": "step_error",
+                        "description": str(e),
+                        "step": step.name
+                    })
+            
+            end_time = time.time()
+            duration = end_time - start_time
+            
+            # Формирование результата
+            result = {
+                "success": len(issues) == 0,
+                "scenario_id": scenario.scenario_id,
+                "scenario_name": scenario.name,
+                "completed_steps": completed_steps,
+                "total_steps": len(scenario.steps),
+                "issues": issues,
+                "duration": duration,
+                "start_time": datetime.fromtimestamp(start_time).isoformat(),
+                "end_time": datetime.fromtimestamp(end_time).isoformat()
+            }
+            
+            logger.info(f"Сценарий завершен: {scenario.name}")
+            logger.info(f"Выполнено шагов: {len(completed_steps)}/{len(scenario.steps)}")
+            logger.info(f"Найдено проблем: {len(issues)}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Критическая ошибка выполнения сценария: {e}")
+            return {
+                "success": False,
+                "scenario_id": scenario.scenario_id,
+                "scenario_name": scenario.name,
+                "error": str(e),
+                "completed_steps": [],
+                "issues": [{"type": "critical_error", "description": str(e)}]
+            } 

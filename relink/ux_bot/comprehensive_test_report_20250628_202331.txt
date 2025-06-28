@@ -1,0 +1,12 @@
+КОМПЛЕКСНЫЙ ТЕСТ UX-БОТА RELINK
+==================================================
+
+Дата: 2025-06-28 20:23:31
+Длительность: 35.08 секунд
+
+РЕЗУЛЬТАТЫ:
+  initialization: PASSED
+  llm_integration: WARNING
+  self_integration: WARNING
+  scenarios: ERROR: 'UXBotCore' object has no attribute 'execute_scenario'
+  final_checks: PASSED

@@ -627,11 +627,19 @@ class LLMRouter:
         start_time = time.time()
         
         try:
+            # Логируем входящий запрос
+            logger.info(f"🤖 LLM ЗАПРОС [{request.service_type.value}]")
+            logger.info(f"📝 Промпт: {request.prompt[:200]}{'...' if len(request.prompt) > 200 else ''}")
+            logger.info(f"🔧 Параметры: модель={request.llm_model}, токены={request.max_tokens}, temp={request.temperature}")
+            
             # Генерируем RAG контекст
+            logger.info("🔍 Генерация RAG контекста...")
             rag_context = await self._generate_rag_context(request)
             
-            # Формируем финальный промпт
             if rag_context:
+                logger.info(f"📚 RAG контекст найден: {len(rag_context)} символов")
+                logger.info(f"📖 RAG контекст: {rag_context[:300]}{'...' if len(rag_context) > 300 else ''}")
+                
                 final_prompt = f"""
                 Контекст для ответа:
                 {rag_context}
@@ -642,7 +650,11 @@ class LLMRouter:
                 Ответь на основе предоставленного контекста:
                 """
             else:
+                logger.info("⚠️ RAG контекст не найден, используем прямой промпт")
                 final_prompt = request.prompt
+            
+            logger.info(f"🚀 Отправка запроса к Ollama...")
+            logger.info(f"📤 Финальный промпт: {final_prompt[:300]}{'...' if len(final_prompt) > 300 else ''}")
             
             # Отправляем запрос через централизованную архитектуру
             response = await self.llm_service.process_llm_request(
@@ -659,6 +671,15 @@ class LLMRouter:
             )
             
             response_time = time.time() - start_time
+            
+            # Логируем ответ от Ollama
+            logger.info(f"✅ OLLAMA ОТВЕТ [{request.service_type.value}]")
+            logger.info(f"⏱️ Время ответа: {response_time:.2f}s")
+            logger.info(f"🧠 Модель: {response.model_used}")
+            logger.info(f"🔢 Токены: {response.tokens_used}")
+            logger.info(f"📄 Ответ: {response.response[:500]}{'...' if len(response.response) > 500 else ''}")
+            logger.info(f"🔍 RAG усилен: {response.rag_enhanced}")
+            logger.info(f"💾 Кэш хит: {response.cache_hit}")
             
             # Записываем метрики производительности
             await self.system_analyzer.record_performance(
@@ -682,16 +703,20 @@ class LLMRouter:
                 }
             )
             
-            logger.info(f"Запрос {request.service_type.value} обработан за {response_time:.2f}s")
+            logger.info(f"🎯 Запрос {request.service_type.value} успешно обработан за {response_time:.2f}s")
             return llm_response
             
         except Exception as e:
             response_time = time.time() - start_time
             
+            # Логируем ошибку
+            logger.error(f"❌ ОШИБКА LLM [{request.service_type.value}]")
+            logger.error(f"⏱️ Время до ошибки: {response_time:.2f}s")
+            logger.error(f"🚨 Ошибка: {str(e)}")
+            logger.error(f"📝 Промпт: {request.prompt[:200]}{'...' if len(request.prompt) > 200 else ''}")
+            
             # Записываем ошибку
             await self.system_analyzer.record_performance(response_time, False, 0)
-            
-            logger.error(f"Ошибка обработки запроса {request.service_type.value}: {e}")
             
             return LLMResponse(
                 content="",

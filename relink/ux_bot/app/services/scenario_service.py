@@ -52,7 +52,8 @@ class ScenarioService:
             "benchmark_comparison": self._create_benchmark_scenario(),
             "settings_management": self._create_settings_scenario(),
             "export_functionality": self._create_export_scenario(),
-            "full_user_journey": self._create_full_journey_scenario()
+            "full_user_journey": self._create_full_journey_scenario(),
+            "ux_bot_self_test": self._create_ux_bot_self_test_scenario()
         })
     
     def _create_login_scenario(self) -> TestScenario:
@@ -433,6 +434,149 @@ class ScenarioService:
                 "password": "test_password",
                 "domain_name": "example.com"
             }
+        )
+    
+    def _create_ux_bot_self_test_scenario(self) -> TestScenario:
+        """Создание сценария тестирования собственной интеграции UX-бота"""
+        return TestScenario(
+            id="ux_bot_self_test",
+            name="UX-бот тестирует свою интеграцию",
+            description="Комплексный тест: UX-бот находит страницу Testing, тестирует свой функционал и проверяет интеграцию",
+            priority="critical",
+            steps=[
+                TestStep(
+                    id="navigate_to_testing",
+                    name="Переход на страницу Testing",
+                    description="Найти и перейти на страницу с тестированием",
+                    action=UserAction(
+                        type="navigate",
+                        target="testing_page",
+                        data={"url": "http://localhost:3000/testing"}
+                    ),
+                    expected_result="Страница Testing загружена"
+                ),
+                TestStep(
+                    id="find_ux_bot_section",
+                    name="Поиск раздела UX-бота",
+                    description="Найти раздел или вкладку, связанную с UX-ботом",
+                    action=UserAction(
+                        type="find_element",
+                        target="ux_bot_section",
+                        data={"selector": "[data-testid='ux-bot'], .ux-bot, [aria-label*='UX'], [aria-label*='Bot']"}
+                    ),
+                    expected_result="Найден раздел UX-бота"
+                ),
+                TestStep(
+                    id="click_ux_bot_tab",
+                    name="Клик по вкладке UX-бота",
+                    description="Открыть вкладку с функционалом UX-бота",
+                    action=UserAction(
+                        type="click",
+                        target="ux_bot_tab",
+                        data={"selector": "[data-testid='ux-bot-tab'], .ux-bot-tab, [aria-label*='UX Bot']"}
+                    ),
+                    expected_result="Вкладка UX-бота открыта"
+                ),
+                TestStep(
+                    id="check_ux_bot_controls",
+                    name="Проверка элементов управления",
+                    description="Найти кнопки запуска, остановки и настройки UX-бота",
+                    action=UserAction(
+                        type="find_elements",
+                        target="ux_bot_controls",
+                        data={"selectors": ["button[aria-label*='Start'], button[aria-label*='Run'], button[aria-label*='Launch']", "button[aria-label*='Stop'], button[aria-label*='Cancel']", "button[aria-label*='Settings'], button[aria-label*='Configure']"]}
+                    ),
+                    expected_result="Найдены элементы управления UX-ботом"
+                ),
+                TestStep(
+                    id="start_ux_bot_test",
+                    name="Запуск теста UX-бота",
+                    description="Запустить тестирование через UX-бота",
+                    action=UserAction(
+                        type="click",
+                        target="start_ux_bot_test",
+                        data={"selector": "button[aria-label*='Start'], button[aria-label*='Run'], button[aria-label*='Launch']"}
+                    ),
+                    expected_result="Тест UX-бота запущен"
+                ),
+                TestStep(
+                    id="wait_for_test_progress",
+                    name="Ожидание прогресса теста",
+                    description="Дождаться начала выполнения теста",
+                    action=UserAction(
+                        type="wait",
+                        target="wait_for_test_progress",
+                        data={"timeout": 5}
+                    ),
+                    expected_result="Тест начал выполняться"
+                ),
+                TestStep(
+                    id="check_test_status",
+                    name="Проверка статуса теста",
+                    description="Проверить статус выполнения теста",
+                    action=UserAction(
+                        type="find_element",
+                        target="test_status",
+                        data={"selector": "[data-testid='test-status'], .test-status, [aria-label*='Status']"}
+                    ),
+                    expected_result="Статус теста отображается"
+                ),
+                TestStep(
+                    id="wait_for_completion",
+                    name="Ожидание завершения",
+                    description="Дождаться завершения теста",
+                    action=UserAction(
+                        type="wait",
+                        target="wait_for_completion",
+                        data={"timeout": 30}
+                    ),
+                    expected_result="Тест завершен"
+                ),
+                TestStep(
+                    id="check_results",
+                    name="Проверка результатов",
+                    description="Проверить результаты тестирования",
+                    action=UserAction(
+                        type="find_element",
+                        target="test_results",
+                        data={"selector": "[data-testid='test-results'], .test-results, [aria-label*='Results']"}
+                    ),
+                    expected_result="Результаты теста отображаются"
+                ),
+                TestStep(
+                    id="analyze_logs",
+                    name="Анализ логов",
+                    description="Проверить логи выполнения теста",
+                    action=UserAction(
+                        type="find_element",
+                        target="test_logs",
+                        data={"selector": "[data-testid='test-logs'], .test-logs, [aria-label*='Logs']"}
+                    ),
+                    expected_result="Логи теста доступны"
+                ),
+                TestStep(
+                    id="check_metrics",
+                    name="Проверка метрик",
+                    description="Проверить метрики производительности",
+                    action=UserAction(
+                        type="find_element",
+                        target="test_metrics",
+                        data={"selector": "[data-testid='test-metrics'], .test-metrics, [aria-label*='Metrics']"}
+                    ),
+                    expected_result="Метрики отображаются"
+                ),
+                TestStep(
+                    id="export_results",
+                    name="Экспорт результатов",
+                    description="Попытаться экспортировать результаты теста",
+                    action=UserAction(
+                        type="click",
+                        target="export_results",
+                        data={"selector": "button[aria-label*='Export'], button[aria-label*='Download'], button[aria-label*='Save']"}
+                    ),
+                    expected_result="Экспорт результатов доступен"
+                )
+            ]
         )
     
     def _register_custom_actions(self):

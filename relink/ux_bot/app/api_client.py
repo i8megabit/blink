@@ -353,7 +353,24 @@ class APIClient:
         try:
             result = await self._make_request("GET", "/api/info")
             return result
-            
         except Exception as e:
             logger.error(f"Ошибка получения информации об API: {e}")
+            return {"error": str(e)}
+    
+    async def post(self, endpoint: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Отправка POST запроса"""
+        try:
+            result = await self._make_request("POST", endpoint, data=json)
+            return result
+        except Exception as e:
+            logger.error(f"Ошибка POST запроса к {endpoint}: {e}")
+            return {"error": str(e)}
+    
+    async def get(self, endpoint: str) -> Dict[str, Any]:
+        """Отправка GET запроса"""
+        try:
+            result = await self._make_request("GET", endpoint)
+            return result
+        except Exception as e:
+            logger.error(f"Ошибка GET запроса к {endpoint}: {e}")
             return {"error": str(e)} 
