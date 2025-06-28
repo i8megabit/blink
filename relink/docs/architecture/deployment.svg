@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1400" height="1000" viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-family: 'Arial', sans-serif; font-size: 24px; font-weight: bold; fill: #1f2937; }
+      .subtitle { font-family: 'Arial', sans-serif; font-size: 16px; font-weight: bold; fill: #374151; }
+      .label { font-family: 'Arial', sans-serif; font-size: 12px; fill: #6b7280; }
+      .cloud-box { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 2; rx: 8; }
+      .cloud-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .k8s-box { fill: #10b981; stroke: #059669; stroke-width: 2; rx: 8; }
+      .k8s-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .service-box { fill: #8b5cf6; stroke: #7c3aed; stroke-width: 2; rx: 8; }
+      .service-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .database-box { fill: #f59e0b; stroke: #d97706; stroke-width: 2; rx: 8; }
+      .database-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .monitoring-box { fill: #ef4444; stroke: #dc2626; stroke-width: 2; rx: 8; }
+      .monitoring-text { font-family: 'Arial', sans-serif; font-size: 14px; font-weight: bold; fill: white; }
+      .arrow { stroke: #6b7280; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font-family: 'Arial', sans-serif; font-size: 11px; fill: #6b7280; }
+      .cluster { fill: #f3f4f6; stroke: #d1d5db; stroke-width: 1; rx: 8; }
+      .cluster-title { font-family: 'Arial', sans-serif; font-size: 12px; font-weight: bold; fill: #374151; }
+      .pod { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 1; rx: 4; }
+      .pod-text { font-family: 'Arial', sans-serif; font-size: 10px; fill: #374151; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#6b7280" />
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1400" height="1000" fill="#ffffff"/>
+  
+  <!-- Title -->
+  <text x="700" y="30" text-anchor="middle" class="title">reLink - Архитектура развертывания и инфраструктура</text>
+  
+  <!-- Internet/External -->
+  <g>
+    <rect x="50" y="50" width="1300" height="60" class="cluster"/>
+    <text x="700" y="70" text-anchor="middle" class="cluster-title">Internet / External Access</text>
+    
+    <rect x="100" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="160" y="95" text-anchor="middle" class="cloud-text">CDN</text>
+    
+    <rect x="240" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="300" y="95" text-anchor="middle" class="cloud-text">DNS</text>
+    
+    <rect x="380" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="440" y="95" text-anchor="middle" class="cloud-text">SSL Certificate</text>
+    
+    <rect x="520" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="580" y="95" text-anchor="middle" class="cloud-text">WAF</text>
+    
+    <rect x="660" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="720" y="95" text-anchor="middle" class="cloud-text">Load Balancer</text>
+    
+    <rect x="800" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="860" y="95" text-anchor="middle" class="cloud-text">API Gateway</text>
+    
+    <rect x="940" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="1000" y="95" text-anchor="middle" class="cloud-text">Rate Limiting</text>
+    
+    <rect x="1080" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="1140" y="95" text-anchor="middle" class="cloud-text">Authentication</text>
+    
+    <rect x="1220" y="80" width="120" height="20" class="cloud-box"/>
+    <text x="1280" y="95" text-anchor="middle" class="cloud-text">Monitoring</text>
+  </g>
+  
+  <!-- Kubernetes Cluster -->
+  <g>
+    <rect x="50" y="130" width="1300" height="400" class="cluster"/>
+    <text x="700" y="150" text-anchor="middle" class="cluster-title">Kubernetes Cluster (Production)</text>
+    
+    <!-- Namespace: Frontend -->
+    <rect x="80" y="160" width="400" height="120" class="k8s-box"/>
+    <text x="280" y="180" text-anchor="middle" class="k8s-text">Namespace: frontend</text>
+    
+    <rect x="100" y="190" width="80" height="40" class="pod"/>
+    <text x="140" y="210" text-anchor="middle" class="pod-text">Frontend Pod 1</text>
+    <text x="140" y="220" text-anchor="middle" class="pod-text">React App</text>
+    
+    <rect x="200" y="190" width="80" height="40" class="pod"/>
+    <text x="240" y="210" text-anchor="middle" class="pod-text">Frontend Pod 2</text>
+    <text x="240" y="220" text-anchor="middle" class="pod-text">React App</text>
+    
+    <rect x="300" y="190" width="80" height="40" class="pod"/>
+    <text x="340" y="210" text-anchor="middle" class="pod-text">Frontend Pod 3</text>
+    <text x="340" y="220" text-anchor="middle" class="pod-text">React App</text>
+    
+    <rect x="100" y="240" width="280" height="30" class="service-box"/>
+    <text x="240" y="260" text-anchor="middle" class="service-text">Frontend Service (ClusterIP)</text>
+    
+    <!-- Namespace: Backend -->
+    <rect x="500" y="160" width="400" height="120" class="k8s-box"/>
+    <text x="700" y="180" text-anchor="middle" class="k8s-text">Namespace: backend</text>
+    
+    <rect x="520" y="190" width="80" height="40" class="pod"/>
+    <text x="560" y="210" text-anchor="middle" class="pod-text">Backend Pod 1</text>
+    <text x="560" y="220" text-anchor="middle" class="pod-text">SEO Analysis</text>
+    
+    <rect x="620" y="190" width="80" height="40" class="pod"/>
+    <text x="660" y="210" text-anchor="middle" class="pod-text">Backend Pod 2</text>
+    <text x="660" y="220" text-anchor="middle" class="pod-text">User Mgmt</text>
+    
+    <rect x="720" y="190" width="80" height="40" class="pod"/>
+    <text x="760" y="210" text-anchor="middle" class="pod-text">Backend Pod 3</text>
+    <text x="760" y="220" text-anchor="middle" class="pod-text">Data Proc</text>
+    
+    <rect x="520" y="240" width="280" height="30" class="service-box"/>
+    <text x="660" y="260" text-anchor="middle" class="service-text">Backend Service (ClusterIP)</text>
+    
+    <!-- Namespace: LLM Tuning -->
+    <rect x="920" y="160" width="400" height="120" class="k8s-box"/>
+    <text x="1120" y="180" text-anchor="middle" class="k8s-text">Namespace: llm-tuning</text>
+    
+    <rect x="940" y="190" width="80" height="40" class="pod"/>
+    <text x="980" y="210" text-anchor="middle" class="pod-text">LLM Pod 1</text>
+    <text x="980" y="220" text-anchor="middle" class="pod-text">Model Service</text>
+    
+    <rect x="1040" y="190" width="80" height="40" class="pod"/>
+    <text x="1080" y="210" text-anchor="middle" class="pod-text">LLM Pod 2</text>
+    <text x="1080" y="220" text-anchor="middle" class="pod-text">Tuning Service</text>
+    
+    <rect x="1140" y="190" width="80" height="40" class="pod"/>
+    <text x="1180" y="210" text-anchor="middle" class="pod-text">LLM Pod 3</text>
+    <text x="1180" y="220" text-anchor="middle" class="pod-text">RAG Service</text>
+    
+    <rect x="940" y="240" width="280" height="30" class="service-box"/>
+    <text x="1080" y="260" text-anchor="middle" class="service-text">LLM Service (ClusterIP)</text>
+    
+    <!-- Namespace: Data -->
+    <rect x="80" y="300" width="400" height="120" class="k8s-box"/>
+    <text x="280" y="320" text-anchor="middle" class="k8s-text">Namespace: data</text>
+    
+    <rect x="100" y="330" width="80" height="40" class="pod"/>
+    <text x="140" y="350" text-anchor="middle" class="pod-text">PostgreSQL</text>
+    <text x="140" y="360" text-anchor="middle" class="pod-text">Primary</text>
+    
+    <rect x="200" y="330" width="80" height="40" class="pod"/>
+    <text x="240" y="350" text-anchor="middle" class="pod-text">PostgreSQL</text>
+    <text x="240" y="360" text-anchor="middle" class="pod-text">Replica</text>
+    
+    <rect x="300" y="330" width="80" height="40" class="pod"/>
+    <text x="340" y="350" text-anchor="middle" class="pod-text">Redis</text>
+    <text x="340" y="360" text-anchor="middle" class="pod-text">Cache</text>
+    
+    <rect x="100" y="380" width="280" height="30" class="service-box"/>
+    <text x="240" y="400" text-anchor="middle" class="service-text">Database Service (ClusterIP)</text>
+    
+    <!-- Namespace: Monitoring -->
+    <rect x="500" y="300" width="400" height="120" class="k8s-box"/>
+    <text x="700" y="320" text-anchor="middle" class="k8s-text">Namespace: monitoring</text>
+    
+    <rect x="520" y="330" width="80" height="40" class="pod"/>
+    <text x="560" y="350" text-anchor="middle" class="pod-text">Prometheus</text>
+    <text x="560" y="360" text-anchor="middle" class="pod-text">Metrics</text>
+    
+    <rect x="620" y="330" width="80" height="40" class="pod"/>
+    <text x="660" y="350" text-anchor="middle" class="pod-text">Grafana</text>
+    <text x="660" y="360" text-anchor="middle" class="pod-text">Dashboards</text>
+    
+    <rect x="720" y="330" width="80" height="40" class="pod"/>
+    <text x="760" y="350" text-anchor="middle" class="pod-text">Alertmanager</text>
+    <text x="760" y="360" text-anchor="middle" class="pod-text">Alerts</text>
+    
+    <rect x="520" y="380" width="280" height="30" class="service-box"/>
+    <text x="660" y="400" text-anchor="middle" class="service-text">Monitoring Service (ClusterIP)</text>
+    
+    <!-- Namespace: Storage -->
+    <rect x="920" y="300" width="400" height="120" class="k8s-box"/>
+    <text x="1120" y="320" text-anchor="middle" class="k8s-text">Namespace: storage</text>
+    
+    <rect x="940" y="330" width="80" height="40" class="pod"/>
+    <text x="980" y="350" text-anchor="middle" class="pod-text">ChromaDB</text>
+    <text x="980" y="360" text-anchor="middle" class="pod-text">Vector DB</text>
+    
+    <rect x="1040" y="330" width="80" height="40" class="pod"/>
+    <text x="1080" y="350" text-anchor="middle" class="pod-text">MinIO</text>
+    <text x="1080" y="360" text-anchor="middle" class="pod-text">Object Storage</text>
+    
+    <rect x="1140" y="330" width="80" height="40" class="pod"/>
+    <text x="1180" y="350" text-anchor="middle" class="pod-text">Elasticsearch</text>
+    <text x="1180" y="360" text-anchor="middle" class="pod-text">Logs</text>
+    
+    <rect x="940" y="380" width="280" height="30" class="service-box"/>
+    <text x="1080" y="400" text-anchor="middle" class="service-text">Storage Service (ClusterIP)</text>
+  </g>
+  
+  <!-- Ollama Infrastructure -->
+  <g>
+    <rect x="50" y="550" width="1300" height="120" class="cluster"/>
+    <text x="700" y="570" text-anchor="middle" class="cluster-title">Ollama Infrastructure (GPU/CPU Nodes)</text>
+    
+    <rect x="80" y="580" width="300" height="80" class="k8s-box"/>
+    <text x="230" y="600" text-anchor="middle" class="k8s-text">GPU Node 1 (NVIDIA A100)</text>
+    
+    <rect x="100" y="610" width="80" height="40" class="pod"/>
+    <text x="140" y="630" text-anchor="middle" class="pod-text">Ollama Pod 1</text>
+    <text x="140" y="640" text-anchor="middle" class="pod-text">qwen2.5:7b</text>
+    
+    <rect x="200" y="610" width="80" height="40" class="pod"/>
+    <text x="240" y="630" text-anchor="middle" class="pod-text">Ollama Pod 2</text>
+    <text x="240" y="640" text-anchor="middle" class="pod-text">llama3:8b</text>
+    
+    <rect x="100" y="660" width="180" height="20" class="service-box"/>
+    <text x="190" y="675" text-anchor="middle" class="service-text">GPU Service</text>
+    
+    <rect x="400" y="580" width="300" height="80" class="k8s-box"/>
+    <text x="550" y="600" text-anchor="middle" class="k8s-text">GPU Node 2 (NVIDIA A100)</text>
+    
+    <rect x="420" y="610" width="80" height="40" class="pod"/>
+    <text x="460" y="630" text-anchor="middle" class="pod-text">Ollama Pod 3</text>
+    <text x="460" y="640" text-anchor="middle" class="pod-text">mistral:7b</text>
+    
+    <rect x="520" y="610" width="80" height="40" class="pod"/>
+    <text x="560" y="630" text-anchor="middle" class="pod-text">Ollama Pod 4</text>
+    <text x="560" y="640" text-anchor="middle" class="pod-text">codellama:7b</text>
+    
+    <rect x="420" y="660" width="180" height="20" class="service-box"/>
+    <text x="510" y="675" text-anchor="middle" class="service-text">GPU Service</text>
+    
+    <rect x="720" y="580" width="300" height="80" class="k8s-box"/>
+    <text x="870" y="600" text-anchor="middle" class="k8s-text">CPU Node (Apple M4)</text>
+    
+    <rect x="740" y="610" width="80" height="40" class="pod"/>
+    <text x="780" y="630" text-anchor="middle" class="pod-text">Ollama Pod 5</text>
+    <text x="780" y="640" text-anchor="middle" class="pod-text">qwen2.5:3b</text>
+    
+    <rect x="840" y="610" width="80" height="40" class="pod"/>
+    <text x="880" y="630" text-anchor="middle" class="pod-text">Ollama Pod 6</text>
+    <text x="880" y="640" text-anchor="middle" class="pod-text">llama3:3b</text>
+    
+    <rect x="740" y="660" width="180" height="20" class="service-box"/>
+    <text x="830" y="675" text-anchor="middle" class="service-text">CPU Service</text>
+    
+    <rect x="1040" y="580" width="300" height="80" class="k8s-box"/>
+    <text x="1190" y="600" text-anchor="middle" class="k8s-text">Training Node</text>
+    
+    <rect x="1060" y="610" width="80" height="40" class="pod"/>
+    <text x="1100" y="630" text-anchor="middle" class="pod-text">Training Pod</text>
+    <text x="1100" y="640" text-anchor="middle" class="pod-text">LoRA Fine-tuning</text>
+    
+    <rect x="1160" y="610" width="80" height="40" class="pod"/>
+    <text x="1200" y="630" text-anchor="middle" class="pod-text">Benchmark Pod</text>
+    <text x="1200" y="640" text-anchor="middle" class="pod-text">Performance Tests</text>
+    
+    <rect x="1060" y="660" width="180" height="20" class="service-box"/>
+    <text x="1150" y="675" text-anchor="middle" class="service-text">Training Service</text>
+  </g>
+  
+  <!-- CI/CD Pipeline -->
+  <g>
+    <rect x="50" y="690" width="1300" height="120" class="cluster"/>
+    <text x="700" y="710" text-anchor="middle" class="cluster-title">CI/CD Pipeline & DevOps</text>
+    
+    <rect x="80" y="720" width="200" height="80" class="service-box"/>
+    <text x="180" y="740" text-anchor="middle" class="service-text">GitHub Actions</text>
+    <text x="180" y="755" text-anchor="middle" class="label">• Code Push</text>
+    <text x="180" y="770" text-anchor="middle" class="label">• Build Images</text>
+    <text x="180" y="785" text-anchor="middle" class="label">• Run Tests</text>
+    <text x="180" y="800" text-anchor="middle" class="label">• Security Scan</text>
+    
+    <rect x="300" y="720" width="200" height="80" class="service-box"/>
+    <text x="400" y="740" text-anchor="middle" class="service-text">Docker Registry</text>
+    <text x="400" y="755" text-anchor="middle" class="label">• Container Images</text>
+    <text x="400" y="770" text-anchor="middle" class="label">• Version Control</text>
+    <text x="400" y="785" text-anchor="middle" class="label">• Security Scanning</text>
+    <text x="400" y="800" text-anchor="middle" class="label">• Vulnerability Check</text>
+    
+    <rect x="520" y="720" width="200" height="80" class="service-box"/>
+    <text x="620" y="740" text-anchor="middle" class="service-text">Helm Charts</text>
+    <text x="620" y="755" text-anchor="middle" class="label">• Kubernetes Manifests</text>
+    <text x="620" y="770" text-anchor="middle" class="label">• Configuration Mgmt</text>
+    <text x="620" y="785" text-anchor="middle" class="label">• Environment Config</text>
+    <text x="620" y="800" text-anchor="middle" class="label">• Secrets Management</text>
+    
+    <rect x="740" y="720" width="200" height="80" class="service-box"/>
+    <text x="840" y="740" text-anchor="middle" class="service-text">ArgoCD</text>
+    <text x="840" y="755" text-anchor="middle" class="label">• GitOps Deployment</text>
+    <text x="840" y="770" text-anchor="middle" class="label">• Auto Sync</text>
+    <text x="840" y="785" text-anchor="middle" class="label">• Rollback Capability</text>
+    <text x="840" y="800" text-anchor="middle" class="label">• Health Monitoring</text>
+    
+    <rect x="960" y="720" width="200" height="80" class="service-box"/>
+    <text x="1060" y="740" text-anchor="middle" class="service-text">Monitoring Stack</text>
+    <text x="1060" y="755" text-anchor="middle" class="label">• Prometheus</text>
+    <text x="1060" y="770" text-anchor="middle" class="label">• Grafana</text>
+    <text x="1060" y="785" text-anchor="middle" class="label">• Alertmanager</text>
+    <text x="1060" y="800" text-anchor="middle" class="label">• Jaeger Tracing</text>
+    
+    <rect x="1180" y="720" width="200" height="80" class="service-box"/>
+    <text x="1280" y="740" text-anchor="middle" class="service-text">Backup & DR</text>
+    <text x="1280" y="755" text-anchor="middle" class="label">• Database Backups</text>
+    <text x="1280" y="770" text-anchor="middle" class="label">• Model Snapshots</text>
+    <text x="1280" y="785" text-anchor="middle" class="label">• Disaster Recovery</text>
+    <text x="1280" y="800" text-anchor="middle" class="label">• Data Retention</text>
+  </g>
+  
+  <!-- Network & Security -->
+  <g>
+    <rect x="50" y="830" width="1300" height="120" class="cluster"/>
+    <text x="700" y="850" text-anchor="middle" class="cluster-title">Network & Security</text>
+    
+    <rect x="80" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="180" y="880" text-anchor="middle" class="monitoring-text">Network Policies</text>
+    <text x="180" y="895" text-anchor="middle" class="label">• Pod-to-Pod Communication</text>
+    <text x="180" y="910" text-anchor="middle" class="label">• Namespace Isolation</text>
+    <text x="180" y="925" text-anchor="middle" class="label">• Ingress/Egress Rules</text>
+    <text x="180" y="940" text-anchor="middle" class="label">• Service Mesh (Istio)</text>
+    
+    <rect x="300" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="400" y="880" text-anchor="middle" class="monitoring-text">Security</text>
+    <text x="400" y="895" text-anchor="middle" class="label">• RBAC Authorization</text>
+    <text x="400" y="910" text-anchor="middle" class="label">• Service Accounts</text>
+    <text x="400" y="925" text-anchor="middle" class="label">• Secrets Management</text>
+    <text x="400" y="940" text-anchor="middle" class="label">• Pod Security Standards</text>
+    
+    <rect x="520" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="620" y="880" text-anchor="middle" class="monitoring-text">Storage</text>
+    <text x="620" y="895" text-anchor="middle" class="label">• Persistent Volumes</text>
+    <text x="620" y="910" text-anchor="middle" class="label">• Storage Classes</text>
+    <text x="620" y="925" text-anchor="middle" class="label">• Backup Volumes</text>
+    <text x="620" y="940" text-anchor="middle" class="label">• Data Encryption</text>
+    
+    <rect x="740" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="840" y="880" text-anchor="middle" class="monitoring-text">Load Balancing</text>
+    <text x="840" y="895" text-anchor="middle" class="label">• Ingress Controllers</text>
+    <text x="840" y="910" text-anchor="middle" class="label">• Service Load Balancers</text>
+    <text x="840" y="925" text-anchor="middle" class="label">• Traffic Distribution</text>
+    <text x="840" y="940" text-anchor="middle" class="label">• Health Checks</text>
+    
+    <rect x="960" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="1060" y="880" text-anchor="middle" class="monitoring-text">Auto Scaling</text>
+    <text x="1060" y="895" text-anchor="middle" class="label">• HPA (Horizontal)</text>
+    <text x="1060" y="910" text-anchor="middle" class="label">• VPA (Vertical)</text>
+    <text x="1060" y="925" text-anchor="middle" class="label">• Cluster Autoscaler</text>
+    <text x="1060" y="940" text-anchor="middle" class="label">• Resource Quotas</text>
+    
+    <rect x="1180" y="860" width="200" height="80" class="monitoring-box"/>
+    <text x="1280" y="880" text-anchor="middle" class="monitoring-text">Compliance</text>
+    <text x="1280" y="895" text-anchor="middle" class="label">• SOC2 Compliance</text>
+    <text x="1280" y="910" text-anchor="middle" class="label">• GDPR Compliance</text>
+    <text x="1280" y="925" text-anchor="middle" class="label">• Audit Logging</text>
+    <text x="1280" y="940" text-anchor="middle" class="label">• Data Protection</text>
+  </g>
+  
+  <!-- Data Flow Arrows -->
+  <g>
+    <!-- External to K8s -->
+    <line x1="720" y1="110" x2="700" y2="130" class="arrow"/>
+    
+    <!-- Service communication -->
+    <line x1="240" y1="280" x2="660" y2="280" class="arrow"/>
+    <line x1="660" y1="280" x2="1080" y2="280" class="arrow"/>
+    <line x1="1080" y1="280" x2="240" y2="280" class="arrow"/>
+    
+    <!-- LLM to Ollama -->
+    <line x1="1080" y1="280" x2="190" y2="580" class="arrow"/>
+    <line x1="1080" y1="280" x2="510" y2="580" class="arrow"/>
+    <line x1="1080" y1="280" x2="830" y2="580" class="arrow"/>
+    <line x1="1080" y1="280" x2="1150" y2="580" class="arrow"/>
+    
+    <!-- Data to Storage -->
+    <line x1="240" y1="420" x2="1080" y2="420" class="arrow"/>
+    <line x1="660" y1="420" x2="1080" y2="420" class="arrow"/>
+    
+    <!-- CI/CD to K8s -->
+    <line x1="840" y1="800" x2="700" y2="550" class="arrow"/>
+  </g>
+  
+  <!-- Legend -->
+  <g>
+    <rect x="50" y="970" width="1300" height="30" fill="#f9fafb" stroke="#d1d5db" stroke-width="1" rx="4"/>
+    <text x="700" y="990" text-anchor="middle" class="subtitle">Легенда: Cloud Services | Kubernetes | Services | Databases | Monitoring | Network & Security</text>
+  </g>
+</svg> 
