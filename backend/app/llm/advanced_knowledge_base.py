@@ -124,11 +124,26 @@ class AdvancedKnowledgeBase:
         metadata: Dict[str, Any],
         collection_type: CollectionType = CollectionType.SEO_RECOMMENDATIONS
     ) -> str:
-        """Сохранение рекомендации с полными метаданными"""
+        """Сохранение рекомендации с полными метаданными с проверкой уникальности"""
         
+        # Подготавливаем контент для сохранения
+        content = recommendation.get("content", "")
+        if isinstance(content, list):
+            content = "\n".join(content)
+        domain = metadata.get("domain", "")
+
+        # Проверка на уникальность: ищем существующую рекомендацию с тем же контентом и доменом
+        collection = self.collections[collection_type.value]
+        existing = collection.get(where={"domain": domain})
+        if existing and "documents" in existing and existing["documents"]:
+            for i, doc in enumerate(existing["documents"][0]):
+                if doc.strip() == content.strip():
+                    # Уже есть такая рекомендация, возвращаем её id
+                    return existing["ids"][i]
+
         # Создаем полные метаданные
         full_metadata = RecommendationMetadata(
-            domain=metadata.get("domain", ""),
+            domain=domain,
             content_type=metadata.get("content_type", ""),
             quality_score=metadata.get("quality_score", 0.0),
             user_satisfaction=metadata.get("user_satisfaction", 0.0),
@@ -148,16 +163,10 @@ class AdvancedKnowledgeBase:
             category=metadata.get("category", "general")
         )
         
-        # Подготавливаем контент для сохранения
-        content = recommendation.get("content", "")
-        if isinstance(content, list):
-            content = "\n".join(content)
-        
         # Получаем эмбеддинг
         embedding = await self._get_embedding(content)
         
         # Сохраняем в коллекцию
-        collection = self.collections[collection_type.value]
         result = collection.add(
             embeddings=[embedding],
             documents=[content],
