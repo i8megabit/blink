@@ -1,0 +1,91 @@
+{
+  "test_suite": "comprehensive_api_test",
+  "total_tests": 6,
+  "successful_tests": 0,
+  "failed_tests": 6,
+  "success_rate": 0.0,
+  "total_time": 0.0300750732421875,
+  "results": [
+    {
+      "test": "frontend_availability",
+      "error": "All connection attempts failed",
+      "success": false
+    },
+    {
+      "test": "backend_health",
+      "status_code": 404,
+      "success": false
+    },
+    {
+      "test": "rag_service",
+      "endpoints": [
+        {
+          "endpoint": "health",
+          "error": "All connection attempts failed",
+          "success": false
+        },
+        {
+          "endpoint": "search",
+          "error": "All connection attempts failed",
+          "success": false
+        }
+      ],
+      "success": false
+    },
+    {
+      "test": "llm_router",
+      "endpoints": [
+        {
+          "endpoint": "health",
+          "error": "All connection attempts failed",
+          "success": false
+        },
+        {
+          "endpoint": "route",
+          "error": "All connection attempts failed",
+          "success": false
+        }
+      ],
+      "success": false
+    },
+    {
+      "test": "frontend_api_endpoints",
+      "endpoints": [
+        {
+          "endpoint": "/api/v1/health",
+          "error": "All connection attempts failed",
+          "success": false
+        },
+        {
+          "endpoint": "/api/v1/status",
+          "error": "All connection attempts failed",
+          "success": false
+        },
+        {
+          "endpoint": "/api/v1/config",
+          "error": "All connection attempts failed",
+          "success": false
+        }
+      ],
+      "success": false
+    },
+    {
+      "test": "performance_metrics",
+      "metrics": [
+        {
+          "metric": "frontend_response_time",
+          "error": "All connection attempts failed",
+          "success": false
+        },
+        {
+          "metric": "backend_response_time",
+          "value": 0.0014379024505615234,
+          "success": true,
+          "threshold": 1.0
+        }
+      ],
+      "success": false
+    }
+  ],
+  "overall_success": false
+}
