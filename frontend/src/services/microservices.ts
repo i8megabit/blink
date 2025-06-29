@@ -3,12 +3,9 @@ import { Microservice, HealthStatus, ServiceAPI } from '@/types/microservices';
 
 // Конфигурация микросервисов
 const MICROSERVICES_CONFIG = {
-  'llm-tuning': { port: 8000, description: 'LLM Tuning Service' },
   'backend': { port: 8004, description: 'Main Backend Service' },
   'router': { port: 8001, description: 'LLM Router Service' },
   'benchmark': { port: 8002, description: 'Benchmark Service' },
-  'monitoring': { port: 8006, description: 'Monitoring Service' },
-  'rag': { port: 8003, description: 'RAG Service' },
   'relink': { port: 8003, description: 'reLink SEO Service' },
 } as const;
 
@@ -71,13 +68,17 @@ class MicroservicesClient {
       }
 
       const startTime = Date.now();
-      await client.get('/health');
+      const response = await client.get('/health');
       const responseTime = Date.now() - startTime;
 
+      // Считаем degraded как healthy, так как сервис работает
+      const isHealthy = response.data.status === 'healthy' || response.data.status === 'degraded';
+
       const health: HealthStatus = {
-        status: 'healthy',
+        status: isHealthy ? 'healthy' : 'unhealthy',
         timestamp: new Date().toISOString(),
         response_time: responseTime,
+        details: response.data,
       };
 
       this.healthCache.set(serviceName, health);

@@ -11,6 +11,7 @@ export interface HealthStatus {
   timestamp: string;
   response_time?: number;
   error?: string;
+  details?: Record<string, any>;
 }
 
 export interface ServiceEndpoint {

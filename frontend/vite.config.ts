@@ -13,11 +13,6 @@ export default defineConfig({
     port: 3000,
     host: true,
     proxy: {
-      '/api/llm-tuning': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/llm-tuning/, ''),
-      },
       '/api/backend': {
         target: 'http://localhost:8004',
         changeOrigin: true,
@@ -32,16 +27,6 @@ export default defineConfig({
         target: 'http://localhost:8002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/benchmark/, ''),
-      },
-      '/api/monitoring': {
-        target: 'http://localhost:8006',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/monitoring/, ''),
-      },
-      '/api/rag': {
-        target: 'http://localhost:8003',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/rag/, ''),
       },
       '/api/relink': {
         target: 'http://localhost:8003',
