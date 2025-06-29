@@ -1,8 +1,26 @@
+# 🚀 reLink Docker Compose с автоматическим BuildKit
+# Автоматически использует BuildKit для всех операций сборки
+
+version: '3.8'
+
+# Глобальные настройки BuildKit
+x-buildkit: &buildkit
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+# Глобальные настройки для всех сервисов
+x-common: &common
+  restart: unless-stopped
+  networks:
+    - relink-network
+
 services:
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        <<: *buildkit
     image: eberil/relink-backend:4.1.2
     ports:
       - "8000:8000"
@@ -40,11 +58,14 @@ services:
       - db
       - redis
       - ollama
+    <<: *common
 
   docs:
     build:
       context: ../docs
       dockerfile: Dockerfile
+      args:
+        <<: *buildkit
     image: eberil/relink-docs:4.1.2
     ports:
       - "8001:8001"
@@ -79,11 +100,14 @@ services:
       start_period: 40s
     depends_on:
       - redis
+    <<: *common
 
 #  monitoring:
 #    build:
 #      context: .
 #      dockerfile: monitoring/Dockerfile
+#      args:
+#        <<: *buildkit
 #    ports:
 #      - "8002:8002"
 #    environment:
@@ -118,11 +142,14 @@ services:
 #      - redis
 #      - db
 #      - ollama
+#    <<: *common
 
   testing:
     build:
       context: ../testing
       dockerfile: Dockerfile
+      args:
+        <<: *buildkit
     image: eberil/relink-testing:4.1.2
     ports:
       - "8003:8003"
@@ -165,11 +192,14 @@ services:
       - redis
       - db
       - prometheus
+    <<: *common
 
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        <<: *buildkit
     image: eberil/relink-frontend:4.1.2
     ports:
       - "3000:80"
@@ -186,6 +216,7 @@ services:
       - docs
       # - monitoring
       - testing
+    <<: *common
 
   redis:
     image: redis:7-alpine
@@ -207,16 +238,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-    restart: unless-stopped
+    <<: *common
 
   db:
     image: postgres:16
-    restart: always
+    ports:
+      - "5432:5432"
     environment:
+      - POSTGRES_DB=seo_db
       - POSTGRES_USER=seo_user
       - POSTGRES_PASSWORD=seo_pass
-      - POSTGRES_DB=seo_db
     deploy:
       resources:
         limits:
@@ -226,133 +257,43 @@ services:
           cpus: '0.347'
           memory: 433M
     volumes:
-      - ../data/relink_db:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seo_user -d seo_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    <<: *common
 
   ollama:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
     deploy:
       resources:
         limits:
-          cpus: '1.391'
-          memory: 5204M
+          cpus: '2.0'
+          memory: 4G
         reservations:
-          cpus: '0.695'
-          memory: 2602M
+          cpus: '1.0'
+          memory: 2G
     volumes:
-      - ../data/ollama_models:/root/.ollama
-      - ./scripts:/scripts
-    environment:
-      # 🚀 ОПТИМИЗАЦИЯ ДЛЯ APPLE M4
-      - OLLAMA_KEEP_ALIVE=2h
-      - OLLAMA_REQUEST_TIMEOUT=300s
-      - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_QUEUE=4
-      - OLLAMA_CONCURRENT_REQUESTS=2
-      - OLLAMA_HOST=0.0.0.0:11434
-      - OLLAMA_ORIGINS=*
-      - OLLAMA_LOAD_TIMEOUT=120s
-      - OLLAMA_RUNNER_TIMEOUT=300s
-      - OLLAMA_MODELS=/root/.ollama/models
-      - OLLAMA_DEBUG=0
-      
-      # 🎯 ОПТИМИЗАЦИЯ КОНТЕКСТА И БАТЧИНГА
-      - OLLAMA_MAX_TOKENS=4096
-      - OLLAMA_CONTEXT_LENGTH=4096
-      - OLLAMA_BATCH_SIZE=512
-      - OLLAMA_TEMPERATURE=0.7
-      - OLLAMA_TOP_P=0.9
-      - OLLAMA_REPEAT_PENALTY=1.1
-      - OLLAMA_SEED=42
-      
-      # 🔥 МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ ДЛЯ APPLE M4 КОНТЕЙНЕР
-      - OLLAMA_FLASH_ATTENTION=1        # CPU Flash Attention оптимизация
-      - OLLAMA_KV_CACHE_TYPE=q8_0       # Квантованный кэш для экономии памяти
-      - OLLAMA_COMPUTE_UNIT_LIMIT=0     # Без ограничений вычислительных единиц
-      - OLLAMA_CPU_OPTIMIZATION=1       # Включаем CPU оптимизации
-      - OLLAMA_SIMD_ACCELERATION=1      # SIMD ускорение для ARM64
-      - OLLAMA_NEON_OPTIMIZATION=1      # ARM NEON оптимизации
-      
-      # ⚡ CPU ТУРБО-РЕЖИМ для Apple Silicon
-      - OLLAMA_THREADS=8                # Максимум потоков для M4
-      - OLLAMA_CPU_AFFINITY=0-7         # Привязка к Performance ядрам
-      - OLLAMA_PREFER_CPU=true          # Принудительное использование CPU
-      - OLLAMA_ARM64_OPTIMIZED=1        # ARM64 специфичные оптимизации
-      
-      # 🧠 ОПТИМИЗАЦИЯ ПАМЯТИ для M4
-      - OLLAMA_LOW_MEM=false            # Не экономим память - у M4 её достаточно
-      - OLLAMA_MEM_FRACTION=0.85        # 85% памяти контейнера для модели
-      - OLLAMA_MMAP_ENABLED=1           # Memory mapping для быстрого доступа
-      - OLLAMA_HUGE_PAGES=1             # Используем большие страницы памяти
-      
-      - OLLAMA_PRELOAD_MODEL=qwen2.5:7b-instruct-turbo
-      - OLLAMA_WORKERS=2
-    restart: unless-stopped
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      "ollama serve & 
-      sleep 45 && 
-      echo '🚀 Загружаем модели для A/B тестирования...' && 
-      ollama pull qwen2.5:7b && 
-      ollama pull qwen2.5:7b-instruct && 
-      ollama pull qwen2.5:7b-instruct-turbo && 
-      echo '✅ Модели загружены!' && 
-      wait"
-
-#  llm_tuning:
-#    build:
-#      context: .
-#      dockerfile: llm_tuning/Dockerfile
-#    ports:
-#      - "8004:8004"
-#    environment:
-#      - PYTHONUNBUFFERED=1
-#      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-#      - REDIS_HOST=redis
-#      - REDIS_PORT=6379
-#      - REDIS_DB=2
-#      - OLLAMA_URL=http://ollama:11434
-#      - CACHE_TTL=3600
-#      - CACHE_PREFIX=llm_tuning
-#      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-#      - LOG_LEVEL=INFO
-#      - LOG_FORMAT=json
-#      - MAX_CONCURRENT_TUNINGS=3
-#      - TUNING_TIMEOUT=1800
-#      - MODEL_RETENTION_DAYS=7
-#      - METRICS_ENABLED=true
-#      - PROMETHEUS_PORT=9091
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: '2.086'
-#          memory: 3469M
-#        reservations:
-#          cpus: '1.043'
-#          memory: 1734M
-#    volumes:
-#      - ./llm_tuning/models:/app/models
-#      - ./llm_tuning/data:/app/data
-#    healthcheck:
-#      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 40s
-#    depends_on:
-#      - redis
-#      - db
-#      - ollama
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    <<: *common
 
   prometheus:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -360,24 +301,52 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433M
+        reservations:
+          cpus: '0.173'
+          memory: 216M
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    <<: *common
 
-#  jaeger:
-#    image: jaegertracing/all-in-one:1.41
-#    ports:
-#      - "6831:6831/udp"
-#      - "16686:16686"
-#    environment:
-#      - COLLECTOR_ZIPKIN_HOST_PORT=9411
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: '0.347'
-#          memory: 433M
-#        reservations:
-#          cpus: '0.173'
-#          memory: 216M
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433M
+        reservations:
+          cpus: '0.173'
+          memory: 216M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    <<: *common
 
 volumes:
+  postgres_data:
   redis_data:
+  ollama_data:
   prometheus_data:
+
+networks:
+  relink-network:
+    driver: bridge

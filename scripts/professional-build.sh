@@ -12,23 +12,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Конфигурация
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="${PROJECT_ROOT}/config/docker-compose.yml"
-
-# Базовые образы для pull
-BASE_IMAGES=(
-    "python:3.11.9-slim-bullseye"
-    "node:20.11.1-alpine"
-    "nginx:1.25-alpine"
-    "postgres:16"
-    "redis:7-alpine"
-    "ollama/ollama:latest"
-    "prom/prometheus:latest"
-)
-
-# Функции логирования
+# Функции логирования (должны быть определены в начале)
 log_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
@@ -44,6 +28,29 @@ log_warning() {
 log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
+
+# Конфигурация
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+COMPOSE_FILE="${PROJECT_ROOT}/config/docker-compose.yml"
+ENV_FILE="${PROJECT_ROOT}/config/docker.env"
+
+# Автоматическая загрузка настроек из docker.env
+if [ -f "$ENV_FILE" ]; then
+    log_info "Загрузка настроек из $ENV_FILE"
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+fi
+
+# Базовые образы для pull
+BASE_IMAGES=(
+    "python:3.11.9-slim-bullseye"
+    "node:20.11.1-alpine"
+    "nginx:1.25-alpine"
+    "postgres:16"
+    "redis:7-alpine"
+    "ollama/ollama:latest"
+    "prom/prometheus:latest"
+)
 
 # Функция для проверки зависимостей
 check_dependencies() {
@@ -72,14 +79,24 @@ check_dependencies() {
 load_buildkit_config() {
     log_info "Загрузка BuildKit конфигурации..."
     
-    if [ -f "${SCRIPT_DIR}/docker-buildkit.env" ]; then
+    # Приоритет: docker.env > docker-buildkit.env > дефолтные настройки
+    if [ -f "$ENV_FILE" ]; then
+        source "$ENV_FILE"
+        log_success "Настройки загружены из $ENV_FILE"
+    elif [ -f "${SCRIPT_DIR}/docker-buildkit.env" ]; then
         source "${SCRIPT_DIR}/docker-buildkit.env"
-        log_success "BuildKit конфигурация загружена"
+        log_success "BuildKit конфигурация загружена из docker-buildkit.env"
     else
-        log_warning "Файл docker-buildkit.env не найден, используем дефолтные настройки"
+        log_warning "Файлы конфигурации не найдены, используем дефолтные настройки"
         export DOCKER_BUILDKIT=1
         export COMPOSE_DOCKER_CLI_BUILD=1
     fi
+    
+    # Проверка и вывод текущих настроек
+    log_info "Текущие настройки BuildKit:"
+    log_info "  DOCKER_BUILDKIT: ${DOCKER_BUILDKIT:-не установлен}"
+    log_info "  COMPOSE_DOCKER_CLI_BUILD: ${COMPOSE_DOCKER_CLI_BUILD:-не установлен}"
+    log_info "  COMPOSE_FILE: ${COMPOSE_FILE:-не установлен}"
 }
 
 # Функция для pull базовых образов
@@ -198,141 +215,167 @@ health_check() {
     done
 }
 
-# Функция для показа справки
-show_help() {
-    echo -e "${BLUE}🚀 Профессиональный Docker Build Скрипт${NC}"
-    echo ""
-    echo "Использование: $0 [ОПЦИИ]"
-    echo ""
-    echo "Опции:"
-    echo "  -s, --service SERVICE    Сборка конкретного сервиса"
-    echo "  -n, --no-cache          Сборка без кеша"
-    echo "  -p, --no-pull           Не pull базовые образы"
-    echo "  -c, --cleanup           Очистка Docker после сборки"
-    echo "  -f, --force-cleanup     Принудительная очистка"
-    echo "  -a, --analyze           Анализ образов после сборки"
-    echo "  -h, --health-check      Проверка здоровья после запуска"
-    echo "  -u, --up                Запуск сервисов после сборки"
-    echo "  -d, --down              Остановка сервисов перед сборкой"
-    echo "  --help                  Показать эту справку"
-    echo ""
-    echo "Примеры:"
-    echo "  $0                      # Полная сборка с BuildKit"
-    echo "  $0 -s backend           # Сборка только backend"
-    echo "  $0 -n -c                # Сборка без кеша + очистка"
-    echo "  $0 -u -h                # Сборка + запуск + проверка здоровья"
+# Функция для запуска сервисов
+start_services() {
+    log_info "Запуск сервисов..."
+    
+    if docker-compose -f "$COMPOSE_FILE" up -d; then
+        log_success "Сервисы запущены"
+    else
+        log_error "Ошибка запуска сервисов"
+        exit 1
+    fi
 }
 
-# Основная функция
+# Функция для остановки сервисов
+stop_services() {
+    log_info "Остановка сервисов..."
+    
+    if docker-compose -f "$COMPOSE_FILE" down; then
+        log_success "Сервисы остановлены"
+    else
+        log_error "Ошибка остановки сервисов"
+        exit 1
+    fi
+}
+
+# Функция для перезапуска сервисов
+restart_services() {
+    log_info "Перезапуск сервисов..."
+    stop_services
+    start_services
+    log_success "Сервисы перезапущены"
+}
+
+# Функция для просмотра логов
+show_logs() {
+    local service=${1:-""}
+    
+    if [ -n "$service" ]; then
+        log_info "Логи сервиса $service..."
+        docker-compose -f "$COMPOSE_FILE" logs -f "$service"
+    else
+        log_info "Логи всех сервисов..."
+        docker-compose -f "$COMPOSE_FILE" logs -f
+    fi
+}
+
+# Главная функция
 main() {
-    local service=""
-    local no_cache=false
-    local no_pull=false
-    local cleanup=false
-    local force_cleanup=false
-    local analyze=false
-    local health_check_flag=false
-    local up=false
-    local down=false
+    local command=${1:-"help"}
     
-    # Парсинг аргументов
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -s|--service)
-                service="$2"
-                shift 2
-                ;;
-            -n|--no-cache)
-                no_cache=true
-                shift
-                ;;
-            -p|--no-pull)
-                no_pull=true
-                shift
-                ;;
-            -c|--cleanup)
-                cleanup=true
-                shift
-                ;;
-            -f|--force-cleanup)
-                force_cleanup=true
-                shift
-                ;;
-            -a|--analyze)
-                analyze=true
-                shift
-                ;;
-            -h|--health-check)
-                health_check_flag=true
-                shift
-                ;;
-            -u|--up)
-                up=true
-                shift
-                ;;
-            -d|--down)
-                down=true
-                shift
-                ;;
-            --help)
-                show_help
-                exit 0
-                ;;
-            *)
-                log_error "Неизвестная опция: $1"
-                show_help
-                exit 1
-                ;;
-        esac
-    done
-    
-    # Начало работы
-    echo -e "${BLUE}🚀 Запуск профессиональной сборки Docker${NC}"
-    echo "=================================="
-    
-    # Проверка зависимостей
-    check_dependencies
-    
-    # Загрузка конфигурации BuildKit
-    load_buildkit_config
-    
-    # Остановка сервисов если нужно
-    if [ "$down" = true ]; then
-        log_info "Остановка сервисов..."
-        docker-compose -f "$COMPOSE_FILE" down
-    fi
-    
-    # Pull базовых образов
-    if [ "$no_pull" = false ]; then
-        pull_base_images
-    fi
-    
-    # Сборка
-    build_with_buildkit "$service" "$no_cache" "$no_pull"
-    
-    # Анализ образов
-    if [ "$analyze" = true ]; then
-        analyze_images
-    fi
-    
-    # Очистка
-    if [ "$cleanup" = true ] || [ "$force_cleanup" = true ]; then
-        cleanup_docker "$force_cleanup"
-    fi
-    
-    # Запуск сервисов
-    if [ "$up" = true ]; then
-        log_info "Запуск сервисов..."
-        docker-compose -f "$COMPOSE_FILE" up -d
-        
-        # Проверка здоровья
-        if [ "$health_check_flag" = true ]; then
+    case $command in
+        "help"|"-h"|"--help")
+            echo -e "${BLUE}🚀 reLink Professional Build Script${NC}"
+            echo ""
+            echo -e "${GREEN}Команды:${NC}"
+            echo "  build [service]     - Сборка всех сервисов или конкретного сервиса"
+            echo "  build-no-cache      - Сборка без кеша"
+            echo "  pull                - Pull базовых образов"
+            echo "  up                  - Запуск сервисов"
+            echo "  down                - Остановка сервисов"
+            echo "  restart             - Перезапуск сервисов"
+            echo "  logs [service]      - Просмотр логов"
+            echo "  health              - Проверка здоровья сервисов"
+            echo "  analyze             - Анализ Docker образов"
+            echo "  cleanup             - Очистка Docker ресурсов"
+            echo "  cleanup-force       - Принудительная очистка"
+            echo "  quick-start         - Быстрый старт (сборка + запуск + проверка)"
+            echo "  dev                 - Режим разработки (пересборка + логи)"
+            echo "  prod                - Продакшн режим (с проверками)"
+            echo ""
+            echo -e "${GREEN}Примеры:${NC}"
+            echo "  $0 build backend    - Сборка только backend"
+            echo "  $0 build-no-cache   - Сборка без кеша"
+            echo "  $0 logs backend     - Логи только backend"
+            echo "  $0 quick-start      - Полный цикл запуска"
+            ;;
+        "build")
+            check_dependencies
+            load_buildkit_config
+            pull_base_images
+            build_with_buildkit "${2:-}" false true
+            analyze_images
+            ;;
+        "build-no-cache")
+            check_dependencies
+            load_buildkit_config
+            pull_base_images
+            build_with_buildkit "${2:-}" true true
+            analyze_images
+            ;;
+        "pull")
+            check_dependencies
+            pull_base_images
+            ;;
+        "up")
+            check_dependencies
+            load_buildkit_config
+            start_services
+            ;;
+        "down")
+            check_dependencies
+            stop_services
+            ;;
+        "restart")
+            check_dependencies
+            load_buildkit_config
+            restart_services
+            ;;
+        "logs")
+            check_dependencies
+            show_logs "${2:-}"
+            ;;
+        "health")
+            check_dependencies
             health_check
-        fi
-    fi
-    
-    log_success "🎉 Профессиональная сборка завершена!"
+            ;;
+        "analyze")
+            check_dependencies
+            analyze_images
+            ;;
+        "cleanup")
+            check_dependencies
+            cleanup_docker false
+            ;;
+        "cleanup-force")
+            check_dependencies
+            cleanup_docker true
+            ;;
+        "quick-start")
+            check_dependencies
+            load_buildkit_config
+            pull_base_images
+            build_with_buildkit "" false true
+            start_services
+            health_check
+            analyze_images
+            log_success "🚀 Система готова к работе!"
+            ;;
+        "dev")
+            check_dependencies
+            load_buildkit_config
+            build_with_buildkit "" true true
+            start_services
+            show_logs
+            ;;
+        "prod")
+            check_dependencies
+            load_buildkit_config
+            pull_base_images
+            build_with_buildkit "" false true
+            start_services
+            health_check
+            analyze_images
+            log_success "🚀 Продакшн система развернута!"
+            ;;
+        *)
+            log_error "Неизвестная команда: $command"
+            echo "Используйте '$0 help' для справки"
+            exit 1
+            ;;
+    esac
 }
 
-# Запуск основной функции
+# Запуск главной функции
 main "$@" 
