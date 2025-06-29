@@ -925,9 +925,10 @@ def _parse_llm_recommendations(llm_response: str) -> List[dict]:
 @app.post("/api/v1/seo/competitors")
 async def analyze_competitors(
     request_data: CompetitorAnalysisRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_simple),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Анализ конкурентов"""
+    """Анализ конкурентов с использованием LLM и RAG"""
     try:
         result = {
             "domain": request_data.domain,
@@ -949,10 +950,10 @@ async def analyze_competitors(
 @app.get("/api/v1/history")
 async def get_analysis_history(
     request: AnalysisHistoryRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
-    """Получение истории анализов с валидацией"""
+    """Получение истории анализов домена"""
     try:
         history = [
             {
@@ -977,7 +978,7 @@ async def get_analysis_history(
 @app.post("/api/v1/export")
 async def export_data(
     request_data: ExportRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_simple)
 ):
     """Экспорт данных"""
     try:
@@ -1177,7 +1178,7 @@ class DiagramGenerationResponseModel(BaseModel):
 @app.post("/api/diagrams/generate", response_model=DiagramGenerationResponseModel)
 async def generate_diagram(
     request: DiagramGenerationRequestModel,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Генерация SVG диаграммы архитектуры."""
@@ -1192,7 +1193,7 @@ async def generate_diagram(
             components=request.components,
             relationships=request.relationships,
             style_config=request.style,
-            user_id=current_user.id
+            user_id=current_user.get("id", 1)
         )
         
         # Генерируем диаграмму
@@ -1232,7 +1233,7 @@ async def get_diagram_templates():
 @app.get("/api/diagrams/{diagram_id}")
 async def get_diagram(
     diagram_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение диаграммы по ID."""
@@ -1241,7 +1242,7 @@ async def get_diagram(
         result = await db.execute(
             select(Diagram).where(
                 Diagram.id == diagram_id,
-                Diagram.user_id == current_user.id
+                Diagram.user_id == current_user.get("id", 1)
             )
         )
         diagram = result.scalar_one_or_none()
@@ -1270,7 +1271,7 @@ async def get_diagram(
 
 @app.get("/api/diagrams")
 async def get_user_diagrams(
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db),
     limit: int = 10,
     offset: int = 0
@@ -1280,7 +1281,7 @@ async def get_user_diagrams(
         from .models import Diagram
         result = await db.execute(
             select(Diagram)
-            .where(Diagram.user_id == current_user.id)
+            .where(Diagram.user_id == current_user.get("id", 1))
             .order_by(Diagram.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -1316,11 +1317,11 @@ async def get_user_diagrams(
 @app.post("/api/v1/tests/", response_model=TestResponse)
 async def create_test(
     test_request: TestRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Создание нового теста"""
-    return await testing_service.create_test(test_request, current_user.id, db)
+    return await testing_service.create_test(test_request, current_user.get("id", 1), db)
 
 @app.get("/api/v1/tests/", response_model=List[TestResponse])
 async def get_tests(
@@ -1335,7 +1336,7 @@ async def get_tests(
     offset: int = 0,
     sort_by: str = "created_at",
     sort_order: str = "desc",
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение списка тестов с фильтрацией"""
@@ -1357,7 +1358,7 @@ async def get_tests(
 @app.get("/api/v1/tests/{test_id}", response_model=TestResponse)
 async def get_test(
     test_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение теста по ID"""
@@ -1369,11 +1370,11 @@ async def get_test(
 @app.post("/api/v1/tests/{test_id}/execute", response_model=TestExecutionResponse)
 async def execute_test(
     test_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Выполнение теста"""
-    return await testing_service.execute_test(test_id, current_user.id, db)
+    return await testing_service.execute_test(test_id, current_user.get("id", 1), db)
 
 @app.get("/api/v1/test-executions/", response_model=List[TestExecutionResponse])
 async def get_test_executions(
@@ -1381,7 +1382,7 @@ async def get_test_executions(
     status: Optional[TestStatus] = None,
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение списка выполнений тестов"""
@@ -1390,7 +1391,7 @@ async def get_test_executions(
 @app.post("/api/v1/test-executions/{execution_id}/cancel")
 async def cancel_test_execution(
     execution_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Отмена выполнения теста"""
@@ -1402,24 +1403,24 @@ async def cancel_test_execution(
 @app.post("/api/v1/test-suites/", response_model=TestSuiteResponse)
 async def create_test_suite(
     suite_request: TestSuiteRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Создание набора тестов"""
-    return await testing_service.create_test_suite(suite_request, current_user.id, db)
+    return await testing_service.create_test_suite(suite_request, current_user.get("id", 1), db)
 
 @app.post("/api/v1/test-suites/{suite_id}/execute", response_model=List[TestExecutionResponse])
 async def execute_test_suite(
     suite_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Выполнение набора тестов"""
-    return await testing_service.execute_test_suite(suite_id, current_user.id, db)
+    return await testing_service.execute_test_suite(suite_id, current_user.get("id", 1), db)
 
 @app.get("/api/v1/testing/metrics")
 async def get_testing_metrics(
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение метрик тестирования"""
@@ -1440,7 +1441,7 @@ app.include_router(auth_router, prefix="/api/v1")
 @app.post("/api/v1/wordpress/index")
 async def index_wordpress_site(
     request: WPRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Индексация WordPress сайта."""
@@ -1463,7 +1464,7 @@ async def index_wordpress_site(
                 name=domain,
                 display_name=domain.replace('https://', '').replace('http://', ''),
                 description=f"WordPress сайт {domain}",
-                owner_id=current_user.id
+                owner_id=current_user.get("id", 1)
             )
             db.add(domain_obj)
             await db.commit()
@@ -1509,7 +1510,7 @@ async def index_wordpress_site(
 @app.post("/api/v1/wordpress/reindex")
 async def reindex_wordpress_site(
     request: WPRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Реиндексация WordPress сайта."""
@@ -1675,7 +1676,7 @@ async def parse_wordpress_site(domain: str, client_id: str = None) -> List[dict]
 @app.post("/api/v1/seo/recommendations")
 async def get_seo_recommendations(
     request_data: DomainAnalysisRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение SEO рекомендаций на основе анализа постов с использованием LLM Router."""
@@ -1708,7 +1709,7 @@ async def get_seo_recommendations(
         # Сохраняем анализ в историю
         analysis = AnalysisHistory(
             domain_id=domain_obj.id,
-            user_id=current_user.id,
+            user_id=current_user.get("id", 1),
             posts_analyzed=len(posts),
             connections_found=len([r for r in recommendations if r.get('type') == 'internal_linking']),
             recommendations_generated=len(recommendations),
@@ -2072,7 +2073,7 @@ async def analyze_content_structure(posts: List[WordPressPost], client_id: str =
 @app.get("/api/v1/insights/{domain_id}")
 async def get_domain_insights(
     domain_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение инсайтов по домену."""
@@ -2134,7 +2135,7 @@ async def get_domain_insights(
 @app.get("/api/v1/analytics/{domain_id}")
 async def get_domain_analytics(
     domain_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_simple),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение аналитики по домену."""
