@@ -5,6 +5,8 @@
 from typing import List, Dict, Any, Optional
 import httpx
 import structlog
+import chromadb
+from chromadb.config import Settings
 
 from .config import get_settings
 
@@ -14,14 +16,29 @@ logger = structlog.get_logger()
 _rag_service: Optional['RAGService'] = None
 
 class RAGService:
-    """Нативная интеграция с RAG сервисом"""
+    """Нативная интеграция с RAG сервисом через ChromaDB"""
     
     def __init__(self):
         self.settings = get_settings()
-        self.base_url = self.settings.RAG_SERVICE_URL
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.chroma_client: Optional[chromadb.Client] = None
+        self._initialize_chromadb()
         
-        logger.info("RAG Service initialized", base_url=self.base_url)
+        logger.info("RAG Service initialized with ChromaDB")
+    
+    def _initialize_chromadb(self):
+        """Инициализация ChromaDB клиента"""
+        try:
+            # Используем HTTP клиент для подключения к серверу ChromaDB
+            self.chroma_client = chromadb.HttpClient(
+                host=self.settings.CHROMADB_HOST,
+                port=self.settings.CHROMADB_PORT
+            )
+            logger.info("ChromaDB client initialized", 
+                       host=self.settings.CHROMADB_HOST, 
+                       port=self.settings.CHROMADB_PORT)
+        except Exception as e:
+            logger.error("Failed to initialize ChromaDB client", error=str(e))
+            self.chroma_client = None
     
     async def search(
         self, 
@@ -31,30 +48,39 @@ class RAGService:
     ) -> List[Dict[str, Any]]:
         """Поиск в векторной базе данных"""
         
+        if not self.chroma_client:
+            logger.error("ChromaDB client not initialized")
+            return []
+        
         try:
-            payload = {
-                "query": query,
-                "collection": collection,
-                "top_k": top_k,
-                "service": self.settings.SERVICE_NAME
-            }
+            # Получаем коллекцию
+            chroma_collection = self.chroma_client.get_collection(collection)
             
-            response = await self.client.post(
-                f"{self.base_url}/api/v1/search",
-                json=payload
+            # Выполняем поиск
+            results = chroma_collection.query(
+                query_texts=[query],
+                n_results=top_k
             )
             
-            response.raise_for_status()
-            result = response.json()
+            # Форматируем результаты
+            formatted_results = []
+            if results['documents'] and results['documents'][0]:
+                for i, doc in enumerate(results['documents'][0]):
+                    formatted_results.append({
+                        'document': doc,
+                        'metadata': results['metadatas'][0][i] if results['metadatas'] and results['metadatas'][0] else {},
+                        'id': results['ids'][0][i] if results['ids'] and results['ids'][0] else None,
+                        'distance': results['distances'][0][i] if results['distances'] and results['distances'][0] else None
+                    })
             
             logger.info(
                 "RAG search completed",
                 query=query[:100] + "..." if len(query) > 100 else query,
-                results_count=len(result.get("results", [])),
+                results_count=len(formatted_results),
                 collection=collection
             )
             
-            return result.get("results", [])
+            return formatted_results
             
         except Exception as e:
             logger.error(
@@ -62,7 +88,7 @@ class RAGService:
                 error=str(e),
                 query=query[:100] + "..." if len(query) > 100 else query
             )
-            raise
+            return []
     
     async def add_documents(
         self, 
@@ -71,20 +97,36 @@ class RAGService:
     ) -> Dict[str, Any]:
         """Добавление документов в векторную БД"""
         
+        if not self.chroma_client:
+            logger.error("ChromaDB client not initialized")
+            return {"error": "ChromaDB not initialized"}
+        
         try:
-            payload = {
-                "documents": documents,
-                "collection": collection,
-                "service": self.settings.SERVICE_NAME
-            }
+            # Получаем или создаем коллекцию
+            try:
+                chroma_collection = self.chroma_client.get_collection(collection)
+            except:
+                chroma_collection = self.chroma_client.create_collection(
+                    name=collection,
+                    metadata={"description": f"Collection for {self.settings.SERVICE_NAME}"}
+                )
             
-            response = await self.client.post(
-                f"{self.base_url}/api/v1/add",
-                json=payload
+            # Подготавливаем данные
+            texts = []
+            metadatas = []
+            ids = []
+            
+            for i, doc in enumerate(documents):
+                texts.append(doc.get('text', doc.get('content', str(doc))))
+                metadatas.append(doc.get('metadata', {}))
+                ids.append(doc.get('id', f"doc_{i}_{hash(str(doc))}"))
+            
+            # Добавляем документы
+            chroma_collection.add(
+                documents=texts,
+                metadatas=metadatas,
+                ids=ids
             )
-            
-            response.raise_for_status()
-            result = response.json()
             
             logger.info(
                 "Documents added to RAG",
@@ -92,7 +134,11 @@ class RAGService:
                 collection=collection
             )
             
-            return result
+            return {
+                "success": True,
+                "added_count": len(documents),
+                "collection": collection
+            }
             
         except Exception as e:
             logger.error(
@@ -100,7 +146,7 @@ class RAGService:
                 error=str(e),
                 documents_count=len(documents)
             )
-            raise
+            return {"error": str(e)}
     
     async def delete_documents(
         self,
@@ -109,20 +155,15 @@ class RAGService:
     ) -> Dict[str, Any]:
         """Удаление документов из векторной БД"""
         
+        if not self.chroma_client:
+            logger.error("ChromaDB client not initialized")
+            return {"error": "ChromaDB not initialized"}
+        
         try:
-            payload = {
-                "document_ids": document_ids,
-                "collection": collection,
-                "service": self.settings.SERVICE_NAME
-            }
+            chroma_collection = self.chroma_client.get_collection(collection)
             
-            response = await self.client.delete(
-                f"{self.base_url}/api/v1/delete",
-                json=payload
-            )
-            
-            response.raise_for_status()
-            result = response.json()
+            # Удаляем документы
+            chroma_collection.delete(ids=document_ids)
             
             logger.info(
                 "Documents deleted from RAG",
@@ -130,7 +171,11 @@ class RAGService:
                 collection=collection
             )
             
-            return result
+            return {
+                "success": True,
+                "deleted_count": len(document_ids),
+                "collection": collection
+            }
             
         except Exception as e:
             logger.error(
@@ -138,29 +183,70 @@ class RAGService:
                 error=str(e),
                 document_ids=document_ids
             )
-            raise
+            return {"error": str(e)}
     
     async def get_collections(self) -> List[Dict[str, Any]]:
         """Получение списка коллекций"""
         
+        if not self.chroma_client:
+            logger.error("ChromaDB client not initialized")
+            return []
+        
         try:
-            response = await self.client.get(f"{self.base_url}/api/v1/collections")
-            response.raise_for_status()
+            collections = self.chroma_client.list_collections()
             
-            result = response.json()
+            result = []
+            for collection in collections:
+                result.append({
+                    "name": collection.name,
+                    "metadata": collection.metadata,
+                    "count": collection.count()
+                })
             
-            logger.info("RAG collections retrieved", count=len(result.get("collections", [])))
+            logger.info("RAG collections retrieved", count=len(result))
             
-            return result.get("collections", [])
+            return result
             
         except Exception as e:
             logger.error("Failed to get RAG collections", error=str(e))
-            raise
+            return []
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Проверка здоровья RAG сервиса"""
+        
+        if not self.chroma_client:
+            return {
+                "status": "unhealthy",
+                "error": "ChromaDB client not initialized"
+            }
+        
+        try:
+            # Проверяем подключение
+            collections = self.chroma_client.list_collections()
+            
+            return {
+                "status": "healthy",
+                "chromadb_connected": True,
+                "collections_count": len(collections),
+                "service": self.settings.SERVICE_NAME
+            }
+            
+        except Exception as e:
+            logger.error("RAG health check failed", error=str(e))
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "service": self.settings.SERVICE_NAME
+            }
     
     async def close(self):
         """Закрытие соединения"""
-        await self.client.aclose()
-        logger.info("RAG Service connection closed")
+        if self.chroma_client:
+            try:
+                self.chroma_client.close()
+                logger.info("RAG Service connection closed")
+            except Exception as e:
+                logger.error("Error closing RAG service", error=str(e))
 
 def get_rag_service() -> RAGService:
     """Получение глобального экземпляра RAG сервиса"""

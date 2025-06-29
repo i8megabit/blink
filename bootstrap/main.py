@@ -98,15 +98,26 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check():
         """Проверка здоровья сервиса"""
+        from .rag_service import get_rag_service
+        
+        # Проверяем RAG сервис
+        rag_service = get_rag_service()
+        rag_health = await rag_service.health_check()
+        
         health_status = {
             "status": "healthy",
             "service": service_name,
-            "chromadb": "connected" if chroma_client else "disconnected"
+            "chromadb": rag_health.get("status", "unknown"),
+            "chromadb_connected": rag_health.get("chromadb_connected", False),
+            "collections_count": rag_health.get("collections_count", 0)
         }
         
-        if not chroma_client:
+        # Если ChromaDB не подключен, статус degraded
+        if not rag_health.get("chromadb_connected", False):
             health_status["status"] = "degraded"
             health_status["warnings"] = ["ChromaDB not connected"]
+            if "error" in rag_health:
+                health_status["chromadb_error"] = rag_health["error"]
         
         return health_status
     

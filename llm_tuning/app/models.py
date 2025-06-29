@@ -213,7 +213,7 @@ class RAGDocument(Base):
     
     # Метаданные
     tags = Column(JSON, default=[])
-    metadata = Column(JSON, default={})
+    doc_metadata = Column(JSON, default={})
     
     # Статистика использования
     usage_count = Column(Integer, default=0)

@@ -8,11 +8,11 @@ services:
       dockerfile: Dockerfile
     container_name: llm-tuning-service
     ports:
-      - "8001:8000"
+      - "8005:8000"
     environment:
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql+asyncpg://llm_tuning_user:llm_tuning_pass@llm-tuning-db:5432/llm_tuning_db
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://ollama:11435
       - API_KEY=dev-api-key-12345
       - DEBUG=true
       - LOG_LEVEL=INFO
@@ -33,10 +33,10 @@ services:
       resources:
         limits:
           cpus: '2.086'
-          memory: 3469Mi
+          memory: 3469M
         reservations:
           cpus: '1.043'
-          memory: 1734Mi
+          memory: 1734M
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -65,10 +65,10 @@ services:
       resources:
         limits:
           cpus: '0.695'
-          memory: 867Mi
+          memory: 867M
         reservations:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
     ports:
       - "5433:5432"
     volumes:
@@ -88,7 +88,7 @@ services:
     image: ollama/ollama:latest
     container_name: llm-tuning-ollama
     ports:
-      - "11434:11434"
+      - "11435:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_ORIGINS=*
@@ -119,15 +119,15 @@ services:
     image: redis:7-alpine
     container_name: llm-tuning-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     deploy:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - redis-data:/data
     networks:
@@ -151,10 +151,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
@@ -176,10 +176,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -209,10 +209,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -238,10 +238,10 @@ services:
       resources:
         limits:
           cpus: '0.347'
-          memory: 433Mi
+          memory: 433M
         reservations:
           cpus: '0.173'
-          memory: 216Mi
+          memory: 216M
     networks:
       - llm-tuning-network
     restart: unless-stopped

@@ -253,7 +253,7 @@ class RAGDocumentCreate(BaseModelSchema):
     source: Optional[str] = Field(None, max_length=500, description="Источник документа")
     document_type: str = Field(default="general", max_length=100, description="Тип документа")
     tags: List[str] = Field(default_factory=list, description="Теги документа")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные метаданные")
+    doc_metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные метаданные")
 
 
 class RAGDocumentUpdate(BaseModelSchema):
@@ -263,7 +263,7 @@ class RAGDocumentUpdate(BaseModelSchema):
     source: Optional[str] = Field(None, max_length=500)
     document_type: Optional[str] = Field(None, max_length=100)
     tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    doc_metadata: Optional[Dict[str, Any]] = None
 
 
 class RAGDocumentResponse(BaseModelSchema):
@@ -274,7 +274,7 @@ class RAGDocumentResponse(BaseModelSchema):
     source: Optional[str]
     document_type: str
     tags: List[str]
-    metadata: Dict[str, Any]
+    doc_metadata: Dict[str, Any]
     usage_count: int
     last_used: Optional[datetime]
     created_at: datetime

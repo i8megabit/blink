@@ -288,6 +288,9 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", env="ENVIRONMENT")
     debug: bool = Field(default=False, env="DEBUG")
     
+    # Новое поле для совместимости с legacy-кодом
+    DATABASE_URL: str = Field(default=None, env="DATABASE_URL")
+
     # Подмодули настроек
     database: DatabaseSettings = DatabaseSettings()
     redis: RedisSettings = RedisSettings()
@@ -304,6 +307,16 @@ class Settings(BaseSettings):
         env_file = os.path.join(os.path.dirname(__file__), ".env")
         env_file_encoding = "utf-8"
         case_sensitive = False
+
+    @validator('DATABASE_URL', pre=True, always=True)
+    def set_database_url(cls, v, values):
+        # Если явно не задано, используем database.url
+        if v:
+            return v
+        db_settings = values.get('database')
+        if db_settings and hasattr(db_settings, 'url'):
+            return db_settings.url
+        return None
     
     @validator('environment')
     def validate_environment(cls, v):

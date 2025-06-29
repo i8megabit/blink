@@ -18,11 +18,11 @@ Base = declarative_base()
 
 # Создаем асинхронный движок базы данных
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    poolclass=NullPool if settings.TESTING else None,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
+    getattr(settings, 'DATABASE_URL', None) or settings.database.url,
+    echo=settings.debug,
+    poolclass=NullPool if getattr(settings, 'is_testing', lambda: False)() else None,
+    pool_size=getattr(settings, 'DB_POOL_SIZE', 20),
+    max_overflow=getattr(settings, 'DB_MAX_OVERFLOW', 40),
     pool_pre_ping=True,
     pool_recycle=3600,
 )
