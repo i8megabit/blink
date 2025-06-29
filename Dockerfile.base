@@ -1,11 +1,16 @@
 # 🐳 БАЗОВЫЙ ОБРАЗ - ФИЛИГРАННОЕ МАСТЕРСТВО
 FROM python:3.11-slim as base
 
+# Аргументы сборки
+ARG SERVICE_NAME
+ARG SERVICE_PORT=8000
+
 # Метаданные
 LABEL maintainer="reLink Team <i8megabit@gmail.com>" \
       description="Base image for all reLink microservices" \
       version="1.0.0" \
-      architecture="universal"
+      architecture="universal" \
+      service="${SERVICE_NAME}"
 
 # Системные зависимости
 RUN apt-get update && apt-get install -y \
@@ -21,6 +26,8 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONOPTIMIZE=2
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
+ENV SERVICE_NAME=${SERVICE_NAME}
+ENV SERVICE_PORT=${SERVICE_PORT}
 
 # Создание пользователя
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -33,16 +40,17 @@ COPY requirements-base.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-base.txt
 
-# Общие утилиты
+# Общие утилиты и бутстрап
 COPY bootstrap/ ./bootstrap/
+COPY requirements-base.txt ./requirements-base.txt
 
 # Права доступа
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Health check
+# Health check с динамическим портом
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD curl -f http://localhost:${SERVICE_PORT}/health || exit 1
 
 # Точка входа
 ENTRYPOINT ["python", "-m", "bootstrap.main"] 

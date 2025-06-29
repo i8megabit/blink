@@ -1,7 +1,7 @@
 version: '3.8'
 
-# 🚀 ПЕРВЫЙ ТЕСТОВЫЙ КОМПОУЗ reLink
-# Оптимизирован для MacBook Pro M4 16GB
+# 🚀 РЕВОЛЮЦИОННАЯ АРХИТЕКТУРА МИКРОСЕРВИСОВ reLink
+# Оптимизирован для MacBook Pro M4 16GB с единым базовым образом
 
 services:
   # 🐳 БАЗОВЫЕ СЕРВИСЫ
@@ -91,11 +91,14 @@ services:
       timeout: 10s
       retries: 3
 
-  # 🔧 МИКРОСЕРВИСЫ
+  # 🔧 МИКРОСЕРВИСЫ (ЕДИНЫЙ БАЗОВЫЙ ОБРАЗ)
   router:
     build:
-      context: ./router
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: router
+        SERVICE_PORT: 8001
     container_name: relink-router
     ports:
       - "8001:8001"
@@ -109,6 +112,9 @@ services:
       - OLLAMA_URL=http://ollama:11434
       - CHROMADB_URL=http://chromadb:8000
       - DEBUG=true
+    volumes:
+      - ./router:/app/router
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,8 +134,11 @@ services:
 
   benchmark:
     build:
-      context: ./benchmark
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: benchmark
+        SERVICE_PORT: 8002
     container_name: relink-benchmark
     ports:
       - "8002:8002"
@@ -142,7 +151,11 @@ services:
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
       - ROUTER_URL=http://router:8001
+      - CHROMADB_URL=http://chromadb:8000
       - DEBUG=true
+    volumes:
+      - ./benchmark:/app/benchmark
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,8 +173,11 @@ services:
 
   relink:
     build:
-      context: ./relink
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: relink
+        SERVICE_PORT: 8003
     container_name: relink-seo
     ports:
       - "8003:8003"
@@ -177,6 +193,9 @@ services:
       - CHROMADB_URL=http://chromadb:8000
       - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
+    volumes:
+      - ./relink:/app/relink
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
@@ -196,8 +215,11 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: backend
+        SERVICE_PORT: 8004
     container_name: relink-backend
     ports:
       - "8004:8004"
@@ -214,6 +236,9 @@ services:
       - RELINK_URL=http://relink:8003
       - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
+    volumes:
+      - ./backend:/app/backend
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
@@ -233,6 +258,49 @@ services:
       timeout: 10s
       retries: 3
 
+  # 🧠 LLM TUNING СЕРВИС
+  llm_tuning:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: llm_tuning
+        SERVICE_PORT: 8007
+    container_name: relink-llm-tuning
+    ports:
+      - "8007:8007"
+    environment:
+      - SERVICE_NAME=llm_tuning
+      - SERVICE_PORT=8007
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=relink_redis_pass
+      - OLLAMA_URL=http://ollama:11434
+      - ROUTER_URL=http://router:8001
+      - CHROMADB_URL=http://chromadb:8000
+      - BACKEND_URL=http://backend:8004
+      - DEBUG=true
+    volumes:
+      - ./llm_tuning:/app/llm_tuning
+      - ./bootstrap:/app/bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      router:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - relink-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # 🎨 ФРОНТЕНД
   frontend:
     build:
@@ -246,6 +314,7 @@ services:
       - VITE_ROUTER_URL=http://localhost:8001
       - VITE_RELINK_URL=http://localhost:8003
       - VITE_BENCHMARK_URL=http://localhost:8002
+      - VITE_LLM_TUNING_URL=http://localhost:8007
       - VITE_OLLAMA_URL=http://localhost:11434
       - NODE_ENV=development
     depends_on:
@@ -256,6 +325,8 @@ services:
       relink:
         condition: service_healthy
       benchmark:
+        condition: service_healthy
+      llm_tuning:
         condition: service_healthy
     networks:
       - relink-network
@@ -268,8 +339,11 @@ services:
   # 📊 МОНИТОРИНГ
   monitoring:
     build:
-      context: ./monitoring
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: monitoring
+        SERVICE_PORT: 8005
     container_name: relink-monitoring
     ports:
       - "8005:8005"
@@ -284,7 +358,11 @@ services:
       - ROUTER_URL=http://router:8001
       - RELINK_URL=http://relink:8003
       - BENCHMARK_URL=http://benchmark:8002
+      - LLM_TUNING_URL=http://llm_tuning:8007
       - DEBUG=true
+    volumes:
+      - ./monitoring:/app/monitoring
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
@@ -303,8 +381,11 @@ services:
   # 🔍 ТЕСТИРОВАНИЕ
   testing:
     build:
-      context: ./testing
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE_NAME: testing
+        SERVICE_PORT: 8006
     container_name: relink-testing
     ports:
       - "8006:8006"
@@ -319,8 +400,12 @@ services:
       - ROUTER_URL=http://router:8001
       - RELINK_URL=http://relink:8003
       - BENCHMARK_URL=http://benchmark:8002
+      - LLM_TUNING_URL=http://llm_tuning:8007
       - FRONTEND_URL=http://frontend:3000
       - DEBUG=true
+    volumes:
+      - ./testing:/app/testing
+      - ./bootstrap:/app/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
