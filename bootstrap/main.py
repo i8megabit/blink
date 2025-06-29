@@ -1,166 +1,226 @@
 """
-🚀 Главный модуль бутстрапа - создание FastAPI приложений
+🚀 Бутстрап для всех микросервисов reLink
+RAG-ориентированная архитектура с ChromaDB
 """
 
 import os
-import importlib
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from contextlib import asynccontextmanager
+import sys
+import asyncio
+import logging
 from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
+
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import structlog
 
 from .config import get_settings
-from .logging import setup_logging
-from .monitoring import get_service_monitor
 
 # Настройка логирования
-setup_logging()
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
 logger = structlog.get_logger()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения"""
-    # Запуск приложения
-    logger.info("Starting application", service=app.title)
+# Глобальные переменные
+settings = get_settings()
+chroma_client: Optional[chromadb.Client] = None
+
+def initialize_chromadb() -> chromadb.Client:
+    """Инициализация ChromaDB клиента"""
+    global chroma_client
     
-    # Инициализация мониторинга
-    monitor = get_service_monitor()
-    logger.info("Monitoring initialized")
-    
-    yield
-    
-    # Завершение приложения
-    logger.info("Shutting down application", service=app.title)
+    try:
+        chroma_settings = ChromaSettings(
+            chroma_api_impl="rest",
+            chroma_server_host=settings.CHROMADB_HOST,
+            chroma_server_http_port=settings.CHROMADB_PORT,
+            chroma_server_ssl_enabled=False,
+            anonymized_telemetry=False
+        )
+        
+        chroma_client = chromadb.Client(chroma_settings)
+        
+        # Проверка подключения
+        collections = chroma_client.list_collections()
+        logger.info(
+            "ChromaDB initialized successfully",
+            host=settings.CHROMADB_HOST,
+            port=settings.CHROMADB_PORT,
+            collections_count=len(collections)
+        )
+        
+        return chroma_client
+        
+    except Exception as e:
+        logger.error(
+            "Failed to initialize ChromaDB",
+            error=str(e),
+            host=settings.CHROMADB_HOST,
+            port=settings.CHROMADB_PORT
+        )
+        raise
+
+def get_chroma_client() -> chromadb.Client:
+    """Получение глобального ChromaDB клиента"""
+    global chroma_client
+    if chroma_client is None:
+        chroma_client = initialize_chromadb()
+    return chroma_client
 
 def create_app(
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    version: str = "1.0.0",
-    debug: Optional[bool] = None,
-    **kwargs
+    title: str = "reLink Microservice",
+    description: str = "Микросервис reLink с RAG интеграцией",
+    version: str = "1.0.0"
 ) -> FastAPI:
-    """
-    Создание FastAPI приложения с бутстрапом
+    """Создание FastAPI приложения с бутстрапом"""
     
-    Args:
-        title: Заголовок приложения (автоматически определяется из SERVICE_NAME)
-        description: Описание приложения
-        version: Версия приложения
-        debug: Режим отладки
-        **kwargs: Дополнительные параметры
-    """
+    # Инициализация ChromaDB
+    try:
+        initialize_chromadb()
+    except Exception as e:
+        logger.error("Failed to initialize ChromaDB during app creation", error=str(e))
     
-    settings = get_settings()
-    
-    # Автоматическое определение названия сервиса
-    if title is None:
-        title = settings.SERVICE_NAME or "reLink Service"
-    
-    if description is None:
-        description = f"{title} - Микросервис reLink"
-    
-    # Определение режима отладки
-    if debug is None:
-        debug = settings.DEBUG
-    
-    # Создание приложения
     app = FastAPI(
         title=title,
         description=description,
         version=version,
-        debug=debug,
-        lifespan=lifespan,
-        **kwargs
+        docs_url="/docs",
+        redoc_url="/redoc"
     )
     
-    # Добавление CORS middleware
-    cors_origins = settings.CORS_ORIGINS.split(",")
+    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
+        allow_origins=settings.CORS_ORIGINS.split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     
-    # Добавление TrustedHost middleware
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["*"]  # В продакшене нужно ограничить
-    )
-    
-    # Добавление health check endpoint
+    # Health check endpoint
     @app.get("/health")
     async def health_check():
         """Проверка здоровья сервиса"""
-        return {
-            "status": "healthy",
-            "service": title,
-            "version": version,
-            "description": description,
-            "port": settings.SERVICE_PORT
-        }
-    
-    # Добавление metrics endpoint
-    if settings.METRICS_ENABLED:
-        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-        from fastapi.responses import Response
-        
-        @app.get("/metrics")
-        async def metrics():
-            """Метрики Prometheus"""
-            return Response(
-                content=generate_latest(),
-                media_type=CONTENT_TYPE_LATEST
-            )
-    
-    # Автоматическая загрузка роутов сервиса
-    try:
-        service_name = settings.SERVICE_NAME.lower()
-        if service_name and service_name != "unknown":
-            # Попытка импорта роутера сервиса
+        try:
+            # Проверка ChromaDB
+            chroma_status = "healthy"
             try:
-                service_module = importlib.import_module(f"{service_name}.api")
-                if hasattr(service_module, 'router'):
-                    app.include_router(service_module.router, prefix="/api/v1")
-                    logger.info("Service routes loaded", service=service_name)
-            except ImportError:
-                logger.warning("Service routes not found", service=service_name)
-    except Exception as e:
-        logger.warning("Failed to load service routes", error=str(e))
+                client = get_chroma_client()
+                collections = client.list_collections()
+                chroma_collections = len(collections)
+            except Exception as e:
+                chroma_status = "unhealthy"
+                chroma_collections = 0
+                logger.error("ChromaDB health check failed", error=str(e))
+            
+            return {
+                "status": "healthy",
+                "service": settings.SERVICE_NAME,
+                "version": version,
+                "chromadb": {
+                    "status": chroma_status,
+                    "collections_count": chroma_collections
+                },
+                "timestamp": asyncio.get_event_loop().time()
+            }
+        except Exception as e:
+            logger.error("Health check failed", error=str(e))
+            raise HTTPException(status_code=500, detail="Service unhealthy")
     
-    logger.info(
-        "Application created",
-        title=title,
-        version=version,
-        debug=debug,
-        service=settings.SERVICE_NAME
-    )
+    # ChromaDB endpoints
+    @app.get("/api/v1/chromadb/collections")
+    async def list_collections():
+        """Получение списка коллекций ChromaDB"""
+        try:
+            client = get_chroma_client()
+            collections = client.list_collections()
+            return {
+                "collections": [
+                    {
+                        "name": col.name,
+                        "count": col.count(),
+                        "metadata": col.metadata
+                    }
+                    for col in collections
+                ]
+            }
+        except Exception as e:
+            logger.error("Failed to list collections", error=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/v1/chromadb/collections/{collection_name}")
+    async def get_collection_info(collection_name: str):
+        """Получение информации о коллекции"""
+        try:
+            client = get_chroma_client()
+            collection = client.get_collection(collection_name)
+            
+            return {
+                "name": collection.name,
+                "count": collection.count(),
+                "metadata": collection.metadata
+            }
+        except Exception as e:
+            logger.error(f"Failed to get collection {collection_name}", error=str(e))
+            raise HTTPException(status_code=404, detail="Collection not found")
+    
+    @app.post("/api/v1/chromadb/collections/{collection_name}")
+    async def create_collection(collection_name: str, metadata: Dict[str, Any] = None):
+        """Создание новой коллекции"""
+        try:
+            client = get_chroma_client()
+            collection = client.create_collection(
+                name=collection_name,
+                metadata=metadata or {}
+            )
+            
+            logger.info(f"Collection {collection_name} created successfully")
+            return {
+                "name": collection.name,
+                "metadata": collection.metadata,
+                "status": "created"
+            }
+        except Exception as e:
+            logger.error(f"Failed to create collection {collection_name}", error=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
     
     return app
 
-def add_service_routes(app: FastAPI, router, prefix: str = "/api/v1"):
-    """
-    Добавление роутов сервиса в приложение
-    
-    Args:
-        app: FastAPI приложение
-        router: Роутер сервиса
-        prefix: Префикс для роутов
-    """
-    app.include_router(router, prefix=prefix)
-    logger.info("Service routes added", prefix=prefix)
-
 def run_service():
-    """Запуск сервиса с автоматической конфигурацией"""
+    """Запуск сервиса"""
     import uvicorn
     
-    settings = get_settings()
+    logger.info(
+        "Starting reLink microservice",
+        service_name=settings.SERVICE_NAME,
+        port=settings.SERVICE_PORT,
+        debug=settings.DEBUG
+    )
     
     # Создание приложения
-    app = create_app()
+    app = create_app(
+        title=f"reLink {settings.SERVICE_NAME.title()}",
+        description=f"Микросервис {settings.SERVICE_NAME} с RAG интеграцией",
+        version="1.0.0"
+    )
     
     # Запуск сервера
     uvicorn.run(
@@ -168,7 +228,7 @@ def run_service():
         host="0.0.0.0",
         port=settings.SERVICE_PORT,
         reload=settings.DEBUG,
-        log_level="debug" if settings.DEBUG else "info"
+        log_level=settings.LOG_LEVEL.lower()
     )
 
 if __name__ == "__main__":

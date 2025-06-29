@@ -1,7 +1,7 @@
 version: '3.8'
 
 # 🚀 РЕВОЛЮЦИОННАЯ АРХИТЕКТУРА МИКРОСЕРВИСОВ reLink
-# Оптимизирован для MacBook Pro M4 16GB с единым базовым образом
+# RAG-ориентированная архитектура с ChromaDB как основной БД
 
 services:
   # 🐳 БАЗОВЫЕ СЕРВИСЫ
@@ -19,27 +19,6 @@ services:
       - relink-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: relink-postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    environment:
-      POSTGRES_DB: relink_db
-      POSTGRES_USER: seo_user
-      POSTGRES_PASSWORD: seo_pass
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-    networks:
-      - relink-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U seo_user -d relink_db"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -71,6 +50,7 @@ services:
       timeout: 10s
       retries: 3
 
+  # 🗄️ CHROMADB - ОСНОВНАЯ БАЗА ДАННЫХ
   chromadb:
     image: chromadb/chroma:latest
     container_name: relink-chromadb
@@ -78,11 +58,14 @@ services:
       - "8000:8000"
     volumes:
       - chromadb_data:/chroma/chroma
+      - ./chromadb_persist:/chroma/chroma/persist
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
       - CHROMA_SERVER_HTTP_PORT=8000
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/chroma/auth.json
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.providers.HtpasswdFileServerAuthProvider
     networks:
       - relink-network
     healthcheck:
@@ -105,19 +88,16 @@ services:
     environment:
       - SERVICE_NAME=router
       - SERVICE_PORT=8001
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
-      - CHROMADB_URL=http://chromadb:8000
       - DEBUG=true
     volumes:
       - ./router:/app/router
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       ollama:
@@ -145,20 +125,17 @@ services:
     environment:
       - SERVICE_NAME=benchmark
       - SERVICE_PORT=8002
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
       - ROUTER_URL=http://router:8001
-      - CHROMADB_URL=http://chromadb:8000
       - DEBUG=true
     volumes:
       - ./benchmark:/app/benchmark
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       router:
@@ -184,21 +161,18 @@ services:
     environment:
       - SERVICE_NAME=relink
       - SERVICE_PORT=8003
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
       - ROUTER_URL=http://router:8001
-      - CHROMADB_URL=http://chromadb:8000
       - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
     volumes:
       - ./relink:/app/relink
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       router:
@@ -226,13 +200,12 @@ services:
     environment:
       - SERVICE_NAME=backend
       - SERVICE_PORT=8004
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
       - ROUTER_URL=http://router:8001
-      - CHROMADB_URL=http://chromadb:8000
       - RELINK_URL=http://relink:8003
       - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
@@ -240,8 +213,6 @@ services:
       - ./backend:/app/backend
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       router:
@@ -272,21 +243,18 @@ services:
     environment:
       - SERVICE_NAME=llm_tuning
       - SERVICE_PORT=8007
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
       - OLLAMA_URL=http://ollama:11434
       - ROUTER_URL=http://router:8001
-      - CHROMADB_URL=http://chromadb:8000
       - BACKEND_URL=http://backend:8004
       - DEBUG=true
     volumes:
       - ./llm_tuning:/app/llm_tuning
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       router:
@@ -316,6 +284,7 @@ services:
       - VITE_BENCHMARK_URL=http://localhost:8002
       - VITE_LLM_TUNING_URL=http://localhost:8007
       - VITE_OLLAMA_URL=http://localhost:11434
+      - VITE_CHROMADB_URL=http://localhost:8000
       - NODE_ENV=development
     depends_on:
       backend:
@@ -350,7 +319,7 @@ services:
     environment:
       - SERVICE_NAME=monitoring
       - SERVICE_PORT=8005
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
@@ -364,8 +333,6 @@ services:
       - ./monitoring:/app/monitoring
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -392,7 +359,7 @@ services:
     environment:
       - SERVICE_NAME=testing
       - SERVICE_PORT=8006
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@postgres:5432/relink_db
+      - CHROMADB_URL=http://chromadb:8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=relink_redis_pass
@@ -407,8 +374,6 @@ services:
       - ./testing:/app/testing
       - ./bootstrap:/app/bootstrap
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -424,8 +389,6 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
   ollama_data:

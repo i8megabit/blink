@@ -1,5 +1,6 @@
 """
 🔧 Конфигурация для всех микросервисов reLink
+RAG-ориентированная архитектура с ChromaDB
 """
 
 import os
@@ -15,20 +16,23 @@ class Settings(BaseSettings):
     SERVICE_PORT: int = Field(default=8000, description="Порт сервиса")
     DEBUG: bool = Field(default=False, description="Режим отладки")
     
-    # База данных
-    DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db",
-        description="URL подключения к БД"
+    # ChromaDB - основная база данных
+    CHROMADB_URL: str = Field(
+        default="http://chromadb:8000",
+        description="URL подключения к ChromaDB"
     )
-    DB_HOST: str = Field(default="db", description="Хост БД")
-    DB_USER: str = Field(default="seo_user", description="Пользователь БД")
-    DB_PASSWORD: str = Field(default="seo_pass", description="Пароль БД")
-    DB_NAME: str = Field(default="seo_db", description="Имя БД")
+    CHROMADB_HOST: str = Field(default="chromadb", description="Хост ChromaDB")
+    CHROMADB_PORT: int = Field(default=8000, description="Порт ChromaDB")
+    CHROMADB_PERSIST_DIR: str = Field(
+        default="./chromadb_persist",
+        description="Директория для персистентности ChromaDB"
+    )
     
     # Redis
     REDIS_HOST: str = Field(default="redis", description="Хост Redis")
     REDIS_PORT: int = Field(default=6379, description="Порт Redis")
     REDIS_DB: int = Field(default=0, description="Номер БД Redis")
+    REDIS_PASSWORD: str = Field(default="relink_redis_pass", description="Пароль Redis")
     REDIS_URL: str = Field(
         default="redis://redis:6379",
         description="URL подключения к Redis"
@@ -48,15 +52,24 @@ class Settings(BaseSettings):
     
     # LLM Router
     LLM_ROUTER_URL: str = Field(
-        default="http://llm-router:8007",
+        default="http://router:8001",
         description="URL LLM роутера"
     )
     
     # RAG Service
     RAG_SERVICE_URL: str = Field(
-        default="http://rag-service:8008",
-        description="URL RAG сервиса"
+        default="http://chromadb:8000",
+        description="URL RAG сервиса (ChromaDB)"
     )
+    
+    # Векторные настройки
+    EMBEDDING_MODEL: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        description="Модель для эмбеддингов"
+    )
+    VECTOR_CHUNK_SIZE: int = Field(default=1000, description="Размер чанков для векторизации")
+    VECTOR_CHUNK_OVERLAP: int = Field(default=200, description="Перекрытие чанков")
+    SIMILARITY_THRESHOLD: float = Field(default=0.7, description="Порог схожести для поиска")
     
     # Безопасность
     SECRET_KEY: str = Field(
