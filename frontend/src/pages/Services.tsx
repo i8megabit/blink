@@ -1,7 +1,5 @@
-import React from 'react';
 import { useMicroservices } from '@/hooks/useMicroservices';
 import { RelinkService } from '@/components/RelinkService';
-import type { HealthStatus } from '@/types/microservices';
 
 export function Services() {
   const { servicesHealth, loading, error } = useMicroservices();

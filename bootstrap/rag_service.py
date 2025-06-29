@@ -29,13 +29,15 @@ class RAGService:
         """Инициализация ChromaDB клиента"""
         try:
             # Используем HTTP клиент для подключения к серверу ChromaDB
+            headers = {}
+            if hasattr(self.settings, 'CHROMADB_AUTH_TOKEN') and self.settings.CHROMADB_AUTH_TOKEN:
+                headers["X-Chroma-Token"] = self.settings.CHROMADB_AUTH_TOKEN
+            
             self.chroma_client = chromadb.HttpClient(
                 host=self.settings.CHROMADB_HOST,
                 port=self.settings.CHROMADB_PORT,
                 ssl=False,  # Для локальной разработки
-                headers={
-                    "X-Chroma-Token": self.settings.CHROMADB_AUTH_TOKEN if hasattr(self.settings, 'CHROMADB_AUTH_TOKEN') else None
-                }
+                headers=headers if headers else None
             )
             logger.info("ChromaDB client initialized", 
                        host=self.settings.CHROMADB_HOST, 

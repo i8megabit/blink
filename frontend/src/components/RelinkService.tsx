@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Badge, Input, Textarea, Modal } from './ui';
-import { microservicesClient } from '@/services/microservices';
+import { Card, Button, Badge, Input, Modal } from './ui';
 
 interface RelinkServiceProps {
   serviceName: string;

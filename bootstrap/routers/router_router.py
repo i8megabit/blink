@@ -124,4 +124,34 @@ async def generate_with_ollama(
         result = await ollama_client.generate(prompt, model)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/health")
+async def health_check():
+    """Проверка здоровья роутера"""
+    from ..rag_service import get_rag_service
+    from ..ollama_client import get_ollama_client
+    
+    try:
+        # Проверяем RAG сервис
+        rag_service = get_rag_service()
+        rag_health = await rag_service.health_check()
+        
+        # Проверяем Ollama
+        ollama_client = get_ollama_client()
+        ollama_models = await ollama_client.list_models()
+        
+        return {
+            "status": "healthy",
+            "service": "router",
+            "chromadb": rag_health.get("status", "unknown"),
+            "chromadb_connected": rag_health.get("chromadb_connected", False),
+            "ollama_models_count": len(ollama_models),
+            "collections_count": rag_health.get("collections_count", 0)
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "service": "router",
+            "error": str(e)
+        } 
