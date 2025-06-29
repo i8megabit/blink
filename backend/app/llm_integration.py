@@ -293,44 +293,6 @@ class MonitoringServiceIntegration:
         )
 
 # Фабрика интеграций для микросервисов
-class LLMIntegrationFactory:
-    """Фабрика для создания интеграций с микросервисами"""
-    
-    def __init__(self, llm_service: LLMIntegrationService):
-        self.llm_service = llm_service
-    
-    def get_testing_integration(self) -> TestingServiceIntegration:
-        """Получение интеграции с сервисом тестирования"""
-        return TestingServiceIntegration(self.llm_service)
-    
-    def get_diagram_integration(self) -> DiagramServiceIntegration:
-        """Получение интеграции с сервисом диаграмм"""
-        return DiagramServiceIntegration(self.llm_service)
-    
-    def get_monitoring_integration(self) -> MonitoringServiceIntegration:
-        """Получение интеграции с сервисом мониторинга"""
-        return MonitoringServiceIntegration(self.llm_service)
-    
-    def get_seo_integration(self) -> SEOServiceIntegration:
-        """Получение интеграции с SEO сервисом"""
-        return SEOServiceIntegration(self.llm_service)
-
-# Утилиты для быстрой интеграции
-async def quick_llm_response(prompt: str, **kwargs) -> str:
-    """Быстрый LLM ответ для простых случаев"""
-    service = await get_llm_integration_service()
-    return await service.generate_response(prompt, **kwargs)
-
-async def quick_embedding(text: str, **kwargs) -> List[float]:
-    """Быстрое получение эмбеддинга"""
-    service = await get_llm_integration_service()
-    return await service.get_embedding(text, **kwargs)
-
-async def quick_knowledge_search(query: str, **kwargs) -> List[str]:
-    """Быстрый поиск в базе знаний"""
-    service = await get_llm_integration_service()
-    return await service.search_knowledge_base(query, **kwargs)
-
 class SEOServiceIntegration:
     """Интеграция с SEO сервисом"""
     
@@ -488,4 +450,42 @@ class SEOServiceIntegration:
                 if clean_keyword and len(clean_keyword) > 2:
                     keywords.append(clean_keyword)
         
-        return keywords[:20]  # Ограничиваем количество 
+        return keywords[:20]  # Ограничиваем количество
+
+class LLMIntegrationFactory:
+    """Фабрика для создания интеграций с микросервисами"""
+    
+    def __init__(self, llm_service: LLMIntegrationService):
+        self.llm_service = llm_service
+    
+    def get_testing_integration(self) -> TestingServiceIntegration:
+        """Получение интеграции с сервисом тестирования"""
+        return TestingServiceIntegration(self.llm_service)
+    
+    def get_diagram_integration(self) -> DiagramServiceIntegration:
+        """Получение интеграции с сервисом диаграмм"""
+        return DiagramServiceIntegration(self.llm_service)
+    
+    def get_monitoring_integration(self) -> MonitoringServiceIntegration:
+        """Получение интеграции с сервисом мониторинга"""
+        return MonitoringServiceIntegration(self.llm_service)
+    
+    def get_seo_integration(self) -> SEOServiceIntegration:
+        """Получение интеграции с SEO сервисом"""
+        return SEOServiceIntegration(self.llm_service)
+
+# Утилиты для быстрой интеграции
+async def quick_llm_response(prompt: str, **kwargs) -> str:
+    """Быстрый LLM ответ для простых случаев"""
+    service = await get_llm_integration_service()
+    return await service.generate_response(prompt, **kwargs)
+
+async def quick_embedding(text: str, **kwargs) -> List[float]:
+    """Быстрое получение эмбеддинга"""
+    service = await get_llm_integration_service()
+    return await service.get_embedding(text, **kwargs)
+
+async def quick_knowledge_search(query: str, **kwargs) -> List[str]:
+    """Быстрый поиск в базе знаний"""
+    service = await get_llm_integration_service()
+    return await service.search_knowledge_base(query, **kwargs) 

@@ -265,27 +265,6 @@ app.add_middleware(
 # Добавление middleware для мониторинга
 app.add_middleware(MonitoringMiddleware)
 
-# Упрощенная функция аутентификации для тестирования
-async def get_current_user_simple(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> dict:
-    """Упрощенное получение текущего пользователя без БД."""
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials"
-            )
-        return {"username": username, "id": 1}  # Заглушка для тестирования
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
-
 # Инициализация RAG системы
 def initialize_rag_system() -> None:
     """Инициализация RAG системы с ChromaDB."""
@@ -2392,6 +2371,27 @@ async def test_login():
         logger.error(f"Ошибка при логине тестового пользователя: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка логина: {str(e)}")
 
+# Упрощенная функция аутентификации для тестирования
+async def get_current_user_simple(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> dict:
+    """Упрощенное получение текущего пользователя без БД."""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials"
+            )
+        return {"username": username, "id": 1}  # Заглушка для тестирования
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+
 @app.post("/api/v1/seo/content-recommendations")
 async def get_content_recommendations(
     domain: str,
@@ -2503,41 +2503,6 @@ async def get_llm_metrics():
     except Exception as e:
         logger.error(f"Ошибка получения метрик LLM: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения метрик: {str(e)}")
-
-@app.post("/api/v1/test/seo/analyze")
-async def test_analyze_domain(request_data: DomainAnalysisRequest):
-    """Тестовый анализ домена без аутентификации"""
-    try:
-        logger.info(f"Тестовый анализ домена: {request_data.domain}")
-        
-        # Простой анализ без БД
-        return {
-            "domain": request_data.domain,
-            "analysis_date": datetime.utcnow(),
-            "score": 75.0,
-            "recommendations": [
-                {
-                    "type": "content",
-                    "priority": "high",
-                    "description": "Добавить больше статей о садоводстве"
-                },
-                {
-                    "type": "technical",
-                    "priority": "medium", 
-                    "description": "Оптимизировать скорость загрузки"
-                }
-            ],
-            "metrics": {
-                "content_quality": 0.7,
-                "internal_linking": 0.6,
-                "keyword_optimization": 0.8
-            },
-            "status": "completed"
-        }
-        
-    except Exception as e:
-        logger.error(f"Ошибка тестового анализа домена {request_data.domain}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Ошибка анализа: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
