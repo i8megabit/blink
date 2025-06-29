@@ -44,11 +44,6 @@ services:
       - OLLAMA_HOST=0.0.0.0
     networks:
       - relink-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # 🗄️ ChromaDB - основная база данных
   chromadb:
@@ -65,11 +60,6 @@ services:
       - ANONYMIZED_TELEMETRY=False
     networks:
       - relink-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # 🔄 МИКРОСЕРВИСЫ (унифицированные на базе Dockerfile.base)
   router:

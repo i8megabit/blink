@@ -3,6 +3,7 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import httpx
 
