@@ -1,6 +1,17 @@
 # 🚀 РЕВОЛЮЦИОННАЯ АРХИТЕКТУРА МИКРОСЕРВИСОВ reLink
 # RAG-ориентированная архитектура с ChromaDB как основной БД
 
+# Определение архитектуры для условной сборки
+x-architecture: &architecture
+  # Для Apple Silicon (ARM64)
+  arm64: &arm64-config
+    dockerfile: Dockerfile.apple-silicon
+    platform: linux/arm64
+  # Для x86_64
+  amd64: &amd64-config
+    dockerfile: Dockerfile.base
+    platform: linux/amd64
+
 services:
   # 🐳 БАЗОВЫЕ СЕРВИСЫ
   redis:
@@ -163,8 +174,8 @@ services:
 
   llm_tuning:
     build:
-      context: .
-      dockerfile: Dockerfile.base
+      context: ./llm_tuning
+      dockerfile: ${DOCKERFILE:-Dockerfile.apple-silicon}
       args:
         SERVICE_NAME: llm_tuning
         SERVICE_PORT: 8005
