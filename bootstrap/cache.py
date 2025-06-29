@@ -4,7 +4,7 @@
 
 from typing import Optional, Any
 import json
-import aioredis
+import redis.asyncio as redis
 import structlog
 
 from .config import get_settings
@@ -12,16 +12,16 @@ from .config import get_settings
 logger = structlog.get_logger()
 
 # Глобальный экземпляр Redis
-_redis_client: Optional[aioredis.Redis] = None
+_redis_client: Optional[redis.Redis] = None
 
-async def get_cache() -> aioredis.Redis:
+async def get_cache() -> redis.Redis:
     """Получение Redis клиента"""
     global _redis_client
     
     if _redis_client is None:
         settings = get_settings()
         
-        _redis_client = aioredis.from_url(
+        _redis_client = redis.from_url(
             settings.REDIS_URL,
             encoding="utf-8",
             decode_responses=True

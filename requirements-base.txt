@@ -13,7 +13,6 @@ sentence-transformers==2.2.2
 
 # Кеширование
 redis==5.0.1
-aioredis==2.0.1
 
 # HTTP клиенты
 httpx==0.25.2
