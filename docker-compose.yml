@@ -94,8 +94,8 @@ services:
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
       # Настройки OpenTelemetry
-      - CHROMA_SERVER_OTEL_ENABLED=True
-      - CHROMA_SERVER_OTEL_ENDPOINT=http://localhost:4317
+      - CHROMA_SERVER_OTEL_ENABLED=true
+      - CHROMA_SERVER_OTEL_ENDPOINT=http://opentelemetry-collector:4317
       - CHROMA_SERVER_OTEL_SERVICE_NAME=relink-chromadb
       # Дополнительные настройки для production
       - CHROMA_SERVER_AUTH_PROVIDER=none
@@ -490,6 +490,18 @@ services:
         reservations:
           memory: 512M
           cpus: '0.25'
+
+  opentelemetry-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: relink-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+    networks:
+      - relink-network
+    restart: unless-stopped
 
 # 🌐 Сети
 networks:
