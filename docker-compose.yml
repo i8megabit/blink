@@ -93,6 +93,14 @@ services:
       - CHROMA_SERVER_HTTP_PORT=8000
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
+      # Настройки OpenTelemetry
+      - CHROMA_SERVER_OTEL_ENABLED=True
+      - CHROMA_SERVER_OTEL_ENDPOINT=http://localhost:4317
+      - CHROMA_SERVER_OTEL_SERVICE_NAME=relink-chromadb
+      # Дополнительные настройки для production
+      - CHROMA_SERVER_AUTH_PROVIDER=none
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=none
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=none
     networks:
       - relink-network
     restart: unless-stopped

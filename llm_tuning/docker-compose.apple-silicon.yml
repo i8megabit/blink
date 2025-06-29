@@ -201,6 +201,11 @@ services:
       - CHROMA_SERVER_HOST=0.0.0.0
       - CHROMA_SERVER_HTTP_PORT=8000
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
+      - ANONYMIZED_TELEMETRY=False
+      # Настройки OpenTelemetry
+      - CHROMA_SERVER_OTEL_ENABLED=True
+      - CHROMA_SERVER_OTEL_ENDPOINT=http://jaeger:4317
+      - CHROMA_SERVER_OTEL_SERVICE_NAME=llm-tuning-chromadb
       - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/app/chroma_auth.json
       - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthServer
       - CHROMA_SERVER_AUTH_PROVIDER=token
