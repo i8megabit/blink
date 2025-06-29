@@ -58,6 +58,8 @@ class SmartDockerCache:
                     # Обеспечиваем обратную совместимость
                     if "layer_hashes" not in data:
                         data["layer_hashes"] = {}
+                    if "build_times" not in data:
+                        data["build_times"] = {}
                     return data
             except:
                 pass
