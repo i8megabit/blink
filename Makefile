@@ -201,3 +201,16 @@ info: ## Показать информацию о проекте
 	@echo "  make analyze-dagorod  # Полный анализ dagorod.ru"
 	@echo "  make logs        # Показать логи"
 	@echo "  make down        # Остановить сервисы"
+
+# 🏗️ АРХИТЕКТУРНЫЕ КОМАНДЫ
+detect-arch:
+	@echo "🔍 Определение архитектуры..."
+	@source scripts/detect-architecture.sh
+
+run-arch: detect-arch
+	@echo "🚀 Запуск с автоматическим определением архитектуры..."
+	@docker-compose -f 1-docker-compose.yml up -d
+
+build-arch: detect-arch
+	@echo "🔨 Сборка с автоматическим определением архитектуры..."
+	@docker-compose -f 1-docker-compose.yml build
