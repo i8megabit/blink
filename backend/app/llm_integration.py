@@ -7,6 +7,7 @@ import logging
 import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import inspect
 
 from .config import settings
 from .llm.centralized_architecture import (
@@ -299,7 +300,13 @@ class SEOServiceIntegration:
     def __init__(self, llm_service: LLMIntegrationService):
         self.llm_service = llm_service
     
+    def _log_method_call(self):
+        stack = inspect.stack()
+        caller = stack[1]
+        logger.info(f"[DEBUG SEOServiceIntegration] {caller.function} called from {caller.filename}:{caller.lineno}")
+    
     async def analyze_domain_seo(self, domain: str, comprehensive: bool = True) -> Dict[str, Any]:
+        self._log_method_call()
         """Анализ SEO домена с использованием LLM и RAG"""
         # Создаем промпт для анализа
         prompt = f"""
@@ -337,6 +344,7 @@ class SEOServiceIntegration:
         }
     
     async def generate_content_recommendations(self, domain: str, content_type: str = "articles") -> List[Dict[str, Any]]:
+        self._log_method_call()
         """Генерация рекомендаций по контенту"""
         prompt = f"""
         Создай рекомендации по контенту для домена {domain}.
@@ -363,6 +371,7 @@ class SEOServiceIntegration:
         return self._parse_content_recommendations(llm_response.response)
     
     async def optimize_keywords(self, domain: str, current_keywords: List[str]) -> Dict[str, Any]:
+        self._log_method_call()
         """Оптимизация ключевых слов"""
         keywords_text = ", ".join(current_keywords)
         

@@ -1,0 +1,47 @@
+{
+  "backend_8b40c7bf": {
+    "layer_id": "backend_8b40c7bf",
+    "files_hash": "8b40c7bf68827599a41a28036608ca703d6349a87241188f591038930218b71e",
+    "dependencies": [
+      "python:3.11-slim",
+      "base",
+      "base"
+    ],
+    "build_time": "2025-06-29T02:34:04.755793",
+    "size": null,
+    "is_valid": true
+  },
+  "docs_200d2d3e": {
+    "layer_id": "docs_200d2d3e",
+    "files_hash": "200d2d3e1fa2798cd44c98e38a79246669942385387fea92a94d6af01a100cc9",
+    "dependencies": [
+      "python:3.11-slim",
+      "base",
+      "base"
+    ],
+    "build_time": "2025-06-29T02:34:05.615262",
+    "size": null,
+    "is_valid": true
+  },
+  "testing_3386224c": {
+    "layer_id": "testing_3386224c",
+    "files_hash": "3386224c0c7dcceea14c17c58b78a3761b6a84a202285847580aa9d179ff2ba4",
+    "dependencies": [
+      "python:3.11-slim",
+      "python:3.11-slim"
+    ],
+    "build_time": "2025-06-29T02:34:05.839189",
+    "size": null,
+    "is_valid": true
+  },
+  "frontend_03342f35": {
+    "layer_id": "frontend_03342f35",
+    "files_hash": "03342f356d7e061be7d34b2916a617a3342cca360faf8802b5c19248117c06aa",
+    "dependencies": [
+      "nginx:alpine"
+    ],
+    "build_time": "2025-06-29T02:34:07.358323",
+    "size": null,
+    "is_valid": true
+  }
+}

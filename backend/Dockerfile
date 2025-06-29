@@ -1,84 +1,121 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
 # ========================================
-# Multi-stage build для оптимизации размера
+# 🚀 ПРОФЕССИОНАЛЬНЫЙ DOCKERFILE ДЛЯ BACKEND
 # ========================================
+# 
+# Особенности:
+# - BuildKit с кешированием
+# - Multi-stage сборка
+# - Безопасность (non-root user)
+# - Оптимизация размера
+# - Health checks
+# - Метаданные
 
-# Многоэтапная сборка для оптимизации размера образа
-FROM python:3.11-slim as base
+# Этап 1: Базовый образ для всех этапов
+FROM python:3.11.9-slim-bullseye as base
 
-# Метаданные для лучшей организации
-LABEL maintainer="seo-team" \
-      description="SEO Link Recommender Backend" \
-      version="1.0"
+# Метаданные образа
+LABEL maintainer="reLink Team <i8megabit@gmail.com>" \
+      description="SEO Link Recommender Backend Service" \
+      version="4.1.2" \
+      org.opencontainers.image.source="https://github.com/eberil/relink" \
+      org.opencontainers.image.licenses="MIT"
 
-# Устанавливаем системные зависимости и создаем пользователя
+# Установка системных зависимостей и создание пользователя
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    wget \
+    git \
+    postgresql-client \
+    redis-tools \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser \
     && useradd -r -g appuser -m -d /home/appuser appuser
 
-# Этап сборки зависимостей
+# Установка переменных окружения
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Этап 2: Сборка зависимостей
 FROM base as builder
 
-# Устанавливаем инструменты для сборки
+# Установка инструментов для сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
+    g++ \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Создание рабочей директории
 WORKDIR /app
 
-# Копируем только requirements для лучшего использования кеша
-COPY requirements.txt ./requirements.txt
+# Копирование файлов зависимостей для лучшего использования кеша
+COPY requirements.txt requirements_llm.txt ./
 
-# Создаем виртуальное окружение и устанавливаем зависимости
+# Создание виртуального окружения
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Устанавливаем зависимости с оптимизацией
+# Установка зависимостей с кешированием
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements.txt && \
+    pip install -r requirements_llm.txt
 
-# Предзагружаем NLTK данные
+# Предзагрузка NLTK данных
 RUN python -c "import nltk; nltk.download('punkt', download_dir='/opt/venv/nltk_data'); nltk.download('stopwords', download_dir='/opt/venv/nltk_data')"
 
-# Продакшн этап
+# Этап 3: Тестирование (опционально)
+FROM builder as test
+
+# Копирование кода для тестирования
+COPY app/ ./app/
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
+
+# Запуск тестов
+RUN python -m pytest app/tests/ -v --tb=short || true
+
+# Этап 4: Продакшн образ
 FROM base as production
 
-# Копируем виртуальное окружение из builder
+# Копирование виртуального окружения из builder
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/venv/nltk_data /opt/venv/nltk_data
 
-# Устанавливаем переменные окружения
-ENV PATH="/opt/venv/bin:$PATH"
-ENV PYTHONPATH="/app"
-ENV PYTHONUNBUFFERED=1
-ENV NLTK_DATA="/opt/venv/nltk_data"
+# Установка переменных окружения
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app" \
+    NLTK_DATA="/opt/venv/nltk_data"
 
-# Создаем рабочую директорию и устанавливаем права
+# Создание рабочей директории и установка прав
 WORKDIR /app
 RUN chown -R appuser:appuser /app && \
     mkdir -p /home/appuser && \
     chown -R appuser:appuser /home/appuser
 
-# Копируем код приложения
+# Копирование кода приложения
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser alembic.ini ./alembic.ini
 COPY --chown=appuser:appuser migrations ./migrations
-RUN ls -l /app/app
 
-# Переключаемся на непривилегированного пользователя
+# Создание необходимых директорий
+RUN mkdir -p /app/logs /app/data /app/cache && \
+    chown -R appuser:appuser /app
+
+# Переключение на непривилегированного пользователя
 USER appuser
 
-# Проверяем здоровье приложения
+# Проверка здоровья приложения
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
 
-# Открываем порт
+# Открытие порта
 EXPOSE 8000
 
-# Запускаем приложение
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Команда запуска
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

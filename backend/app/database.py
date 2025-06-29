@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import MetaData
 import logging
+import inspect
 
 from .config import get_settings
 
@@ -54,6 +55,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Dependency для получения асинхронной сессии базы данных
     Используется в FastAPI endpoints
     """
+    stack = inspect.stack()
+    caller = stack[1]
+    print(f"[DEBUG get_db] Called from: {caller.filename}:{caller.lineno} - {caller.function}")
     async with AsyncSessionLocal() as session:
         try:
             yield session

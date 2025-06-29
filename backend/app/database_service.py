@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 import os
+import inspect
+import traceback
 
 from .database import get_db
 from .models import Domain, AnalysisHistory, WordPressPost, User
@@ -28,8 +30,14 @@ class DatabaseRAGService:
         self.cache_manager = None
         self._initialized = False
     
+    def _log_method_call(self):
+        stack = inspect.stack()
+        caller = stack[1]
+        logger.info(f"[DEBUG DatabaseRAGService] {caller.function} called from {caller.filename}:{caller.lineno}")
+    
     async def initialize(self):
         """Инициализация сервиса"""
+        self._log_method_call()
         if self._initialized:
             return
         
@@ -54,6 +62,7 @@ class DatabaseRAGService:
     
     async def analyze_domain_with_rag(self, domain_name: str, user_id: int, comprehensive: bool = True) -> Dict[str, Any]:
         """Анализ домена с использованием RAG и сохранением в БД"""
+        self._log_method_call()
         if not self._initialized:
             await self.initialize()
         
@@ -121,16 +130,14 @@ class DatabaseRAGService:
     
     async def generate_content_recommendations(self, domain_name: str, user_id: int) -> List[Dict[str, Any]]:
         """Генерация рекомендаций по контенту с использованием RAG"""
+        self._log_method_call()
         if not self._initialized:
             await self.initialize()
-        
         try:
             # Получаем данные о контенте домена
             content_data = await self._get_domain_content(domain_name)
-            
             # Создаем контекст для рекомендаций
             content_context = self._build_content_context(content_data)
-            
             # Добавляем в базу знаний
             await self.cache_manager.add_to_knowledge_base([{
                 "content": content_context,
@@ -140,21 +147,19 @@ class DatabaseRAGService:
                     "created_at": datetime.utcnow().isoformat()
                 }
             }])
-            
             # Генерируем рекомендации
             recommendations = await self.seo_integration.generate_content_recommendations(
                 domain_name, 
                 "articles"
             )
-            
             return recommendations
-            
         except Exception as e:
-            logger.error(f"Ошибка генерации рекомендаций для {domain_name}: {e}")
+            logger.error(f"[TRACE] Ошибка генерации рекомендаций для {domain_name}: {e}\n{traceback.format_exc()}")
             raise
     
     async def optimize_keywords_with_history(self, domain_name: str, user_id: int) -> Dict[str, Any]:
         """Оптимизация ключевых слов с учетом истории"""
+        self._log_method_call()
         if not self._initialized:
             await self.initialize()
         
@@ -186,9 +191,10 @@ class DatabaseRAGService:
     
     async def _get_domain_data(self, domain_name: str) -> Dict[str, Any]:
         """Получение данных домена из базы данных"""
-        async with get_db() as db:
+        self._log_method_call()
+        async for db in get_db():
             # Получаем домен
-            domain_query = select(Domain).where(Domain.domain == domain_name)
+            domain_query = select(Domain).where(Domain.name == domain_name)
             domain_result = await db.execute(domain_query)
             domain = domain_result.scalar_one_or_none()
             
@@ -213,9 +219,10 @@ class DatabaseRAGService:
     
     async def _get_domain_content(self, domain_name: str) -> Dict[str, Any]:
         """Получение контента домена"""
-        async with get_db() as db:
+        self._log_method_call()
+        async for db in get_db():
             # Получаем домен
-            domain_query = select(Domain).where(Domain.domain == domain_name)
+            domain_query = select(Domain).where(Domain.name == domain_name)
             domain_result = await db.execute(domain_query)
             domain = domain_result.scalar_one_or_none()
             
@@ -256,12 +263,13 @@ class DatabaseRAGService:
     
     async def _build_rag_context(self, domain_data: Dict[str, Any]) -> str:
         """Построение контекста для RAG"""
+        self._log_method_call()
         context_parts = []
         
         # Информация о домене
         if domain_data.get("domain"):
             domain = domain_data["domain"]
-            context_parts.append(f"Домен: {domain.domain}")
+            context_parts.append(f"Домен: {domain.name}")
             context_parts.append(f"Описание: {domain.description or 'Нет описания'}")
         
         # Информация о постах
@@ -296,6 +304,7 @@ class DatabaseRAGService:
     
     def _build_content_context(self, content_data: Dict[str, Any]) -> str:
         """Построение контекста контента"""
+        self._log_method_call()
         context_parts = []
         
         posts = content_data.get("posts", [])
@@ -313,16 +322,19 @@ class DatabaseRAGService:
     
     async def _save_analysis_result(self, domain_name: str, user_id: int, analysis: Dict[str, Any]) -> int:
         """Сохранение результата анализа в базу данных"""
-        async with get_db() as db:
+        self._log_method_call()
+        async for db in get_db():
             # Получаем или создаем домен
-            domain_query = select(Domain).where(Domain.domain == domain_name)
+            domain_query = select(Domain).where(Domain.name == domain_name)
             domain_result = await db.execute(domain_query)
             domain = domain_result.scalar_one_or_none()
             
             if not domain:
                 domain = Domain(
-                    domain=domain_name,
+                    name=domain_name,
+                    display_name=domain_name,
                     description=f"Домен {domain_name}",
+                    owner_id=user_id,
                     created_at=datetime.utcnow()
                 )
                 db.add(domain)
@@ -351,9 +363,10 @@ class DatabaseRAGService:
     
     async def get_analysis_history(self, domain_name: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Получение истории анализов домена"""
-        async with get_db() as db:
+        self._log_method_call()
+        async for db in get_db():
             # Получаем домен
-            domain_query = select(Domain).where(Domain.domain == domain_name)
+            domain_query = select(Domain).where(Domain.name == domain_name)
             domain_result = await db.execute(domain_query)
             domain = domain_result.scalar_one_or_none()
             

@@ -1,0 +1,404 @@
+# 🚀 ПРОФЕССИОНАЛЬНЫЙ DOCKER-COMPOSE С BUILDKIT
+# Используйте: docker-compose -f config/docker-compose.buildkit.yml up
+
+version: '3.8'
+
+# Глобальные настройки BuildKit
+x-buildkit: &buildkit
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: production
+    args:
+      BUILDKIT_INLINE_CACHE: 1
+      DOCKER_BUILDKIT: 1
+    cache_from:
+      - type=gha
+      - type=registry,ref=eberil/relink-backend:cache
+    cache_to:
+      - type=gha,mode=max
+      - type=registry,ref=eberil/relink-backend:cache,mode=max
+
+# Общие настройки для всех сервисов
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # ========================================
+  # BACKEND СЕРВИС
+  # ========================================
+  backend:
+    <<: *buildkit
+    <<: *common
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        DOCKER_BUILDKIT: 1
+    image: eberil/relink-backend:4.1.2
+    container_name: relink-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Основные настройки
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - SECRET_KEY=your-super-secret-key-for-jwt-tokens-2024
+      
+      # База данных
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - DB_HOST=db
+      - DB_USER=seo_user
+      - DB_PASSWORD=seo_pass
+      - DB_NAME=seo_db
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_URL=redis://redis:6379
+      
+      # Ollama LLM
+      - OLLAMA_URL=http://ollama:11434/api/generate
+      - OLLAMA_MODEL=qwen2.5:7b-instruct-turbo
+      
+      # Кеширование
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=backend_
+      
+      # Логирование
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      
+      # Безопасность
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 1734M
+        reservations:
+          cpus: '0.695'
+          memory: 867M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - backend_logs:/app/logs
+      - backend_data:/app/data
+    networks:
+      - relink-network
+
+  # ========================================
+  # FRONTEND СЕРВИС
+  # ========================================
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        DOCKER_BUILDKIT: 1
+    image: eberil/relink-frontend:4.1.2
+    container_name: relink-frontend
+    ports:
+      - "3000:80"
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867M
+        reservations:
+          cpus: '0.347'
+          memory: 433M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - relink-network
+
+  # ========================================
+  # ДОКУМЕНТАЦИЯ СЕРВИС
+  # ========================================
+  docs:
+    build:
+      context: ../docs
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        DOCKER_BUILDKIT: 1
+    image: eberil/relink-docs:4.1.2
+    container_name: relink-docs
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=docs_
+      - DOCS_PATH=/app/static
+      - VERSION_FILE=/app/VERSION
+      - README_FILE=/app/README.md
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433M
+        reservations:
+          cpus: '0.173'
+          memory: 216M
+    volumes:
+      - ./VERSION:/app/VERSION:ro
+      - ./README.md:/app/README.md:ro
+      - ./TECHNICAL_ROADMAP.md:/app/static/TECHNICAL_ROADMAP.md:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - relink-network
+
+  # ========================================
+  # ТЕСТИРОВАНИЕ СЕРВИС
+  # ========================================
+  testing:
+    build:
+      context: ../testing
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        DOCKER_BUILDKIT: 1
+    image: eberil/relink-testing:4.1.2
+    container_name: relink-testing
+    ports:
+      - "8003:8003"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=testing_
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - MAX_CONCURRENT_TESTS=10
+      - TEST_TIMEOUT=300
+      - REPORT_RETENTION_DAYS=30
+      - METRICS_ENABLED=true
+      - PROMETHEUS_PORT=9090
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867M
+        reservations:
+          cpus: '0.347'
+          memory: 433M
+    volumes:
+      - ./testing/reports:/app/reports
+      - ./testing/test_data:/app/test_data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    networks:
+      - relink-network
+
+  # ========================================
+  # REDIS
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: relink-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433M
+        reservations:
+          cpus: '0.173'
+          memory: 216M
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - relink-network
+
+  # ========================================
+  # POSTGRESQL
+  # ========================================
+  db:
+    image: postgres:16
+    container_name: relink-db
+    restart: always
+    environment:
+      - POSTGRES_USER=seo_user
+      - POSTGRES_PASSWORD=seo_pass
+      - POSTGRES_DB=seo_db
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867M
+        reservations:
+          cpus: '0.347'
+          memory: 433M
+    volumes:
+      - ../data/relink_db:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seo_user -d seo_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - relink-network
+
+  # ========================================
+  # OLLAMA LLM
+  # ========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: relink-ollama
+    ports:
+      - "11434:11434"
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '1.391'
+          memory: 5204M
+        reservations:
+          cpus: '0.695'
+          memory: 2602M
+    volumes:
+      - ../data/ollama_models:/root/.ollama
+      - ./scripts:/scripts:ro
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    networks:
+      - relink-network
+
+  # ========================================
+  # PROMETHEUS МОНИТОРИНГ
+  # ========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: relink-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    <<: *common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 433M
+        reservations:
+          cpus: '0.173'
+          memory: 216M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - relink-network
+
+# ========================================
+# VOLUMES
+# ========================================
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  backend_logs:
+    driver: local
+  backend_data:
+    driver: local
+
+# ========================================
+# NETWORKS
+# ========================================
+networks:
+  relink-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
