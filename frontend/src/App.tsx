@@ -9,6 +9,10 @@ import { Services } from '@/pages/Services';
 import { Monitoring } from '@/pages/Monitoring';
 import { LLMTuning } from '@/pages/LLMTuning';
 import { Benchmarks } from '@/pages/Benchmarks';
+import ConsoleLogger from '@/components/ConsoleLogger';
+
+// Утилиты
+import { logger } from '@/utils/logger';
 
 // Стили
 import '@/styles/index.css';
@@ -33,6 +37,15 @@ const swrConfig = {
 };
 
 function App() {
+  // Логируем инициализацию приложения
+  logger.info('🚀 Приложение reLink инициализируется', {
+    version: import.meta.env.VITE_APP_VERSION || '1.0.0',
+    environment: import.meta.env.MODE,
+    debug: import.meta.env.VITE_REACT_APP_DEBUG,
+    profiling: import.meta.env.VITE_REACT_APP_ENABLE_PROFILING,
+    detailedLogging: import.meta.env.VITE_REACT_APP_ENABLE_DETAILED_LOGGING
+  });
+
   return (
     <QueryClientProvider client={queryClient}>
       <SWRConfig value={swrConfig}>
@@ -46,6 +59,13 @@ function App() {
               <Route path="/benchmarks" element={<Benchmarks />} />
             </Routes>
           </Layout>
+          
+          {/* Компонент для отображения логов в консоли */}
+          <ConsoleLogger 
+            enabled={import.meta.env.VITE_REACT_APP_ENABLE_DETAILED_LOGGING === 'true'}
+            showStats={true}
+            maxLogs={200}
+          />
         </Router>
       </SWRConfig>
     </QueryClientProvider>

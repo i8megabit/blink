@@ -26,11 +26,26 @@ services:
       - REDIS_PASSWORD=relink_redis_pass
     networks:
       - relink-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   # 🧠 AI/ML СЕРВИСЫ
   ollama:
@@ -44,6 +59,26 @@ services:
       - OLLAMA_HOST=0.0.0.0
     networks:
       - relink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
 
   # 🗄️ ChromaDB - основная база данных
   chromadb:
@@ -60,6 +95,26 @@ services:
       - ANONYMIZED_TELEMETRY=False
     networks:
       - relink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
 
   # 🔄 МИКРОСЕРВИСЫ (унифицированные на базе Dockerfile.base)
   router:
@@ -79,16 +134,36 @@ services:
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
       - CHROMA_PROTOCOL=http
+      - LOG_LEVEL=DEBUG
+      - ENABLE_PROFILING=true
+      - ENABLE_DETAILED_LOGGING=true
     networks:
       - relink-network
     depends_on:
-      - ollama
-      - chromadb
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   benchmark:
     build:
@@ -104,16 +179,36 @@ services:
       - SERVICE_NAME=benchmark
       - SERVICE_PORT=8002
       - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ENABLE_PROFILING=true
+      - ENABLE_DETAILED_LOGGING=true
     networks:
       - relink-network
     depends_on:
-      - ollama
-      - chromadb
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   relink:
     build:
@@ -129,16 +224,36 @@ services:
       - SERVICE_NAME=relink
       - SERVICE_PORT=8003
       - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ENABLE_PROFILING=true
+      - ENABLE_DETAILED_LOGGING=true
     networks:
       - relink-network
     depends_on:
-      - ollama
-      - chromadb
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   backend:
     build:
@@ -154,16 +269,40 @@ services:
       - SERVICE_NAME=backend
       - SERVICE_PORT=8004
       - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ENABLE_PROFILING=true
+      - ENABLE_DETAILED_LOGGING=true
+      - ENABLE_REQUEST_PROFILING=true
+      - ENABLE_PERFORMANCE_MONITORING=true
     networks:
       - relink-network
     depends_on:
-      - ollama
-      - chromadb
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "10"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
 
   llm_tuning:
     build:
@@ -179,16 +318,38 @@ services:
       - SERVICE_NAME=llm_tuning
       - SERVICE_PORT=8005
       - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - ENABLE_PROFILING=true
+      - ENABLE_DETAILED_LOGGING=true
     networks:
       - relink-network
     depends_on:
-      - ollama
-      - chromadb
+      chromadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   # 🌐 Frontend
   frontend:
@@ -198,15 +359,38 @@ services:
     container_name: relink-frontend
     ports:
       - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_DEBUG=true
+      - REACT_APP_ENABLE_PROFILING=true
+      - REACT_APP_ENABLE_DETAILED_LOGGING=true
+      - REACT_APP_API_BASE_URL=http://localhost:8004
+      - REACT_APP_WS_BASE_URL=ws://localhost:8004
     networks:
       - relink-network
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "15m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
   # 📊 Мониторинг
   monitoring:
@@ -221,16 +405,36 @@ services:
     networks:
       - relink-network
     depends_on:
-      - router
-      - benchmark
-      - relink
-      - backend
-      - llm_tuning
+      router:
+        condition: service_healthy
+      benchmark:
+        condition: service_healthy
+      relink:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      llm_tuning:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
 
   # 🧪 Тестирование
   testing:
@@ -241,28 +445,57 @@ services:
     networks:
       - relink-network
     depends_on:
-      - router
-      - benchmark
-      - relink
-      - backend
-      - llm_tuning
-      - frontend
+      router:
+        condition: service_healthy
+      benchmark:
+        condition: service_healthy
+      relink:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      llm_tuning:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     environment:
       - SELENIUM_HUB_URL=http://selenium-hub:4444
       - TEST_ENVIRONMENT=docker
+      - LOG_LEVEL=DEBUG
+      - ENABLE_DETAILED_LOGGING=true
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://backend:8004/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "15m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
 
 # 🌐 Сети
 networks:
   relink-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 # 💾 Тома для персистентности данных
 volumes:
   redis_data:
+    driver: local
   ollama_data:
-  chromadb_data: 
+    driver: local
+  chromadb_data:
+    driver: local 
