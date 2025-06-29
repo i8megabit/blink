@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CacheConfig:
     """Конфигурация кэша"""
-    redis_url: str = "redis://localhost:6379"
+    redis_url: str = "redis://redis:6379"
     default_ttl: int = 3600  # 1 час
     max_cache_size: int = 10000
     embedding_ttl: int = 86400  # 24 часа
@@ -41,7 +41,7 @@ class CachedDocument:
 class DistributedCache:
     """Распределенный кэш для RAG операций"""
     
-    def __init__(self, redis_url: str = "redis://localhost:6379", config: Optional[CacheConfig] = None):
+    def __init__(self, redis_url: str = "redis://redis:6379", config: Optional[CacheConfig] = None):
         self.config = config or CacheConfig(redis_url=redis_url)
         self.redis: Optional[Redis] = None
         

@@ -49,7 +49,7 @@ class LLMResponse:
 class CentralizedLLMArchitecture:
     """Централизованная архитектура для конкурентного использования Ollama"""
     
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://redis:6379"):
         self.concurrent_manager = ConcurrentOllamaManager()
         self.cache_manager = DistributedCache(redis_url)
         self.request_prioritizer = RequestPrioritizer()

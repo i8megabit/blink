@@ -177,12 +177,12 @@ class TestRedisCache:
     @pytest.fixture
     def redis_cache(self):
         """Redis кэш для тестирования"""
-        return RedisCache("redis://localhost:6379")
+        return RedisCache("redis://redis:6379")
     
     @pytest.mark.asyncio
     async def test_redis_initialization(self, redis_cache):
         """Тест инициализации Redis кэша"""
-        assert redis_cache.redis_url == "redis://localhost:6379"
+        assert redis_cache.redis_url == "redis://redis:6379"
         assert redis_cache._client is None
     
     @pytest.mark.asyncio
@@ -196,7 +196,7 @@ class TestRedisCache:
             
             assert client == mock_client
             mock_redis.from_url.assert_called_once_with(
-                "redis://localhost:6379", 
+                "redis://redis:6379", 
                 decode_responses=False
             )
     

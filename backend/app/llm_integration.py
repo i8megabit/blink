@@ -32,7 +32,7 @@ class LLMIntegrationService:
         
         logger.info("LLMIntegrationService инициализирован")
     
-    async def initialize(self, redis_url: str = "redis://localhost:6379"):
+    async def initialize(self, redis_url: str = "redis://redis:6379"):
         """Инициализация централизованной архитектуры"""
         if self._initialized:
             logger.warning("LLMIntegrationService уже инициализирован")

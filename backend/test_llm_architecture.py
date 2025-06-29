@@ -97,7 +97,7 @@ class TestCentralizedLLMArchitecture:
     
     async def test_distributed_cache(self):
         """Тест распределенного кэша"""
-        cache = DistributedRAGCache("redis://localhost:6379")
+        cache = DistributedRAGCache("redis://redis:6379")
         
         # Тестируем кэширование ответа
         response = LLMResponse(
@@ -227,7 +227,7 @@ class TestPerformance:
     
     async def test_cache_performance(self):
         """Тест производительности кэша"""
-        cache = DistributedRAGCache("redis://localhost:6379")
+        cache = DistributedRAGCache("redis://redis:6379")
         
         # Тестируем скорость кэширования
         response = LLMResponse(
