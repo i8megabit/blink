@@ -275,12 +275,12 @@ cat > frontend/src/components/services/$SERVICE_NAME.tsx << EOF
 import React from 'react';
 import { Card, Button, Badge } from '../ui';
 
-interface ${SERVICE_NAME^}Props {
+interface $SERVICE_NAME^Props {
   serviceName: string;
   description: string;
 }
 
-export const ${SERVICE_NAME^}Component: React.FC<${SERVICE_NAME^}Props> = ({
+export const $SERVICE_NAME^Component: React.FC<$SERVICE_NAME^Props> = ({
   serviceName,
   description
 }) => {
