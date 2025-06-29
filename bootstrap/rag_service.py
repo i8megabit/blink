@@ -28,7 +28,7 @@ class RAGService:
     def _initialize_chromadb(self):
         """Инициализация ChromaDB клиента"""
         try:
-            # Используем HTTP клиент для подключения к серверу ChromaDB
+            # Используем простой HTTP клиент для подключения к серверу ChromaDB
             self.chroma_client = chromadb.HttpClient(
                 host=self.settings.CHROMADB_HOST,
                 port=self.settings.CHROMADB_PORT

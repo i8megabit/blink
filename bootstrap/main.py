@@ -10,8 +10,6 @@ import logging
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
@@ -38,38 +36,18 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-# Глобальные переменные
-chroma_client: Optional[chromadb.Client] = None
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
-    global chroma_client
-    
     settings = get_settings()
     
-    # Инициализация ChromaDB
-    try:
-        chroma_client = chromadb.HttpClient(
-            host=settings.CHROMADB_HOST,
-            port=settings.CHROMADB_PORT
-        )
-        logger.info("ChromaDB client initialized", 
-                   host=settings.CHROMADB_HOST, 
-                   port=settings.CHROMADB_PORT)
-    except Exception as e:
-        logger.error("Failed to initialize ChromaDB", error=str(e))
-        chroma_client = None
+    # Инициализация происходит в rag_service.py
+    logger.info("Application startup", service_name=settings.SERVICE_NAME)
     
     yield
     
     # Очистка ресурсов
-    if chroma_client:
-        try:
-            chroma_client.close()
-            logger.info("ChromaDB client closed")
-        except Exception as e:
-            logger.error("Error closing ChromaDB client", error=str(e))
+    logger.info("Application shutdown", service_name=settings.SERVICE_NAME)
 
 def create_app() -> FastAPI:
     """Создание FastAPI приложения"""

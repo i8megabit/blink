@@ -86,6 +86,9 @@ services:
       - SERVICE_NAME=router
       - SERVICE_PORT=8001
       - DEBUG=true
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMA_PROTOCOL=http
     networks:
       - relink-network
     depends_on:
