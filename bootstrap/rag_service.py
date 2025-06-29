@@ -123,8 +123,18 @@ class RAGService:
             ids = []
             
             for i, doc in enumerate(documents):
-                texts.append(doc.get('text', doc.get('content', str(doc))))
-                metadatas.append(doc.get('metadata', {}))
+                # Извлекаем текст
+                text = doc.get('text', doc.get('content', str(doc)))
+                texts.append(text)
+                
+                # Очищаем метаданные от проблемных полей
+                metadata = doc.get('metadata', {}).copy()
+                if '_type' in metadata:
+                    del metadata['_type']
+                if 'id' in metadata:
+                    del metadata['id']
+                
+                metadatas.append(metadata)
                 ids.append(doc.get('id', f"doc_{i}_{hash(str(doc))}"))
             
             # Добавляем документы

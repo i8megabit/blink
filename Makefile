@@ -1,7 +1,7 @@
 # Makefile для управления reLink проектом
 # Оптимизирован для MacBook Pro M4 16GB
 
-.PHONY: help build up down restart logs clean test analyze-dagorod
+.PHONY: help build up down restart logs clean test analyze-dagorod build-smart build-base-smart
 
 # Переменные
 COMPOSE_FILE = 1-docker-compose.yml
@@ -22,6 +22,31 @@ help: ## Показать справку
 build: ## Собрать все контейнеры
 	@echo "$(GREEN)Собираем контейнеры...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) build --parallel
+
+build-smart: ## Умная сборка с кешированием
+	@echo "$(GREEN)Умная сборка с кешированием...$(NC)"
+	python scripts/smart_docker_cache.py --build-all
+
+build-base-smart: ## Умная сборка базового образа
+	@echo "$(GREEN)Умная сборка базового образа...$(NC)"
+	python scripts/smart_docker_cache.py --build-base
+
+build-service-smart: ## Умная сборка конкретного сервиса
+	@echo "$(GREEN)Умная сборка сервиса...$(NC)"
+	@read -p "Введите имя сервиса: " service; \
+	python scripts/smart_docker_cache.py --build-service $$service
+
+build-force: ## Принудительная сборка всех сервисов
+	@echo "$(RED)Принудительная сборка всех сервисов...$(NC)"
+	python scripts/smart_docker_cache.py --build-all --force
+
+cache-stats: ## Показать статистику кеша
+	@echo "$(GREEN)Статистика Docker кеша:$(NC)"
+	python scripts/smart_docker_cache.py --stats
+
+cache-clean: ## Очистить кеш
+	@echo "$(RED)Очистка Docker кеша...$(NC)"
+	python scripts/smart_docker_cache.py --clean
 
 up: ## Запустить все сервисы
 	@echo "$(GREEN)Запускаем сервисы...$(NC)"
@@ -159,7 +184,7 @@ update: ## Обновить все сервисы
 	@echo "$(GREEN)Обновляем сервисы...$(NC)"
 	git pull
 	docker-compose -f $(COMPOSE_FILE) pull
-	$(MAKE) build
+	$(MAKE) build-smart
 	$(MAKE) restart
 
 # Команды для отладки
@@ -197,10 +222,11 @@ info: ## Показать информацию о проекте
 	@echo "  • /api/v1/dashboard/{domain} - Данные дашборда"
 	@echo ""
 	@echo "$(YELLOW)Быстрый старт:$(NC)"
-	@echo "  make up          # Запустить все сервисы"
+	@echo "  make build-smart    # Умная сборка с кешированием"
+	@echo "  make up            # Запустить все сервисы"
 	@echo "  make analyze-dagorod  # Полный анализ dagorod.ru"
-	@echo "  make logs        # Показать логи"
-	@echo "  make down        # Остановить сервисы"
+	@echo "  make logs          # Показать логи"
+	@echo "  make down          # Остановить сервисы"
 
 # 🏗️ АРХИТЕКТУРНЫЕ КОМАНДЫ
 detect-arch:
