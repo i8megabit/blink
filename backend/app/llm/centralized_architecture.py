@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
+import os
 
 from .types import LLMRequest, LLMResponse, RequestPriority, RequestStatus, PerformanceMetrics
 from .concurrent_manager import ConcurrentOllamaManager
@@ -300,7 +301,8 @@ async def get_architecture() -> CentralizedLLMArchitecture:
     global _global_architecture
     
     if _global_architecture is None:
-        _global_architecture = CentralizedLLMArchitecture()
+        redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
+        _global_architecture = CentralizedLLMArchitecture(redis_url)
         await _global_architecture.start()
     
     return _global_architecture

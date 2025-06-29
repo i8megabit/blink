@@ -16,6 +16,12 @@ services:
       - DB_USER=seo_user
       - DB_PASSWORD=seo_pass
       - DB_NAME=seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_URL=redis://redis:6379
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=backend_
     deploy:
       resources:
         limits:
@@ -32,6 +38,7 @@ services:
       start_period: 40s
     depends_on:
       - db
+      - redis
       - ollama
 
   docs:

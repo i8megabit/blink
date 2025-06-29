@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
+import os
 
 from .database import get_db
 from .models import Domain, AnalysisHistory, WordPressPost, User
@@ -39,8 +40,9 @@ class DatabaseRAGService:
             # Создаем SEO интеграцию
             self.seo_integration = SEOServiceIntegration(self.llm_service)
             
-            # Инициализируем кэш менеджер
-            self.cache_manager = DistributedCache()
+            # Инициализируем кэш менеджер с REDIS_URL из окружения
+            redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
+            self.cache_manager = DistributedCache(redis_url)
             await self.cache_manager.connect()
             
             self._initialized = True
