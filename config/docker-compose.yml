@@ -102,47 +102,48 @@ services:
       - redis
     <<: *common
 
-#  monitoring:
-#    build:
-#      context: .
-#      dockerfile: monitoring/Dockerfile
-#      args:
-#        <<: *buildkit
-#    ports:
-#      - "8002:8002"
-#    environment:
-#      - PYTHONUNBUFFERED=1
-#      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-#      - REDIS_HOST=redis
-#      - REDIS_PORT=6379
-#      - REDIS_DB=0
-#      - OLLAMA_URL=http://ollama:11434
-#      - CACHE_TTL=3600
-#      - CACHE_PREFIX=monitoring_
-#      - COLLECT_INTERVAL=30
-#      - RETENTION_DAYS=30
-#      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-#      - LOG_LEVEL=INFO
-#      - LOG_FORMAT=json
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: '0.347'
-#          memory: 867M
-#        reservations:
-#          cpus: '0.173'
-#          memory: 433M
-#    healthcheck:
-#      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 40s
-#    depends_on:
-#      - redis
-#      - db
-#      - ollama
-#    <<: *common
+  monitoring:
+    build:
+      context: ../monitoring
+      dockerfile: Dockerfile
+      args:
+        <<: *buildkit
+    image: eberil/relink-monitoring:4.1.2
+    ports:
+      - "8002:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - OLLAMA_URL=http://ollama:11434
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=monitoring_
+      - COLLECT_INTERVAL=30
+      - RETENTION_DAYS=30
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    deploy:
+      resources:
+        limits:
+          cpus: '0.347'
+          memory: 867M
+        reservations:
+          cpus: '0.173'
+          memory: 433M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+      - db
+      - ollama
+    <<: *common
 
   testing:
     build:
@@ -194,15 +195,30 @@ services:
       - prometheus
     <<: *common
 
-  frontend:
+  router:
     build:
-      context: ../frontend
+      context: ../router
       dockerfile: Dockerfile
       args:
         <<: *buildkit
-    image: eberil/relink-frontend:4.1.2
+    image: eberil/relink-router:4.1.2
     ports:
-      - "3000:80"
+      - "8004:8004"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=2
+      - OLLAMA_URL=http://ollama:11434
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=router_
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - MAX_CONCURRENT_REQUESTS=50
+      - REQUEST_TIMEOUT=30
+      - MODEL_SELECTION_STRATEGY=performance
     deploy:
       resources:
         limits:
@@ -211,11 +227,99 @@ services:
         reservations:
           cpus: '0.347'
           memory: 433M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+      - db
+      - ollama
+    <<: *common
+
+  frontend:
+    build:
+      context: ../frontend-refactored
+      dockerfile: Dockerfile
+      args:
+        <<: *buildkit
+    image: eberil/relink-frontend:4.1.2
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_BACKEND_URL=http://backend:8000
+      - REACT_APP_ROUTER_URL=http://router:8004
+      - REACT_APP_TESTING_URL=http://testing:8003
+      - REACT_APP_MONITORING_URL=http://monitoring:8002
+      - REACT_APP_DOCS_URL=http://docs:8001
+      - REACT_APP_API_TIMEOUT=30000
+      - REACT_APP_ENABLE_ANALYTICS=true
+      - REACT_APP_ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867M
+        reservations:
+          cpus: '0.347'
+          memory: 433M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       - backend
       - docs
-      # - monitoring
+      - monitoring
       - testing
+      - router
+    <<: *common
+
+  benchmark:
+    build:
+      context: ../benchmark
+      dockerfile: Dockerfile
+      args:
+        <<: *buildkit
+    image: eberil/relink-benchmark:4.1.2
+    ports:
+      - "8005:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=3
+      - OLLAMA_URL=http://ollama:11434
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=benchmark_
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:80
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - BENCHMARK_TIMEOUT=600
+      - MAX_CONCURRENT_BENCHMARKS=5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.695'
+          memory: 867M
+        reservations:
+          cpus: '0.347'
+          memory: 433M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+      - db
+      - ollama
     <<: *common
 
   redis:
@@ -350,66 +454,3 @@ volumes:
 networks:
   relink-network:
     driver: bridge
-
-  benchmark:
-    build:
-      context: ../benchmark
-      dockerfile: Dockerfile
-    image: eberil/relink-benchmark:latest
-    ports:
-      - "8001:8001"
-    environment:
-      - SERVICE_NAME=benchmark
-      - SERVICE_PORT=8001
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      - redis
-      - db
-      - ollama
-    networks:
-      - relink-network
-
-  benchmark:
-    build:
-      context: ../benchmark
-      dockerfile: Dockerfile
-    image: eberil/relink-benchmark:latest
-    ports:
-      - "8001:8001"
-    environment:
-      - SERVICE_NAME=benchmark
-      - SERVICE_PORT=8001
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      - redis
-      - db
-      - ollama
-    networks:
-      - relink-network
-
-  router:
-    build:
-      context: ../router
-      dockerfile: Dockerfile
-    image: eberil/relink-router:latest
-    ports:
-      - "8004:8004"
-    environment:
-      - SERVICE_NAME=router
-      - SERVICE_PORT=8004
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      - redis
-      - db
-      - ollama
-    networks:
-      - relink-network
