@@ -85,7 +85,7 @@ from .database import get_db, engine
 from .models import Base, User, Domain, WordPressPost, AnalysisHistory, Diagram, DiagramEmbedding
 from .models import (
     TestRequest, TestResponse, TestSuiteRequest, TestSuiteResponse, TestExecutionResponse,
-    TestType, TestStatus, TestPriority, TestEnvironment
+    TestType, TestStatus, TestPriority, TestEnvironment, utc_now
 )
 from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest

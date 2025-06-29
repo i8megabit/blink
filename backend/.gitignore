@@ -1,4 +1,5 @@
 data/relink_db/base/
+.docker_cache/
 
 # Python
 __pycache__/
