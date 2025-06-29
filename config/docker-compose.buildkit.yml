@@ -3,38 +3,11 @@
 
 version: '3.8'
 
-# Глобальные настройки BuildKit
-x-buildkit: &buildkit
-  build:
-    context: .
-    dockerfile: Dockerfile
-    target: production
-    args:
-      BUILDKIT_INLINE_CACHE: 1
-      DOCKER_BUILDKIT: 1
-    cache_from:
-      - type=gha
-      - type=registry,ref=eberil/relink-backend:cache
-    cache_to:
-      - type=gha,mode=max
-      - type=registry,ref=eberil/relink-backend:cache,mode=max
-
-# Общие настройки для всех сервисов
-x-common: &common
-  restart: unless-stopped
-  logging:
-    driver: "json-file"
-    options:
-      max-size: "10m"
-      max-file: "3"
-
 services:
   # ========================================
   # BACKEND СЕРВИС
   # ========================================
   backend:
-    <<: *buildkit
-    <<: *common
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -44,6 +17,12 @@ services:
         DOCKER_BUILDKIT: 1
     image: eberil/relink-backend:4.1.2
     container_name: relink-backend
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8000:8000"
     environment:
@@ -119,9 +98,14 @@ services:
         DOCKER_BUILDKIT: 1
     image: eberil/relink-frontend:4.1.2
     container_name: relink-frontend
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "3000:80"
-    <<: *common
     deploy:
       resources:
         limits:
@@ -154,6 +138,12 @@ services:
         DOCKER_BUILDKIT: 1
     image: eberil/relink-docs:4.1.2
     container_name: relink-docs
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8001:8001"
     environment:
@@ -167,7 +157,6 @@ services:
       - VERSION_FILE=/app/VERSION
       - README_FILE=/app/README.md
       - CORS_ORIGINS=http://localhost:3000,http://frontend:80
-    <<: *common
     deploy:
       resources:
         limits:
@@ -205,6 +194,12 @@ services:
         DOCKER_BUILDKIT: 1
     image: eberil/relink-testing:4.1.2
     container_name: relink-testing
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8003:8003"
     environment:
@@ -223,7 +218,6 @@ services:
       - REPORT_RETENTION_DAYS=30
       - METRICS_ENABLED=true
       - PROMETHEUS_PORT=9090
-    <<: *common
     deploy:
       resources:
         limits:
@@ -257,10 +251,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: relink-redis
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    <<: *common
     deploy:
       resources:
         limits:
@@ -318,9 +317,14 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: relink-ollama
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "11434:11434"
-    <<: *common
     deploy:
       resources:
         limits:
@@ -350,6 +354,12 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: relink-prometheus
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "9090:9090"
     volumes:
@@ -362,7 +372,6 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    <<: *common
     deploy:
       resources:
         limits:

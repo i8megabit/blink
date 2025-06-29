@@ -11,6 +11,7 @@
 # - Оптимизация размера
 # - Health checks
 # - Метаданные
+# - Обновленный SQLite для ChromaDB
 
 # Этап 1: Базовый образ для всех этапов
 FROM python:3.11.9-slim-bullseye as base
@@ -22,100 +23,106 @@ LABEL maintainer="reLink Team <i8megabit@gmail.com>" \
       org.opencontainers.image.source="https://github.com/eberil/relink" \
       org.opencontainers.image.licenses="MIT"
 
-# Установка системных зависимостей и создание пользователя
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    wget \
-    git \
-    postgresql-client \
-    redis-tools \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r appuser \
-    && useradd -r -g appuser -m -d /home/appuser appuser
-
-# Установка переменных окружения
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Этап 2: Сборка зависимостей
-FROM base as builder
-
-# Установка инструментов для сборки
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Установка системных зависимостей и обновление SQLite
+RUN apt-get update && apt-get install -y \
     build-essential \
-    gcc \
-    g++ \
+    curl \
+    git \
     libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    pkg-config \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Создание рабочей директории
+# Установка новой версии SQLite для ChromaDB
+RUN wget https://www.sqlite.org/2024/sqlite-autoconf-3450100.tar.gz \
+    && tar -xzf sqlite-autoconf-3450100.tar.gz \
+    && cd sqlite-autoconf-3450100 \
+    && ./configure --prefix=/usr/local \
+    && make \
+    && make install \
+    && cd .. \
+    && rm -rf sqlite-autoconf-3450100*
+
+# Создание пользователя для безопасности
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Установка рабочей директории
 WORKDIR /app
 
-# Копирование файлов зависимостей для лучшего использования кеша
-COPY requirements.txt requirements_llm.txt ./
+# Копирование файлов зависимостей
+COPY requirements.txt .
+
+# Этап 2: Установка зависимостей
+FROM base as dependencies
 
 # Создание виртуального окружения
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Установка зависимостей с кешированием
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt && \
-    pip install -r requirements_llm.txt
+# Обновление pip и установка зависимостей
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Предзагрузка NLTK данных
-RUN python -c "import nltk; nltk.download('punkt', download_dir='/opt/venv/nltk_data'); nltk.download('stopwords', download_dir='/opt/venv/nltk_data')"
+# Этап 3: Сборка приложения
+FROM base as builder
 
-# Этап 3: Тестирование (опционально)
-FROM builder as test
+# Копирование виртуального окружения
+COPY --from=dependencies /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Копирование кода для тестирования
-COPY app/ ./app/
-COPY alembic.ini ./
-COPY migrations/ ./migrations/
+# Копирование исходного кода
+COPY . .
 
-# Запуск тестов
-RUN python -m pytest app/tests/ -v --tb=short || true
+# Компиляция Python файлов
+RUN python -m compileall .
 
 # Этап 4: Продакшн образ
-FROM base as production
+FROM python:3.11.9-slim-bullseye as production
 
-# Копирование виртуального окружения из builder
-COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /opt/venv/nltk_data /opt/venv/nltk_data
+# Метаданные
+LABEL maintainer="reLink Team <i8megabit@gmail.com>" \
+      description="SEO Link Recommender Backend Service" \
+      version="4.1.2"
 
-# Установка переменных окружения
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH="/app" \
-    NLTK_DATA="/opt/venv/nltk_data"
+# Установка только необходимых системных зависимостей
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    libffi7 \
+    libssl1.1 \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
-# Создание рабочей директории и установка прав
+# Копирование собранного sqlite3 из base
+COPY --from=base /usr/local/bin/sqlite3 /usr/local/bin/sqlite3
+COPY --from=base /usr/local/lib/libsqlite3.so* /usr/local/lib/
+
+# Создание пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Установка рабочей директории
 WORKDIR /app
-RUN chown -R appuser:appuser /app && \
-    mkdir -p /home/appuser && \
-    chown -R appuser:appuser /home/appuser
 
-# Копирование кода приложения
-COPY --chown=appuser:appuser app ./app
-COPY --chown=appuser:appuser alembic.ini ./alembic.ini
-COPY --chown=appuser:appuser migrations ./migrations
+# Копирование виртуального окружения
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Создание необходимых директорий
-RUN mkdir -p /app/logs /app/data /app/cache && \
-    chown -R appuser:appuser /app
+# Копирование скомпилированного кода
+COPY --from=builder /app /app
 
-# Переключение на непривилегированного пользователя
+# Смена владельца файлов
+RUN chown -R appuser:appuser /app
+
+# Переключение на пользователя приложения
 USER appuser
 
-# Проверка здоровья приложения
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+# Проверка здоровья
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Открытие порта
+# Экспорт порта
 EXPOSE 8000
 
 # Команда запуска
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
