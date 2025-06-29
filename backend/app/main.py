@@ -91,6 +91,7 @@ from .llm_router import system_analyzer, llm_router
 from .diagram_service import DiagramService, DiagramGenerationRequest
 from .testing_service import testing_service, router as testing_router
 from .api.auth import router as auth_router
+from .api.optimization_router import router as optimization_router
 from .llm_integration import get_llm_integration_service
 from .database_service import get_database_rag_service
 
@@ -1438,6 +1439,7 @@ async def get_testing_health():
 
 app.include_router(testing_router, prefix="/api/v1/testing")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(optimization_router, prefix="/api/v1/optimization")
 
 @app.post("/api/v1/wordpress/index")
 async def index_wordpress_site(
