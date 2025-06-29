@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Badge, Input, Textarea, Modal, Table, Tag } from './ui';
+import { Card, Button, Badge, Input, Textarea, Modal } from './ui';
 
 interface CollectionInfo {
   name: string;
@@ -8,6 +8,7 @@ interface CollectionInfo {
   versions: CollectionVersion[];
   current_version?: string;
   metadata?: Record<string, any>;
+  description?: string;
 }
 
 interface CollectionVersion {
@@ -199,11 +200,11 @@ export const CollectionsManager: React.FC<CollectionsManagerProps> = ({
                             <Badge variant="success">Текущая</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-gray-600 text-sm">
                           {formatDate(version.timestamp)}
                         </p>
                         {version.description && (
-                          <p className="text-sm text-gray-700">{version.description}</p>
+                          <p className="text-gray-700 text-sm">{version.description}</p>
                         )}
                       </div>
                       {collection.current_version !== version.version_id && (
@@ -228,38 +229,34 @@ export const CollectionsManager: React.FC<CollectionsManagerProps> = ({
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Создать коллекцию"
+        title="Создать новую коллекцию"
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Название</label>
-            <Input
-              value={newCollection.name}
-              onChange={(e) => setNewCollection({ ...newCollection, name: e.target.value })}
-              placeholder="Введите название коллекции"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Описание</label>
-            <Textarea
-              value={newCollection.description}
-              onChange={(e) => setNewCollection({ ...newCollection, description: e.target.value })}
-              placeholder="Описание коллекции"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Метаданные (JSON)</label>
-            <Textarea
-              value={newCollection.metadata}
-              onChange={(e) => setNewCollection({ ...newCollection, metadata: e.target.value })}
-              placeholder='{"key": "value"}'
-            />
-          </div>
+          <Input
+            label="Название коллекции"
+            value={newCollection.name}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCollection({ ...newCollection, name: e.target.value })}
+            placeholder="Введите название коллекции"
+          />
+          <Textarea
+            label="Описание"
+            value={newCollection.description}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewCollection({ ...newCollection, description: e.target.value })}
+            placeholder="Введите описание коллекции"
+          />
+          <Textarea
+            label="Метаданные (JSON)"
+            value={newCollection.metadata}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewCollection({ ...newCollection, metadata: e.target.value })}
+            placeholder='{"key": "value"}'
+          />
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setShowCreateModal(false)}>
               Отмена
             </Button>
-            <Button onClick={createCollection}>Создать</Button>
+            <Button onClick={createCollection}>
+              Создать
+            </Button>
           </div>
         </div>
       </Modal>
@@ -268,17 +265,17 @@ export const CollectionsManager: React.FC<CollectionsManagerProps> = ({
       <Modal
         isOpen={showVersionModal}
         onClose={() => setShowVersionModal(false)}
-        title={`Создать версию для ${selectedCollection}`}
+        title="Создать новую версию"
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
-            Создать новую версию коллекции "{selectedCollection}"?
-          </p>
+          <p>Создать новую версию для коллекции: <strong>{selectedCollection}</strong></p>
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setShowVersionModal(false)}>
               Отмена
             </Button>
-            <Button onClick={createVersion}>Создать версию</Button>
+            <Button onClick={createVersion}>
+              Создать версию
+            </Button>
           </div>
         </div>
       </Modal>

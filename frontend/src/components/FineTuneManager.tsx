@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Badge, Progress, Modal, Select } from './ui';
+import { Card, Button, Badge, Select, Modal, Progress } from './ui';
 
 interface FineTuneJob {
   job_id: string;
@@ -25,7 +25,7 @@ export const FineTuneManager: React.FC<FineTuneManagerProps> = ({
   const [loading, setLoading] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<string>('');
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<number | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -244,28 +244,13 @@ export const FineTuneManager: React.FC<FineTuneManagerProps> = ({
         title="Запустить Fine-Tuning"
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Коллекция</label>
-            <Select
-              value={selectedCollection}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCollection(e.target.value)}
-            >
-              <option value="">Выберите коллекцию</option>
-              {collections.map((collection) => (
-                <option key={collection} value={collection}>
-                  {collection}
-                </option>
-              ))}
-            </Select>
-          </div>
-          
-          <div className="bg-blue-50 p-3 rounded">
-            <p className="text-sm text-blue-800">
-              Fine-tuning будет запущен для выбранной коллекции. 
-              Процесс может занять значительное время.
-            </p>
-          </div>
-
+          <Select
+            label="Выберите коллекцию"
+            options={collections.map(col => ({ value: col, label: col }))}
+            value={selectedCollection}
+            onChange={setSelectedCollection}
+            placeholder="Выберите коллекцию для fine-tuning"
+          />
           <div className="flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setShowStartModal(false)}>
               Отмена
@@ -273,8 +258,9 @@ export const FineTuneManager: React.FC<FineTuneManagerProps> = ({
             <Button 
               onClick={startFineTune} 
               disabled={!selectedCollection || loading}
+              loading={loading}
             >
-              {loading ? 'Запуск...' : 'Запустить'}
+              Запустить
             </Button>
           </div>
         </div>
