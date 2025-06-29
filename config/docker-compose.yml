@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - SECRET_KEY=your-super-secret-key-for-jwt-tokens-2024
       - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
       - OLLAMA_URL=http://ollama:11434/api/generate
       - OLLAMA_MODEL=qwen2.5:7b-instruct-turbo

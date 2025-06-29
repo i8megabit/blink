@@ -368,6 +368,7 @@ class DomainAnalysisRequest(BaseModel):
     """Запрос для анализа домена."""
     domain: str
     comprehensive: Optional[bool] = False
+    client_id: Optional[str] = None
 
 class CompetitorAnalysisRequest(BaseModel):
     """Запрос для анализа конкурентов."""
