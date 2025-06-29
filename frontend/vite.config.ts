@@ -43,6 +43,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/rag/, ''),
       },
+      '/api/relink': {
+        target: 'http://localhost:8003',
+        changeOrigin: true,
+        rewrite: (path) => {
+          if (path.indexOf('/health') !== -1) {
+            return path.replace(/^\/api\/relink/, '');
+          }
+          return path.replace(/^\/api\/relink/, '/api/v1');
+        },
+      },
     },
   },
   build: {

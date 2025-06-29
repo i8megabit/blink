@@ -4,11 +4,12 @@ import { Microservice, HealthStatus, ServiceAPI } from '@/types/microservices';
 // Конфигурация микросервисов
 const MICROSERVICES_CONFIG = {
   'llm-tuning': { port: 8000, description: 'LLM Tuning Service' },
-  'backend': { port: 8000, description: 'Main Backend' },
-  'router': { port: 8002, description: 'LLM Router' },
-  'benchmark': { port: 8001, description: 'Benchmark Service' },
+  'backend': { port: 8004, description: 'Main Backend Service' },
+  'router': { port: 8001, description: 'LLM Router Service' },
+  'benchmark': { port: 8002, description: 'Benchmark Service' },
   'monitoring': { port: 8006, description: 'Monitoring Service' },
   'rag': { port: 8003, description: 'RAG Service' },
+  'relink': { port: 8003, description: 'reLink SEO Service' },
 } as const;
 
 class MicroservicesClient {
