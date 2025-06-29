@@ -54,7 +54,11 @@ class SmartDockerCache:
         if self.cache_metadata_file.exists():
             try:
                 with open(self.cache_metadata_file, 'r') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Обеспечиваем обратную совместимость
+                    if "layer_hashes" not in data:
+                        data["layer_hashes"] = {}
+                    return data
             except:
                 pass
         return {

@@ -1,7 +1,7 @@
 # Makefile для управления reLink проектом
 # Оптимизирован для MacBook Pro M4 16GB
 
-.PHONY: help build up down restart logs clean test analyze-dagorod build-smart build-base-smart
+.PHONY: help build up down restart logs clean test analyze-dagorod build-smart build-base-smart chromadb-optimization auto-cleanup cache-stats cache-clean
 
 # Переменные
 COMPOSE_FILE = 1-docker-compose.yml
@@ -240,3 +240,73 @@ run-arch: detect-arch
 build-arch: detect-arch
 	@echo "🔨 Сборка с автоматическим определением архитектуры..."
 	@docker-compose -f 1-docker-compose.yml build
+
+chromadb-optimization: ## Оптимизация ChromaDB
+	@echo "$(GREEN)Оптимизация ChromaDB...$(NC)"
+	python scripts/smart_docker_cache.py --chromadb-optimization
+
+auto-cleanup: ## Автоматическая очистка коллекций ChromaDB
+	@echo "$(GREEN)Автоматическая очистка коллекций ChromaDB...$(NC)"
+	python scripts/smart_docker_cache.py --auto-cleanup
+
+# Команды для управления ChromaDB
+chromadb-status: ## Статус ChromaDB
+	@echo "$(GREEN)Статус ChromaDB:$(NC)"
+	@curl -s http://localhost:8001/api/v1/rag/collections | jq . || echo "$(RED)ChromaDB недоступен$(NC)"
+
+chromadb-cleanup: ## Очистка старых коллекций ChromaDB
+	@echo "$(GREEN)Очистка старых коллекций ChromaDB...$(NC)"
+	@curl -X POST http://localhost:8001/api/v1/rag/cleanup | jq . || echo "$(RED)Ошибка очистки$(NC)"
+
+chromadb-stats: ## Статистика ChromaDB
+	@echo "$(GREEN)Статистика ChromaDB:$(NC)"
+	@curl -s http://localhost:8001/api/v1/stats | jq . || echo "$(RED)ChromaDB недоступен$(NC)"
+
+# Команды для тестирования RAG
+test-rag-add: ## Тест добавления документов в RAG
+	@echo "$(GREEN)Тест добавления документов в RAG...$(NC)"
+	@curl -X POST "http://localhost:8001/api/v1/rag/add?collection=test" \
+		-H "Content-Type: application/json" \
+		-d '[{"text": "SEO оптимизация важна для ранжирования сайтов", "metadata": {"source": "test", "type": "seo"}}]' | jq .
+
+test-rag-search: ## Тест поиска в RAG
+	@echo "$(GREEN)Тест поиска в RAG...$(NC)"
+	@curl -X POST "http://localhost:8001/api/v1/rag/search" \
+		-H "Content-Type: application/json" \
+		-d '{"query": "SEO оптимизация", "collection": "test", "top_k": 5}' | jq .
+
+test-rag-collections: ## Тест получения коллекций
+	@echo "$(GREEN)Тест получения коллекций...$(NC)"
+	@curl -s http://localhost:8001/api/v1/rag/collections | jq .
+
+# Команды для разработки
+dev-setup: ## Настройка для разработки
+	@echo "$(GREEN)Настройка для разработки...$(NC)"
+	@chmod +x scripts/*.py
+	@chmod +x scripts/*.sh
+	@echo "$(GREEN)Настройка завершена$(NC)"
+
+quick-test: ## Быстрый тест системы
+	@echo "$(GREEN)Быстрый тест системы...$(NC)"
+	@make health
+	@make test-rag-collections
+	@make test-rag-add
+	@make test-rag-search
+
+# Команды для анализа
+analyze-dagorod: ## Анализ DAGOROD
+	@echo "$(GREEN)Анализ DAGOROD...$(NC)"
+	@python backend/advanced_seo_benchmark.py
+
+# Команды для развертывания
+deploy: ## Развертывание
+	@echo "$(GREEN)Развертывание...$(NC)"
+	@make build-smart
+	@make up
+	@make health
+
+deploy-force: ## Принудительное развертывание
+	@echo "$(GREEN)Принудительное развертывание...$(NC)"
+	@python scripts/smart_docker_cache.py --build-all --force
+	@make up
+	@make health
