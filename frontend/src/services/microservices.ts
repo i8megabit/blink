@@ -7,6 +7,7 @@ const MICROSERVICES_CONFIG = {
   'router': { port: 8001, description: 'LLM Router Service' },
   'benchmark': { port: 8002, description: 'Benchmark Service' },
   'relink': { port: 8003, description: 'reLink SEO Service' },
+  'llm-tuning': { port: 8005, description: 'LLM Tuning Service' },
 } as const;
 
 class MicroservicesClient {

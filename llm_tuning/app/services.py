@@ -21,7 +21,8 @@ from sqlalchemy.orm import selectinload
 from .models import (
     LLMModel, ModelRoute, TuningSession, PerformanceMetrics,
     RAGDocument, APILog, ModelStatus, RouteStrategy, TuningStrategy,
-    ABTest, ABTestStatus, ModelOptimization, QualityAssessment, SystemHealth
+    ABTest, ABTestStatus, ModelOptimization, QualityAssessment, SystemHealth,
+    OptimizationType
 )
 from .config import settings
 
@@ -225,6 +226,9 @@ class RAGService:
     async def add_document(self, document_data: Dict[str, Any]) -> RAGDocument:
         """Добавление документа в RAG систему"""
         try:
+            # Преобразуем metadata -> doc_metadata, если есть
+            if 'metadata' in document_data:
+                document_data['doc_metadata'] = document_data.pop('metadata')
             # Создаем документ
             document = RAGDocument(**document_data)
             

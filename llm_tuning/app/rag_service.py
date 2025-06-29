@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class SearchResult:
     """Результат поиска в RAG"""
     document: str
-    metadata: Dict[str, Any]
+    doc_metadata: Dict[str, Any]
     similarity: float
     source: str
     chunk_id: str
@@ -118,9 +118,9 @@ class RAGService:
             keywords = self.extract_keywords(content)
             
             # Подготовка метаданных
-            metadata_list = []
+            doc_metadata_list = []
             for i, chunk in enumerate(chunks):
-                metadata = {
+                doc_metadata = {
                     "title": title,
                     "source": source or "unknown",
                     "document_type": document_type or "text",
@@ -130,7 +130,7 @@ class RAGService:
                     "tags": tags or [],
                     "created_at": datetime.utcnow().isoformat()
                 }
-                metadata_list.append(metadata)
+                doc_metadata_list.append(doc_metadata)
             
             # Генерация ID для чанков
             chunk_ids = [f"{title}_{i}_{hash(chunk) % 10000}" for i, chunk in enumerate(chunks)]
@@ -139,7 +139,7 @@ class RAGService:
             await self.embedding_manager.add_documents(
                 self.collection_name,
                 chunks,
-                metadata_list,
+                doc_metadata_list,
                 chunk_ids
             )
             
@@ -186,7 +186,7 @@ class RAGService:
             for result in results:
                 search_result = SearchResult(
                     document=result['document'],
-                    metadata=result['metadata'],
+                    doc_metadata=result['metadata'],
                     similarity=result['similarity'],
                     source=result['metadata'].get('source', 'unknown'),
                     chunk_id=result['id']
@@ -280,11 +280,11 @@ class RAGService:
             if include_sources:
                 for result in search_results:
                     source = {
-                        "title": result.metadata.get("title", "Unknown"),
+                        "title": result.doc_metadata.get("title", "Unknown"),
                         "source": result.source,
                         "similarity": result.similarity,
                         "chunk_id": result.chunk_id,
-                        "document_type": result.metadata.get("document_type", "text")
+                        "document_type": result.doc_metadata.get("document_type", "text")
                     }
                     sources.append(source)
             
@@ -337,11 +337,14 @@ class RAGService:
             document_types = set()
             titles = set()
             
-            for metadata in results['metadatas']:
-                if metadata:
-                    sources.add(metadata.get('source', 'unknown'))
-                    document_types.add(metadata.get('document_type', 'text'))
-                    titles.add(metadata.get('title', 'unknown'))
+            # ChromaDB возвращает метаданные в поле 'metadatas'
+            if 'metadatas' in results and results['metadatas']:
+                for metadata_list in results['metadatas']:
+                    for metadata in metadata_list:
+                        if metadata:
+                            sources.add(metadata.get('source', 'unknown'))
+                            document_types.add(metadata.get('document_type', 'text'))
+                            titles.add(metadata.get('title', 'unknown'))
             
             return {
                 "total_documents": len(titles),
@@ -410,7 +413,7 @@ class RAGService:
             # Фильтрация по ключевым словам
             filtered_results = []
             for result in search_results:
-                result_keywords = result.metadata.get('keywords', [])
+                result_keywords = result.doc_metadata.get('keywords', [])
                 if any(keyword.lower() in [kw.lower() for kw in result_keywords] 
                       for keyword in keywords):
                     filtered_results.append(result)
@@ -448,7 +451,7 @@ class RAGService:
                     similarity = 1 - distance
                     search_result = SearchResult(
                         document=similar_results['documents'][0][i],
-                        metadata=similar_results['metadatas'][0][i],
+                        doc_metadata=similar_results['metadatas'][0][i],
                         similarity=similarity,
                         source=similar_results['metadatas'][0][i].get('source', 'unknown'),
                         chunk_id=similar_results['ids'][0][i]

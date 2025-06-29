@@ -38,6 +38,11 @@ export default defineConfig({
           return path.replace(/^\/api\/relink/, '/api/v1');
         },
       },
+      '/api/llm-tuning': {
+        target: 'http://localhost:8005',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/llm-tuning/, ''),
+      },
     },
   },
   build: {

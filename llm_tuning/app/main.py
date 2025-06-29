@@ -18,11 +18,11 @@ from sqlalchemy.sql import func
 from .config import settings
 from .database import get_db, init_db
 from .services import (
-    ModelService, 
-    RouterService, 
+    ModelManager, 
+    RouteManager, 
     RAGService, 
     TuningService,
-    MonitoringService,
+    PerformanceMonitor,
     ABTestingService,
     AutoOptimizationService,
     QualityAssessmentService,
@@ -61,21 +61,8 @@ async def lifespan(app: FastAPI):
     logger.info("✅ База данных инициализирована")
     
     # Инициализация сервисов
-    app.state.model_service = ModelService()
-    app.state.router_service = RouterService()
-    app.state.rag_service = RAGService()
-    app.state.tuning_service = TuningService()
-    app.state.monitoring_service = MonitoringService()
-    app.state.ab_testing_service = ABTestingService()
-    app.state.auto_optimization_service = AutoOptimizationService()
-    app.state.quality_assessment_service = QualityAssessmentService()
-    app.state.system_health_service = SystemHealthService()
-    
-    logger.info("✅ Сервисы инициализированы")
-    logger.info(f"🎯 RAG включен: {settings.rag.enabled}")
-    logger.info(f"⚡ Тюнинг включен: {settings.tuning.enabled}")
-    logger.info(f"🛣️ Маршрутизация включена: {settings.router.enabled}")
-    logger.info(f"🧪 A/B тестирование включено: {settings.tuning.ab_testing_enabled}")
+    # Сервисы будут создаваться при каждом запросе с db_session
+    logger.info("✅ Сервисы готовы к инициализации")
     
     yield
     
@@ -156,12 +143,12 @@ async def health_check():
 @app.post("/api/v1/models", response_model=LLMModelResponse)
 async def create_model(
     model_data: LLMModelCreate,
-    db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    db=Depends(get_db)
 ):
     """Создание новой модели LLM"""
     try:
-        model = await model_service.create_model(db, model_data)
+        model_service = ModelManager(db)
+        model = await model_service.create_model(model_data)
         logger.info(f"✅ Создана модель: {model.name}")
         return model
     except Exception as e:
@@ -176,7 +163,7 @@ async def list_models(
     provider: str = None,
     status: str = None,
     db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    model_service: ModelManager = Depends(lambda: app.state.model_service)
 ):
     """Список моделей LLM"""
     try:
@@ -191,7 +178,7 @@ async def list_models(
 async def get_model(
     model_id: int,
     db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    model_service: ModelManager = Depends(lambda: app.state.model_service)
 ):
     """Получение модели по ID"""
     try:
@@ -211,7 +198,7 @@ async def update_model(
     model_id: int,
     model_data: LLMModelUpdate,
     db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    model_service: ModelManager = Depends(lambda: app.state.model_service)
 ):
     """Обновление модели LLM"""
     try:
@@ -231,7 +218,7 @@ async def update_model(
 async def delete_model(
     model_id: int,
     db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    model_service: ModelManager = Depends(lambda: app.state.model_service)
 ):
     """Удаление модели LLM"""
     try:
@@ -252,7 +239,7 @@ async def delete_model(
 async def route_request(
     request_data: RouteRequest,
     db=Depends(get_db),
-    router_service: RouterService = Depends(lambda: app.state.router_service)
+    router_service: RouteManager = Depends(lambda: app.state.router_service)
 ):
     """Маршрутизация запроса к оптимальной модели"""
     try:
@@ -272,7 +259,7 @@ async def route_request(
 async def create_route(
     route_data: RouteCreate,
     db=Depends(get_db),
-    router_service: RouterService = Depends(lambda: app.state.router_service)
+    router_service: RouteManager = Depends(lambda: app.state.router_service)
 ):
     """Создание нового маршрута"""
     try:
@@ -290,7 +277,7 @@ async def list_routes(
     limit: int = 100,
     strategy: str = None,
     db=Depends(get_db),
-    router_service: RouterService = Depends(lambda: app.state.router_service)
+    router_service: RouteManager = Depends(lambda: app.state.router_service)
 ):
     """Список маршрутов"""
     try:
@@ -437,7 +424,7 @@ async def optimize_model(
 async def record_metrics(
     metrics: PerformanceMetrics,
     db=Depends(get_db),
-    monitoring_service: MonitoringService = Depends(lambda: app.state.monitoring_service)
+    monitoring_service: PerformanceMonitor = Depends(lambda: app.state.monitoring_service)
 ):
     """Запись метрик производительности"""
     try:
@@ -453,7 +440,7 @@ async def get_metrics_summary(
     model_id: int = None,
     time_range: str = "24h",
     db=Depends(get_db),
-    monitoring_service: MonitoringService = Depends(lambda: app.state.monitoring_service)
+    monitoring_service: PerformanceMonitor = Depends(lambda: app.state.monitoring_service)
 ):
     """Получение сводки метрик"""
     try:
@@ -467,7 +454,7 @@ async def get_metrics_summary(
 @app.get("/api/v1/models/status")
 async def get_models_status(
     db=Depends(get_db),
-    model_service: ModelService = Depends(lambda: app.state.model_service)
+    model_service: ModelManager = Depends(lambda: app.state.model_service)
 ):
     """Статус всех моделей"""
     try:
