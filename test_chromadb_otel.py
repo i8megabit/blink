@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Тестовый скрипт для проверки интеграции ChromaDB с OpenTelemetry
+Тестовый скрипт для проверки интеграции ChromaDB v2 (без OpenTelemetry)
 """
 
 import os
@@ -13,8 +13,8 @@ from typing import Dict, Any
 def test_chromadb_connection() -> Dict[str, Any]:
     """Тестирование подключения к ChromaDB"""
     try:
-        # Проверка доступности ChromaDB
-        response = requests.get("http://localhost:8006/api/v1/heartbeat", timeout=5)
+        # Проверка доступности ChromaDB на правильном порту с API v2
+        response = requests.get("http://localhost:8006/api/v2/heartbeat", timeout=5)
         if response.status_code == 200:
             return {"status": "success", "message": "ChromaDB доступен"}
         else:
@@ -22,132 +22,154 @@ def test_chromadb_connection() -> Dict[str, Any]:
     except Exception as e:
         return {"status": "error", "message": f"Ошибка подключения к ChromaDB: {e}"}
 
-def test_otel_collector_connection() -> Dict[str, Any]:
-    """Тестирование подключения к OpenTelemetry Collector"""
+def get_auth_identity() -> Dict[str, Any]:
+    """Получение tenant и database из ChromaDB"""
     try:
-        # Проверка доступности OpenTelemetry Collector
-        response = requests.get("http://localhost:4317", timeout=5)
-        return {"status": "success", "message": "OpenTelemetry Collector доступен"}
+        response = requests.get("http://localhost:8006/api/v2/auth/identity", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "status": "success", 
+                "data": data,
+                "tenant": data.get("tenant_id", "default_tenant"),
+                "database": data.get("database_id", "default_database")
+            }
+        else:
+            return {"status": "error", "message": f"Ошибка получения identity: {response.status_code}"}
     except Exception as e:
-        return {"status": "error", "message": f"Ошибка подключения к OpenTelemetry Collector: {e}"}
+        return {"status": "error", "message": f"Ошибка получения identity: {e}"}
 
-def check_chromadb_environment() -> Dict[str, Any]:
-    """Проверка переменных окружения ChromaDB"""
-    env_vars = {
-        "CHROMA_OTEL_COLLECTION_ENDPOINT": os.getenv("CHROMA_OTEL_COLLECTION_ENDPOINT"),
-        "CHROMA_OTEL_SERVICE_NAME": os.getenv("CHROMA_OTEL_SERVICE_NAME"),
-        "CHROMA_OTEL_GRANULARITY": os.getenv("CHROMA_OTEL_GRANULARITY"),
-        "OTEL_EXPORTER_OTLP_ENDPOINT": os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
-        "OTEL_SERVICE_NAME": os.getenv("OTEL_SERVICE_NAME"),
-        "OTEL_TRACES_SAMPLER": os.getenv("OTEL_TRACES_SAMPLER")
-    }
-    
-    missing_vars = [k for k, v in env_vars.items() if not v]
-    
-    if missing_vars:
-        return {
-            "status": "warning", 
-            "message": f"Отсутствуют переменные окружения: {missing_vars}",
-            "env_vars": env_vars
-        }
-    else:
-        return {
-            "status": "success", 
-            "message": "Все переменные окружения установлены",
-            "env_vars": env_vars
-        }
-
-def test_chromadb_operations() -> Dict[str, Any]:
-    """Тестирование операций ChromaDB"""
+def test_chromadb_api() -> Dict[str, Any]:
+    """Тестирование основных API ChromaDB v2"""
     try:
-        # Создание тестовой коллекции
+        # Получаем tenant и database
+        identity = get_auth_identity()
+        if identity["status"] != "success":
+            return identity
+        
+        tenant = identity["tenant"]
+        database = identity["database"]
+        
+        print(f"Используем tenant: {tenant}, database: {database}")
+        
+        # Создание коллекции с API v2
         collection_name = f"test_collection_{int(time.time())}"
+        collection_data = {
+            "name": collection_name,
+            "metadata": {"description": "Test collection for integration testing"}
+        }
         
-        # Создание коллекции
-        create_response = requests.post(
-            "http://localhost:8006/api/v1/collections",
-            json={"name": collection_name},
-            timeout=10
-        )
+        create_url = f"http://localhost:8006/api/v2/tenants/{tenant}/databases/{database}/collections"
+        response = requests.post(create_url, json=collection_data, timeout=10)
         
-        if create_response.status_code != 200:
-            return {"status": "error", "message": f"Ошибка создания коллекции: {create_response.status_code}"}
-        
-        # Получение списка коллекций
-        list_response = requests.get("http://localhost:8006/api/v1/collections", timeout=10)
-        
-        if list_response.status_code == 200:
-            collections = list_response.json()
-            test_collection = next((c for c in collections if c["name"] == collection_name), None)
+        if response.status_code == 200:
+            collection_info = response.json()
+            collection_id = collection_info.get("id")
             
-            if test_collection:
-                # Удаление тестовой коллекции
-                delete_response = requests.delete(
-                    f"http://localhost:8006/api/v1/collections/{collection_name}",
-                    timeout=10
-                )
-                
+            # Добавление документов в коллекцию
+            add_url = f"http://localhost:8006/api/v2/tenants/{tenant}/databases/{database}/collections/{collection_id}/add"
+            documents_data = {
+                "documents": ["This is a test document"],
+                "metadatas": [{"source": "test"}],
+                "ids": ["test_id_1"]
+            }
+            
+            add_response = requests.post(add_url, json=documents_data, timeout=10)
+            
+            if add_response.status_code in (200, 201):
                 return {
                     "status": "success", 
-                    "message": "Операции ChromaDB работают корректно",
-                    "collection_id": test_collection["id"]
+                    "message": f"Коллекция {collection_name} создана и документы добавлены",
+                    "collection_id": collection_id
                 }
             else:
-                return {"status": "error", "message": "Тестовая коллекция не найдена"}
+                return {
+                    "status": "error", 
+                    "message": f"Ошибка добавления документов: {add_response.status_code}"
+                }
         else:
-            return {"status": "error", "message": f"Ошибка получения списка коллекций: {list_response.status_code}"}
+            return {
+                "status": "error", 
+                "message": f"Ошибка создания коллекции: {response.status_code} - {response.text}"
+            }
             
     except Exception as e:
-        return {"status": "error", "message": f"Ошибка тестирования операций ChromaDB: {e}"}
+        return {"status": "error", "message": f"Ошибка API тестирования: {e}"}
+
+def test_chromadb_health() -> Dict[str, Any]:
+    """Тестирование health check ChromaDB"""
+    try:
+        response = requests.get("http://localhost:8006/api/v2/heartbeat", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "status": "success", 
+                "message": "Health check пройден",
+                "data": data
+            }
+        else:
+            return {"status": "error", "message": f"Health check не пройден: {response.status_code}"}
+    except Exception as e:
+        return {"status": "error", "message": f"Ошибка health check: {e}"}
 
 def main():
     """Основная функция тестирования"""
-    print("🧪 Тестирование интеграции ChromaDB с OpenTelemetry")
-    print("=" * 60)
+    print("🧪 Тестирование интеграции ChromaDB v2")
+    print("=" * 50)
     
-    # Тест 1: Проверка переменных окружения
-    print("\n1. Проверка переменных окружения...")
-    env_result = check_chromadb_environment()
-    print(f"   Статус: {env_result['status']}")
-    print(f"   Сообщение: {env_result['message']}")
+    # Тест подключения
+    print("\n1. Тестирование подключения к ChromaDB...")
+    connection_result = test_chromadb_connection()
+    print(f"   Результат: {connection_result['status']} - {connection_result['message']}")
     
-    # Тест 2: Проверка подключения к ChromaDB
-    print("\n2. Проверка подключения к ChromaDB...")
-    chromadb_result = test_chromadb_connection()
-    print(f"   Статус: {chromadb_result['status']}")
-    print(f"   Сообщение: {chromadb_result['message']}")
+    if connection_result["status"] != "success":
+        print("❌ ChromaDB недоступен, прекращаем тестирование")
+        return
     
-    # Тест 3: Проверка подключения к OpenTelemetry Collector
-    print("\n3. Проверка подключения к OpenTelemetry Collector...")
-    otel_result = test_otel_collector_connection()
-    print(f"   Статус: {otel_result['status']}")
-    print(f"   Сообщение: {otel_result['message']}")
+    # Тест health check
+    print("\n2. Тестирование health check...")
+    health_result = test_chromadb_health()
+    print(f"   Результат: {health_result['status']} - {health_result['message']}")
     
-    # Тест 4: Тестирование операций ChromaDB
-    print("\n4. Тестирование операций ChromaDB...")
-    operations_result = test_chromadb_operations()
-    print(f"   Статус: {operations_result['status']}")
-    print(f"   Сообщение: {operations_result['message']}")
+    # Получение identity
+    print("\n3. Получение tenant и database...")
+    identity_result = get_auth_identity()
+    print(f"   Результат: {identity_result['status']}")
+    if identity_result["status"] == "success":
+        print(f"   Tenant: {identity_result['tenant']}")
+        print(f"   Database: {identity_result['database']}")
+    
+    # Тест API
+    print("\n4. Тестирование API операций...")
+    api_result = test_chromadb_api()
+    print(f"   Результат: {api_result['status']} - {api_result['message']}")
     
     # Итоговый результат
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 50)
     print("📊 ИТОГОВЫЙ РЕЗУЛЬТАТ:")
     
-    all_results = [env_result, chromadb_result, otel_result, operations_result]
-    success_count = sum(1 for r in all_results if r['status'] == 'success')
-    error_count = sum(1 for r in all_results if r['status'] == 'error')
-    warning_count = sum(1 for r in all_results if r['status'] == 'warning')
+    all_tests = [
+        ("Подключение", connection_result),
+        ("Health Check", health_result),
+        ("Identity", identity_result),
+        ("API Операции", api_result)
+    ]
     
-    print(f"   ✅ Успешно: {success_count}")
-    print(f"   ⚠️  Предупреждения: {warning_count}")
-    print(f"   ❌ Ошибки: {error_count}")
+    passed = 0
+    total = len(all_tests)
     
-    if error_count == 0:
-        print("\n🎉 Все тесты прошли успешно!")
-        return 0
+    for test_name, result in all_tests:
+        status = "✅" if result["status"] == "success" else "❌"
+        print(f"   {status} {test_name}: {result['status']}")
+        if result["status"] == "success":
+            passed += 1
+    
+    print(f"\n🎯 Результат: {passed}/{total} тестов пройдено")
+    
+    if passed == total:
+        print("🎉 ВСЕ ТЕСТЫ ПРОЙДЕНЫ! ChromaDB v2 работает корректно.")
     else:
-        print("\n⚠️  Обнаружены проблемы, требующие внимания.")
-        return 1
+        print("⚠️  Некоторые тесты не пройдены. Проверьте конфигурацию.")
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    main() 
