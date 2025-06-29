@@ -1,0 +1,45 @@
+# 🚀 БАЗОВЫЕ ЗАВИСИМОСТИ ДЛЯ ВСЕХ МИКРОСЕРВИСОВ reLink
+
+# FastAPI и веб-фреймворки
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# База данных
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Кеширование
+redis==5.0.1
+aioredis==2.0.1
+
+# HTTP клиенты
+httpx==0.25.2
+aiohttp==3.9.1
+
+# LLM и AI
+openai==1.3.7
+langchain==0.0.350
+chromadb==0.4.18
+
+# Мониторинг
+prometheus-client==0.19.0
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+
+# Логирование
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Безопасность
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Утилиты
+python-dotenv==1.0.0
+pytz==2023.3
+click==8.1.7
+rich==13.7.0 
