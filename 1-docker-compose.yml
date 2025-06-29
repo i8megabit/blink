@@ -55,7 +55,7 @@ services:
     image: chromadb/chroma:latest
     container_name: relink-chromadb
     ports:
-      - "8000:8000"
+      - "8006:8000"
     volumes:
       - chromadb_data:/chroma/chroma
     environment:
@@ -63,6 +63,8 @@ services:
       - CHROMA_SERVER_HTTP_PORT=8000
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/chroma/auth.json
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.providers.HtpasswdFileServerAuthProvider
     networks:
       - relink-network
     healthcheck:

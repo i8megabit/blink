@@ -21,12 +21,13 @@ class Settings(BaseSettings):
         default="http://chromadb:8000",
         description="URL подключения к ChromaDB"
     )
-    CHROMADB_HOST: str = Field(default="chromadb", description="Хост ChromaDB")
-    CHROMADB_PORT: int = Field(default=8000, description="Порт ChromaDB")
+    CHROMADB_HOST: str = "chromadb"
+    CHROMADB_PORT: int = 8000  # Внутренний порт в контейнере
     CHROMADB_COLLECTION: str = Field(
         default="relink_collection",
         description="Коллекция ChromaDB"
     )
+    CHROMADB_AUTH_TOKEN: Optional[str] = None
     
     # Redis кеширование
     REDIS_URL: str = Field(
@@ -39,16 +40,14 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = Field(default=None, description="Пароль Redis")
     
     # Ollama LLM
-    OLLAMA_URL: str = Field(
-        default="http://ollama:11434",
-        description="URL подключения к Ollama"
-    )
+    OLLAMA_URL: str = "http://ollama:11434"
     OLLAMA_HOST: str = Field(default="ollama", description="Хост Ollama")
     OLLAMA_PORT: int = Field(default=11434, description="Порт Ollama")
     OLLAMA_MODEL: str = Field(
         default="qwen2.5:7b-instruct-turbo",
         description="Модель по умолчанию"
     )
+    OLLAMA_TIMEOUT: int = 120  # Увеличенный timeout для больших моделей
     
     # LLM Router
     LLM_ROUTER_URL: str = Field(
