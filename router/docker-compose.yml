@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  router:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: eberil/relink-router:latest
+    ports:
+      - "8004:8004"
+    environment:
+      - SERVICE_NAME=router
+      - SERVICE_PORT=8004
+      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - redis
+      - db
+      - ollama
+    networks:
+      - relink-network
+
+networks:
+  relink-network:
+    external: true

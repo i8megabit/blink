@@ -1,0 +1,7 @@
+# Зависимости для router
+# Базовые зависимости уже включены в eberil/relink-base:latest
+
+# Специфичные зависимости сервиса
+# fastapi
+# uvicorn
+# pydantic
