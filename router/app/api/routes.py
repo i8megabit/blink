@@ -122,7 +122,8 @@ async def get_endpoints():
             "/api/v1/fine-tune/{job_id}",
             "/api/v1/fine-tune/{job_id}/cancel",
             "/api/v1/collections/{name}/metrics",
-            "/api/v1/fine-tune/{job_id}/metrics"
+            "/api/v1/fine-tune/{job_id}/metrics",
+            "/api/v1/fine-tune/jobs"
         ]
     }
 
@@ -721,3 +722,8 @@ async def get_fine_tune_metrics(job_id: str):
     if job_id not in fine_tune_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return fine_tune_metrics.get(job_id, {})
+
+@router.get("/api/v1/fine-tune/jobs", response_model=List[FineTuneJob])
+async def list_fine_tune_jobs():
+    """Получение списка всех задач fine-tune"""
+    return list(fine_tune_jobs.values())
