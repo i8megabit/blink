@@ -241,7 +241,7 @@ services:
 
   frontend:
     build:
-      context: ../frontend-refactored
+      context: ../frontend
       dockerfile: Dockerfile
       args:
         <<: *buildkit
@@ -454,24 +454,3 @@ volumes:
 networks:
   relink-network:
     driver: bridge
-
-  frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    image: eberil/relink-frontend:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - SERVICE_NAME=frontend
-      - SERVICE_PORT=3000
-      - DATABASE_URL=postgresql+asyncpg://seo_user:seo_pass@db:5432/seo_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      - redis
-      - db
-      - ollama
-    networks:
-      - relink-network
