@@ -1,55 +1,54 @@
-# Многоэтапная сборка для оптимизации размера образа
-FROM python:3.11-slim as builder
+# 🐳 Monitoring Service - Микросервис reLink
+FROM python:3.11-slim AS builder
 
-# Установка системных зависимостей для сборки
+# Системные зависимости
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
+    git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Создание виртуального окружения
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Рабочая директория
+WORKDIR /app
 
-# Копирование и установка зависимостей
+# Копирование зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Финальный образ
-FROM python:3.11-slim
+# Копирование кода
+COPY . .
 
-# Установка runtime зависимостей
+# Продакшн образ
+FROM python:3.11-slim AS production
+
+# Системные зависимости для продакшна
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование виртуального окружения
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Создание пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Создание пользователя для безопасности
-RUN groupadd -r monitoring && useradd -r -g monitoring monitoring
-
-# Создание рабочей директории
+# Рабочая директория
 WORKDIR /app
 
-# Копирование кода приложения
-COPY app/ ./app/
-COPY __init__.py .
+# Копирование Python из builder
+COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=builder /usr/local/bin/python* /usr/local/bin/
+COPY --from=builder /usr/local/bin/pip* /usr/local/bin/
 
-# Установка прав доступа
-RUN chown -R monitoring:monitoring /app
+# Копирование кода
+COPY --from=builder /app /app
 
-# Переключение на пользователя
-USER monitoring
+# Права доступа
+RUN chown -R appuser:appuser /app
+USER appuser
 
-# Проверка здоровья
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8002/health || exit 1
+# Открытие порта
+EXPOSE 8000
 
-# Экспорт порта
-EXPOSE 8002
-
-# Команда запуска
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"] 
+# Запуск приложения
+CMD ["python", "-m", "app.main"] 

@@ -5,7 +5,7 @@
 # ========================================
 
 # Многоэтапная сборка для оптимизации размера образа
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Метаданные для лучшей организации
 LABEL maintainer="seo-team" \
@@ -15,12 +15,16 @@ LABEL maintainer="seo-team" \
 # Устанавливаем системные зависимости и создаем пользователя
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
+    wget \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser \
     && useradd -r -g appuser -m -d /home/appuser appuser
 
 # Этап сборки зависимостей
-FROM base as builder
+FROM base AS builder
 
 # Устанавливаем инструменты для сборки
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -43,7 +47,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir uvicorn fastapi
 
 # Продакшн этап
-FROM base as production
+FROM base AS production
 
 # Копируем виртуальное окружение из builder
 COPY --from=builder /opt/venv /opt/venv
@@ -52,6 +56,8 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONOPTIMIZE=2
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # Создаем рабочую директорию и устанавливаем права
 WORKDIR /app

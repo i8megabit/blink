@@ -1,61 +1,54 @@
-# Multi-stage build для оптимизации размера образа
-FROM python:3.11-slim as builder
+# 🐳 Testing Service - Микросервис reLink
+FROM python:3.11-slim AS builder
 
-# Установка системных зависимостей для сборки
+# Системные зависимости
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    libpq-dev \
+    curl \
+    git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Создание виртуального окружения
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Рабочая директория
+WORKDIR /app
 
-# Копирование и установка зависимостей
+# Копирование зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Production образ
-FROM python:3.11-slim as production
+# Копирование кода
+COPY . .
 
-# Установка runtime зависимостей
+# Продакшн образ
+FROM python:3.11-slim AS production
+
+# Системные зависимости для продакшна
 RUN apt-get update && apt-get install -y \
-    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование виртуального окружения
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Создание пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Создание пользователя для безопасности
-RUN groupadd -r testing && useradd -r -g testing testing
-
-# Создание рабочей директории
+# Рабочая директория
 WORKDIR /app
 
-# Копирование кода приложения
-COPY --chown=testing:testing . .
+# Копирование Python из builder
+COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=builder /usr/local/bin/python* /usr/local/bin/
+COPY --from=builder /usr/local/bin/pip* /usr/local/bin/
 
-# Установка прав доступа
-RUN chown -R testing:testing /app
+# Копирование кода
+COPY --from=builder /app /app
 
-# Переключение на пользователя testing
-USER testing
-
-# Переменные окружения
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-ENV ENVIRONMENT=production
+# Права доступа
+RUN chown -R appuser:appuser /app
+USER appuser
 
 # Открытие порта
-EXPOSE 8003
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8003/health || exit 1
+EXPOSE 8000
 
 # Запуск приложения
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--workers", "1"] 
+CMD ["python", "-m", "app.main"] 

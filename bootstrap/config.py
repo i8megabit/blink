@@ -23,31 +23,31 @@ class Settings(BaseSettings):
     )
     CHROMADB_HOST: str = Field(default="chromadb", description="Хост ChromaDB")
     CHROMADB_PORT: int = Field(default=8000, description="Порт ChromaDB")
-    CHROMADB_PERSIST_DIR: str = Field(
-        default="./chromadb_persist",
-        description="Директория для персистентности ChromaDB"
+    CHROMADB_COLLECTION: str = Field(
+        default="relink_collection",
+        description="Коллекция ChromaDB"
     )
     
-    # Redis
-    REDIS_HOST: str = Field(default="redis", description="Хост Redis")
-    REDIS_PORT: int = Field(default=6379, description="Порт Redis")
-    REDIS_DB: int = Field(default=0, description="Номер БД Redis")
-    REDIS_PASSWORD: str = Field(default="relink_redis_pass", description="Пароль Redis")
+    # Redis кеширование
     REDIS_URL: str = Field(
-        default="redis://redis:6379",
+        default="redis://redis:6379/0",
         description="URL подключения к Redis"
     )
-    CACHE_TTL: int = Field(default=3600, description="TTL кеша в секундах")
-    CACHE_PREFIX: str = Field(default="service_", description="Префикс кеша")
+    REDIS_HOST: str = Field(default="redis", description="Хост Redis")
+    REDIS_PORT: int = Field(default=6379, description="Порт Redis")
+    REDIS_DB: int = Field(default=0, description="База данных Redis")
+    REDIS_PASSWORD: Optional[str] = Field(default=None, description="Пароль Redis")
     
-    # LLM и AI
+    # Ollama LLM
     OLLAMA_URL: str = Field(
         default="http://ollama:11434",
-        description="URL Ollama сервера"
+        description="URL подключения к Ollama"
     )
+    OLLAMA_HOST: str = Field(default="ollama", description="Хост Ollama")
+    OLLAMA_PORT: int = Field(default=11434, description="Порт Ollama")
     OLLAMA_MODEL: str = Field(
         default="qwen2.5:7b-instruct-turbo",
-        description="Модель Ollama по умолчанию"
+        description="Модель по умолчанию"
     )
     
     # LLM Router
@@ -59,41 +59,39 @@ class Settings(BaseSettings):
     # RAG Service
     RAG_SERVICE_URL: str = Field(
         default="http://chromadb:8000",
-        description="URL RAG сервиса (ChromaDB)"
+        description="URL RAG сервиса"
     )
     
-    # Векторные настройки
-    EMBEDDING_MODEL: str = Field(
-        default="sentence-transformers/all-MiniLM-L6-v2",
-        description="Модель для эмбеддингов"
-    )
-    VECTOR_CHUNK_SIZE: int = Field(default=1000, description="Размер чанков для векторизации")
-    VECTOR_CHUNK_OVERLAP: int = Field(default=200, description="Перекрытие чанков")
-    SIMILARITY_THRESHOLD: float = Field(default=0.7, description="Порог схожести для поиска")
-    
-    # Безопасность
-    SECRET_KEY: str = Field(
-        default="your-super-secret-key-for-jwt-tokens-2024",
-        description="Секретный ключ для JWT"
-    )
+    # Мониторинг
+    PROMETHEUS_PORT: int = Field(default=9090, description="Порт Prometheus")
+    METRICS_ENABLED: bool = Field(default=True, description="Включить метрики")
     
     # Логирование
     LOG_LEVEL: str = Field(default="INFO", description="Уровень логирования")
-    LOG_FORMAT: str = Field(default="json", description="Формат логов")
+    LOG_FORMAT: str = Field(
+        default="json",
+        description="Формат логов (json/text)"
+    )
     
-    # Мониторинг
-    METRICS_ENABLED: bool = Field(default=True, description="Включение метрик")
-    PROMETHEUS_PORT: int = Field(default=9090, description="Порт Prometheus")
+    # Безопасность
+    SECRET_KEY: str = Field(
+        default="your-secret-key-change-in-production",
+        description="Секретный ключ"
+    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=30,
+        description="Время жизни токена доступа"
+    )
     
     # CORS
-    CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://frontend:80",
+    CORS_ORIGINS: list = Field(
+        default=["http://localhost:3000", "http://frontend:3000"],
         description="Разрешенные CORS origins"
     )
     
     class Config:
         env_file = ".env"
-        case_sensitive = True
+        case_sensitive = False
 
 # Глобальный экземпляр настроек
 _settings: Optional[Settings] = None

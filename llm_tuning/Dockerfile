@@ -1,59 +1,54 @@
-# Multi-stage build для оптимизации размера
-FROM python:3.11-slim as builder
+# 🐳 LLM Tuning Service - Микросервис reLink
+FROM python:3.11-slim AS builder
 
-# Установка системных зависимостей
+# Системные зависимости
 RUN apt-get update && apt-get install -y \
-    build-essential \
+    gcc \
+    g++ \
     curl \
     git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Создание виртуального окружения
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Рабочая директория
+WORKDIR /app
 
-# Копирование и установка зависимостей
+# Копирование зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Production stage
-FROM python:3.11-slim as production
+# Копирование кода
+COPY . .
 
-# Создание пользователя для безопасности
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Продакшн образ
+FROM python:3.11-slim AS production
 
-# Установка runtime зависимостей
+# Системные зависимости для продакшна
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование виртуального окружения
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Создание пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Создание рабочей директории
+# Рабочая директория
 WORKDIR /app
 
-# Копирование кода приложения
-COPY app/ ./app/
-COPY alembic.ini .
-COPY migrations/ ./migrations/
+# Копирование Python из builder
+COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=builder /usr/local/bin/python* /usr/local/bin/
+COPY --from=builder /usr/local/bin/pip* /usr/local/bin/
 
-# Установка прав доступа
+# Копирование кода
+COPY --from=builder /app /app
+
+# Права доступа
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Переменные окружения
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Expose порт
+# Открытие порта
 EXPOSE 8000
 
 # Запуск приложения
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"] 
+CMD ["python", "-m", "app.main"] 
