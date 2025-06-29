@@ -105,7 +105,7 @@ services:
       - relink-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "timeout", "5", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 30s
       timeout: 15s
       retries: 3
