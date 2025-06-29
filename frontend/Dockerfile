@@ -11,8 +11,10 @@ WORKDIR /app
 # Копирование package.json и package-lock.json
 COPY package*.json ./
 
-# Установка зависимостей
-RUN npm ci --only=production
+# Очистка кеша и переустановка зависимостей для решения проблемы с rollup
+RUN rm -rf node_modules package-lock.json && \
+    npm cache clean --force && \
+    npm install
 
 # Копирование исходного кода
 COPY . .

@@ -1,5 +1,3 @@
-version: '3.8'
-
 # 🚀 РЕВОЛЮЦИОННАЯ АРХИТЕКТУРА МИКРОСЕРВИСОВ reLink
 # RAG-ориентированная архитектура с ChromaDB как основной БД
 
@@ -31,17 +29,8 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_ORIGINS=*
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     networks:
       - relink-network
     healthcheck:
@@ -50,7 +39,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 🗄️ CHROMADB - ОСНОВНАЯ БАЗА ДАННЫХ
+  # 🗄️ ChromaDB - основная база данных
   chromadb:
     image: chromadb/chroma:latest
     container_name: relink-chromadb
@@ -58,14 +47,11 @@ services:
       - "8000:8000"
     volumes:
       - chromadb_data:/chroma/chroma
-      - ./chromadb_persist:/chroma/chroma/persist
     environment:
       - CHROMA_SERVER_HOST=0.0.0.0
       - CHROMA_SERVER_HTTP_PORT=8000
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
-      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/chroma/auth.json
-      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.providers.HtpasswdFileServerAuthProvider
     networks:
       - relink-network
     healthcheck:
@@ -74,7 +60,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # 🔧 МИКРОСЕРВИСЫ (ЕДИНЫЙ БАЗОВЫЙ ОБРАЗ)
+  # 🔄 МИКРОСЕРВИСЫ (унифицированные на базе Dockerfile.base)
   router:
     build:
       context: .
@@ -88,24 +74,12 @@ services:
     environment:
       - SERVICE_NAME=router
       - SERVICE_PORT=8001
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - OLLAMA_URL=http://ollama:11434
       - DEBUG=true
-    volumes:
-      - ./router:/app/router
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-      chromadb:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - ollama
+      - chromadb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -125,23 +99,12 @@ services:
     environment:
       - SERVICE_NAME=benchmark
       - SERVICE_PORT=8002
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - OLLAMA_URL=http://ollama:11434
-      - ROUTER_URL=http://router:8001
       - DEBUG=true
-    volumes:
-      - ./benchmark:/app/benchmark
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      router:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - ollama
+      - chromadb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
@@ -155,32 +118,18 @@ services:
       args:
         SERVICE_NAME: relink
         SERVICE_PORT: 8003
-    container_name: relink-seo
+    container_name: relink-service
     ports:
       - "8003:8003"
     environment:
       - SERVICE_NAME=relink
       - SERVICE_PORT=8003
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - OLLAMA_URL=http://ollama:11434
-      - ROUTER_URL=http://router:8001
-      - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
-    volumes:
-      - ./relink:/app/relink
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      router:
-        condition: service_healthy
-      benchmark:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - ollama
+      - chromadb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
@@ -200,76 +149,44 @@ services:
     environment:
       - SERVICE_NAME=backend
       - SERVICE_PORT=8004
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - OLLAMA_URL=http://ollama:11434
-      - ROUTER_URL=http://router:8001
-      - RELINK_URL=http://relink:8003
-      - BENCHMARK_URL=http://benchmark:8002
       - DEBUG=true
-    volumes:
-      - ./backend:/app/backend
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      router:
-        condition: service_healthy
-      relink:
-        condition: service_healthy
-      benchmark:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - ollama
+      - chromadb
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 🧠 LLM TUNING СЕРВИС
   llm_tuning:
     build:
       context: .
       dockerfile: Dockerfile.base
       args:
         SERVICE_NAME: llm_tuning
-        SERVICE_PORT: 8007
+        SERVICE_PORT: 8005
     container_name: relink-llm-tuning
     ports:
-      - "8007:8007"
+      - "8005:8005"
     environment:
       - SERVICE_NAME=llm_tuning
-      - SERVICE_PORT=8007
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - OLLAMA_URL=http://ollama:11434
-      - ROUTER_URL=http://router:8001
-      - BACKEND_URL=http://backend:8004
+      - SERVICE_PORT=8005
       - DEBUG=true
-    volumes:
-      - ./llm_tuning:/app/llm_tuning
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      router:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - ollama
+      - chromadb
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 🎨 ФРОНТЕНД
+  # 🌐 Frontend
   frontend:
     build:
       context: ./frontend
@@ -277,128 +194,71 @@ services:
     container_name: relink-frontend
     ports:
       - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8004
-      - VITE_ROUTER_URL=http://localhost:8001
-      - VITE_RELINK_URL=http://localhost:8003
-      - VITE_BENCHMARK_URL=http://localhost:8002
-      - VITE_LLM_TUNING_URL=http://localhost:8007
-      - VITE_OLLAMA_URL=http://localhost:11434
-      - VITE_CHROMADB_URL=http://localhost:8000
-      - NODE_ENV=development
-    depends_on:
-      backend:
-        condition: service_healthy
-      router:
-        condition: service_healthy
-      relink:
-        condition: service_healthy
-      benchmark:
-        condition: service_healthy
-      llm_tuning:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - backend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 📊 МОНИТОРИНГ
+  # 📊 Мониторинг
   monitoring:
     build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE_NAME: monitoring
-        SERVICE_PORT: 8005
+      context: ./monitoring
+      dockerfile: Dockerfile
     container_name: relink-monitoring
     ports:
-      - "8005:8005"
-    environment:
-      - SERVICE_NAME=monitoring
-      - SERVICE_PORT=8005
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - BACKEND_URL=http://backend:8004
-      - ROUTER_URL=http://router:8001
-      - RELINK_URL=http://relink:8003
-      - BENCHMARK_URL=http://benchmark:8002
-      - LLM_TUNING_URL=http://llm_tuning:8007
-      - DEBUG=true
+      - "9090:9090"
     volumes:
-      - ./monitoring:/app/monitoring
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - relink-network
+    depends_on:
+      - router
+      - benchmark
+      - relink
+      - backend
+      - llm_tuning
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 🔍 ТЕСТИРОВАНИЕ
+  # 🧪 Тестирование
   testing:
     build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE_NAME: testing
-        SERVICE_PORT: 8006
+      context: ./testing
+      dockerfile: Dockerfile
     container_name: relink-testing
-    ports:
-      - "8006:8006"
-    environment:
-      - SERVICE_NAME=testing
-      - SERVICE_PORT=8006
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=relink_redis_pass
-      - BACKEND_URL=http://backend:8004
-      - ROUTER_URL=http://router:8001
-      - RELINK_URL=http://relink:8003
-      - BENCHMARK_URL=http://benchmark:8002
-      - LLM_TUNING_URL=http://llm_tuning:8007
-      - FRONTEND_URL=http://frontend:3000
-      - DEBUG=true
-    volumes:
-      - ./testing:/app/testing
-      - ./bootstrap:/app/bootstrap
-    depends_on:
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
     networks:
       - relink-network
+    depends_on:
+      - router
+      - benchmark
+      - relink
+      - backend
+      - llm_tuning
+      - frontend
+    environment:
+      - SELENIUM_HUB_URL=http://selenium-hub:4444
+      - TEST_ENVIRONMENT=docker
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://backend:8004/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-volumes:
-  redis_data:
-    driver: local
-  ollama_data:
-    driver: local
-  chromadb_data:
-    driver: local
-
+# 🌐 Сети
 networks:
   relink-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16 
+
+# 💾 Тома для персистентности данных
+volumes:
+  redis_data:
+  ollama_data:
+  chromadb_data: 
