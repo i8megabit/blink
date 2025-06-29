@@ -144,6 +144,10 @@ health: ## Проверить здоровье всех сервисов
 	@echo "$(YELLOW)Ollama:$(NC)"
 	curl -f http://localhost:11434/api/tags || echo "$(RED)Ollama недоступен$(NC)"
 
+check-chromadb: ## Проверить исправления ChromaDB
+	@echo "$(GREEN)Проверяем исправления ChromaDB...$(NC)"
+	./scripts/check_chromadb_fixes.sh
+
 # Команды для разработки
 dev: ## Запустить в режиме разработки
 	@echo "$(GREEN)Запускаем в режиме разработки...$(NC)"
