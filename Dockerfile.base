@@ -1,0 +1,48 @@
+# 🐳 БАЗОВЫЙ ОБРАЗ - ФИЛИГРАННОЕ МАСТЕРСТВО
+FROM python:3.11-slim as base
+
+# Метаданные
+LABEL maintainer="reLink Team <i8megabit@gmail.com>" \
+      description="Base image for all reLink microservices" \
+      version="1.0.0" \
+      architecture="universal"
+
+# Системные зависимости
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python оптимизации
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONOPTIMIZE=2
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+
+# Создание пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Рабочая директория
+WORKDIR /app
+
+# Общие зависимости
+COPY requirements-base.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-base.txt
+
+# Общие утилиты
+COPY bootstrap/ ./bootstrap/
+
+# Права доступа
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# Точка входа
+ENTRYPOINT ["python", "-m", "bootstrap.main"] 
