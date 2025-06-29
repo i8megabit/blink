@@ -1,23 +1,47 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      '@': '/src',
     },
   },
   server: {
     port: 3000,
     host: true,
     proxy: {
-      '/api': {
+      '/api/llm-tuning': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        rewrite: (path) => path.replace(/^\/api\/llm-tuning/, ''),
+      },
+      '/api/backend': {
+        target: 'http://localhost:8004',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/backend/, ''),
+      },
+      '/api/router': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/router/, ''),
+      },
+      '/api/benchmark': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/benchmark/, ''),
+      },
+      '/api/monitoring': {
+        target: 'http://localhost:8006',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/monitoring/, ''),
+      },
+      '/api/rag': {
+        target: 'http://localhost:8003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/rag/, ''),
       },
     },
   },
