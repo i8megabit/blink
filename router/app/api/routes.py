@@ -44,6 +44,53 @@ class EffectivenessAnalysis(BaseModel):
     quality_metrics: Dict[str, Any]
     recommendations: List[str]
 
+class CollectionVersion(BaseModel):
+    version_id: str
+    timestamp: float
+    description: Optional[str] = None
+    data_hash: Optional[str] = None
+
+class CollectionInfo(BaseModel):
+    name: str
+    created_at: float
+    updated_at: float
+    versions: List[CollectionVersion] = []
+    current_version: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class CreateCollectionRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class UpdateCollectionRequest(BaseModel):
+    description: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class RollbackRequest(BaseModel):
+    version_id: str
+
+# --- ПРОСТОЙ ИНМЕМОРИ СЛОЙ ДЛЯ КОЛЛЕКЦИЙ ---
+collections_db: Dict[str, CollectionInfo] = {}
+
+# --- ДОБАВЛЕНО: МОДЕЛИ И ЭНДПОИНТЫ ДЛЯ FINE-TUNING ---
+class FineTuneJob(BaseModel):
+    job_id: str
+    collection: str
+    status: str  # pending, running, completed, failed, cancelled
+    started_at: float
+    finished_at: Optional[float] = None
+    progress: float = 0.0
+    logs: Optional[List[str]] = None
+    error: Optional[str] = None
+    model_version: Optional[str] = None
+
+fine_tune_jobs: Dict[str, FineTuneJob] = {}
+
+# --- ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ДЛЯ КОЛЛЕКЦИЙ И FINE-TUNE ---
+collection_metrics: Dict[str, List[Dict[str, Any]]] = {}  # {collection: [{latency, quality, timestamp}]}
+fine_tune_metrics: Dict[str, Dict[str, Any]] = {}  # {job_id: {latency, quality, ...}}
+
 @router.get("/health")
 async def health_check():
     """Проверка здоровья LLM роутера"""
@@ -65,7 +112,17 @@ async def get_endpoints():
             "/api/v1/analyze",
             "/api/v1/models",
             "/api/v1/effectiveness",
-            "/api/v1/route/batch"
+            "/api/v1/route/batch",
+            "/api/v1/collections",
+            "/api/v1/collections/{name}",
+            "/api/v1/collections/{name}/version",
+            "/api/v1/collections/{name}/versions",
+            "/api/v1/collections/{name}/rollback",
+            "/api/v1/fine-tune/start",
+            "/api/v1/fine-tune/{job_id}",
+            "/api/v1/fine-tune/{job_id}/cancel",
+            "/api/v1/collections/{name}/metrics",
+            "/api/v1/fine-tune/{job_id}/metrics"
         ]
     }
 
@@ -484,3 +541,183 @@ async def get_available_models():
         return [model["name"] for model in models]
     except Exception:
         return ["qwen2.5:7b-instruct-turbo", "qwen2.5:14b-instruct", "qwen2.5:32b-instruct"]
+
+# --- ЭНДПОИНТЫ ДЛЯ КОЛЛЕКЦИЙ ---
+@router.post("/api/v1/collections", response_model=CollectionInfo)
+async def create_collection(request: CreateCollectionRequest):
+    """Создать новую коллекцию"""
+    if request.name in collections_db:
+        raise HTTPException(status_code=400, detail="Collection already exists")
+    now = time.time()
+    version_id = str(uuid.uuid4())
+    version = CollectionVersion(version_id=version_id, timestamp=now, description=request.description)
+    info = CollectionInfo(
+        name=request.name,
+        created_at=now,
+        updated_at=now,
+        versions=[version],
+        current_version=version_id,
+        metadata=request.metadata or {}
+    )
+    collections_db[request.name] = info
+    return info
+
+@router.get("/api/v1/collections", response_model=List[CollectionInfo])
+async def list_collections():
+    """Список всех коллекций"""
+    return list(collections_db.values())
+
+@router.get("/api/v1/collections/{name}", response_model=CollectionInfo)
+async def get_collection(name: str):
+    """Получить инфо о коллекции"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return collections_db[name]
+
+@router.delete("/api/v1/collections/{name}")
+async def delete_collection(name: str):
+    """Удалить коллекцию"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    del collections_db[name]
+    return {"status": "deleted", "name": name}
+
+@router.post("/api/v1/collections/{name}/version", response_model=CollectionVersion)
+async def create_collection_version(name: str, request: UpdateCollectionRequest):
+    """Создать новую версию коллекции (например, после fine-tune или обновления датасета)"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    now = time.time()
+    version_id = str(uuid.uuid4())
+    version = CollectionVersion(version_id=version_id, timestamp=now, description=request.description)
+    collections_db[name].versions.append(version)
+    collections_db[name].updated_at = now
+    collections_db[name].current_version = version_id
+    if request.metadata:
+        collections_db[name].metadata = request.metadata
+    return version
+
+@router.get("/api/v1/collections/{name}/versions", response_model=List[CollectionVersion])
+async def list_collection_versions(name: str):
+    """Список версий коллекции"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return collections_db[name].versions
+
+@router.post("/api/v1/collections/{name}/rollback", response_model=CollectionInfo)
+async def rollback_collection(name: str, request: RollbackRequest):
+    """Откатить коллекцию к указанной версии"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    versions = collections_db[name].versions
+    found = next((v for v in versions if v.version_id == request.version_id), None)
+    if not found:
+        raise HTTPException(status_code=404, detail="Version not found")
+    collections_db[name].current_version = found.version_id
+    collections_db[name].updated_at = time.time()
+    return collections_db[name]
+
+@router.post("/api/v1/fine-tune/start", response_model=FineTuneJob)
+async def start_fine_tune(collection: str):
+    """Запустить fine-tuning для коллекции"""
+    if collection not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    job_id = str(uuid.uuid4())
+    now = time.time()
+    job = FineTuneJob(
+        job_id=job_id,
+        collection=collection,
+        status="pending",
+        started_at=now,
+        logs=[f"Fine-tune job {job_id} created for collection {collection}"]
+    )
+    fine_tune_jobs[job_id] = job
+    # Фоновая задача для симуляции fine-tune
+    asyncio.create_task(_run_fine_tune_job(job_id, collection))
+    return job
+
+@router.get("/api/v1/fine-tune/{job_id}", response_model=FineTuneJob)
+async def get_fine_tune_status(job_id: str):
+    """Статус fine-tune job"""
+    if job_id not in fine_tune_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return fine_tune_jobs[job_id]
+
+@router.post("/api/v1/fine-tune/{job_id}/cancel", response_model=FineTuneJob)
+async def cancel_fine_tune(job_id: str):
+    """Отменить fine-tune job"""
+    if job_id not in fine_tune_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    fine_tune_jobs[job_id].status = "cancelled"
+    fine_tune_jobs[job_id].finished_at = time.time()
+    fine_tune_jobs[job_id].logs.append("Job cancelled by user")
+    return fine_tune_jobs[job_id]
+
+async def _run_fine_tune_job(job_id: str, collection: str):
+    # Симуляция процесса fine-tune (замени на реальный pipeline)
+    job = fine_tune_jobs[job_id]
+    job.status = "running"
+    job.logs.append("Fine-tuning started")
+    await asyncio.sleep(2)  # имитация работы
+    job.progress = 0.5
+    job.logs.append("50% complete")
+    await asyncio.sleep(2)
+    job.progress = 1.0
+    job.status = "completed"
+    job.finished_at = time.time()
+    job.model_version = f"model-{collection}-{int(job.finished_at)}"
+    job.logs.append("Fine-tuning completed")
+    # --- Автоматическая синхронизация между RAG и LLM ---
+    await _sync_rag_llm(collection, job.model_version)
+
+# --- СИНХРОНИЗАЦИЯ RAG И LLM ---
+async def _sync_rag_llm(collection: str, model_version: str):
+    # Здесь можно реализовать пуш в LLM роутер или обновление метаданных
+    # Например, отправить событие или обновить коллекцию в RAG
+    # Пока просто логируем
+    print(f"[SYNC] Collection {collection} synced with LLM model version {model_version}")
+    # TODO: интеграция с реальным сервисом
+
+# --- РАСШИРЕННЫЙ МОНИТОРИНГ ---
+# (добавить историю по коллекциям, latency, качество)
+# Можно расширить get_service_monitor и добавить новые метрики
+
+@router.post("/api/v1/collections/{name}/metrics")
+async def add_collection_metric(name: str, latency: float, quality: float):
+    """Добавить метрику latency/качества для коллекции (вызывается из бизнес-логики)"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    if name not in collection_metrics:
+        collection_metrics[name] = []
+    collection_metrics[name].append({
+        "latency": latency,
+        "quality": quality,
+        "timestamp": time.time()
+    })
+    return {"status": "ok"}
+
+@router.get("/api/v1/collections/{name}/metrics")
+async def get_collection_metrics(name: str):
+    """Получить историю метрик по коллекции"""
+    if name not in collections_db:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return collection_metrics.get(name, [])
+
+@router.post("/api/v1/fine-tune/{job_id}/metrics")
+async def add_fine_tune_metric(job_id: str, latency: float, quality: float):
+    """Добавить метрику latency/качества для fine-tune job"""
+    if job_id not in fine_tune_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    fine_tune_metrics[job_id] = {
+        "latency": latency,
+        "quality": quality,
+        "timestamp": time.time()
+    }
+    return {"status": "ok"}
+
+@router.get("/api/v1/fine-tune/{job_id}/metrics")
+async def get_fine_tune_metrics(job_id: str):
+    """Получить метрики по fine-tune job"""
+    if job_id not in fine_tune_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return fine_tune_metrics.get(job_id, {})
