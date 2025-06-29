@@ -94,6 +94,7 @@ services:
       - CHROMA_SERVER_CORS_ALLOW_ORIGINS=["*"]
       - ANONYMIZED_TELEMETRY=False
       # Настройки OpenTelemetry (правильные переменные)
+      - CHROMA_OTEL_ENABLED=true
       - CHROMA_OTEL_COLLECTION_ENDPOINT=http://opentelemetry-collector:4317
       - CHROMA_OTEL_SERVICE_NAME=relink-chromadb
       - CHROMA_OTEL_GRANULARITY=all

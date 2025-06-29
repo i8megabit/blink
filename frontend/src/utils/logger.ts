@@ -3,17 +3,6 @@
  * Профилирование запросов, детальное логирование и мониторинг производительности
  */
 
-// Типы для Vite env
-interface ImportMetaEnv {
-  readonly VITE_REACT_APP_ENABLE_PROFILING: string
-  readonly VITE_REACT_APP_ENABLE_DETAILED_LOGGING: string
-  readonly VITE_REACT_APP_DEBUG: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
 export interface LogLevel {
   DEBUG: 0;
   INFO: 1;
